@@ -395,13 +395,22 @@ async fn can_create_user_from_oidc() {
 
 #[tokio::test]
 #[serial]
-async fn oidc_links_to_existing_email_user() {
+async fn oidc_links_to_existing_verified_email_user() {
     let boot = boot_test::<App>()
         .await
         .expect("Failed to boot test application");
     seed::<App>(&boot.app_context)
         .await
         .expect("Failed to seed database");
+
+    // First verify user1's email so OIDC linking is allowed
+    let user = Model::find_by_email(&boot.app_context.db, "user1@example.com")
+        .await
+        .expect("Failed to find user1");
+    user.into_active_model()
+        .verified(&boot.app_context.db)
+        .await
+        .expect("Failed to verify user1 email");
 
     let info = OidcUserInfo {
         provider: "google".to_string(),
@@ -412,7 +421,7 @@ async fn oidc_links_to_existing_email_user() {
 
     let user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
         .await
-        .expect("Failed to link OIDC to existing user");
+        .expect("Failed to link OIDC to existing verified user");
 
     // Should be the existing user1, now linked
     assert_eq!(user.email, "user1@example.com");
@@ -425,6 +434,31 @@ async fn oidc_links_to_existing_email_user() {
         .await
         .expect("Failed to find linked OIDC user on second call");
     assert_eq!(user.id, user2.id);
+}
+
+#[tokio::test]
+#[serial]
+async fn oidc_rejects_linking_to_unverified_email_user() {
+    let boot = boot_test::<App>()
+        .await
+        .expect("Failed to boot test application");
+    seed::<App>(&boot.app_context)
+        .await
+        .expect("Failed to seed database");
+
+    // user1 from seed has no email_verified_at set
+    let info = OidcUserInfo {
+        provider: "google".to_string(),
+        subject: "google-subject-456".to_string(),
+        email: "user1@example.com".to_string(),
+        name: Some("User One".to_string()),
+    };
+
+    let result = Model::find_or_create_from_oidc(&boot.app_context.db, &info).await;
+    assert!(
+        result.is_err(),
+        "OIDC linking should be rejected for unverified email accounts"
+    );
 }
 
 #[tokio::test]

@@ -79,6 +79,13 @@ mailer:
 #       - email
 #       - profile
 
+# Application settings
+settings:
+  auth:
+    allowed_email_domains:
+      - example.com
+      - gmail.com
+
 # Database Configuration
 database:
   # Database connection URI

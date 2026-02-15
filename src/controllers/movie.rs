@@ -50,6 +50,7 @@ pub async fn new(
 
 #[debug_handler]
 pub async fn update(
+    _auth: auth::JWT,
     Path(id): Path<i32>,
     State(ctx): State<AppContext>,
     Form(params): Form<Params>,
@@ -82,7 +83,7 @@ pub async fn show(
 }
 
 #[debug_handler]
-pub async fn add(State(ctx): State<AppContext>, Form(params): Form<Params>) -> Result<Redirect> {
+pub async fn add(_auth: auth::JWT, State(ctx): State<AppContext>, Form(params): Form<Params>) -> Result<Redirect> {
     let mut item = ActiveModel {
         ..Default::default()
     };
@@ -92,7 +93,7 @@ pub async fn add(State(ctx): State<AppContext>, Form(params): Form<Params>) -> R
 }
 
 #[debug_handler]
-pub async fn remove(Path(id): Path<i32>, State(ctx): State<AppContext>) -> Result<Response> {
+pub async fn remove(_auth: auth::JWT, Path(id): Path<i32>, State(ctx): State<AppContext>) -> Result<Response> {
     load_item(&ctx, id).await?.delete(&ctx.db).await?;
     format::empty()
 }

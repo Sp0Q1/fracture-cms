@@ -143,9 +143,7 @@ async fn login_with_un_existing_email() {
 
 #[tokio::test]
 #[serial]
-async fn can_login_without_verify() {
-    configure_insta!();
-
+async fn cannot_login_without_verify() {
     request::<App, _, _>(|request, _ctx| async move {
         let email = "test@loco.com";
         let password = "12341234";
@@ -167,7 +165,7 @@ async fn can_login_without_verify() {
             "Register request should succeed"
         );
 
-        //verify user request
+        // Login without verifying email should be rejected
         let login_response = request
             .post("/api/auth/login")
             .json(&serde_json::json!({
@@ -178,15 +176,9 @@ async fn can_login_without_verify() {
 
         assert_eq!(
             login_response.status_code(),
-            200,
-            "Login request should succeed"
+            401,
+            "Login without email verification should be rejected"
         );
-
-        with_settings!({
-            filters => cleanup_user_model()
-        }, {
-            assert_debug_snapshot!(login_response.text());
-        });
     })
     .await;
 }

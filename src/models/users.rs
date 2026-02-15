@@ -239,7 +239,7 @@ impl Model {
             return Ok(user);
         }
 
-        // 2. Find by email and link OIDC
+        // 2. Find by email and link OIDC (only if the existing account has a verified email)
         if let Some(user) = users::Entity::find()
             .filter(
                 model::query::condition()
@@ -249,6 +249,11 @@ impl Model {
             .one(db)
             .await?
         {
+            if user.email_verified_at.is_none() {
+                return Err(ModelError::msg(
+                    "cannot link OIDC to an account with unverified email",
+                ));
+            }
             let mut active: ActiveModel = user.into();
             active.oidc_provider = ActiveValue::Set(Some(info.provider.clone()));
             active.oidc_subject = ActiveValue::Set(Some(info.subject.clone()));
