@@ -24,6 +24,8 @@ pub struct Model {
     pub email_verified_at: Option<DateTimeWithTimeZone>,
     pub magic_link_token: Option<String>,
     pub magic_link_expiration: Option<DateTimeWithTimeZone>,
+    pub oidc_provider: Option<String>,
+    pub oidc_subject: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

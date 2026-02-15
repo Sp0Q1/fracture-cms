@@ -44,15 +44,17 @@ impl Hooks for App {
     }
 
     async fn initializers(_ctx: &AppContext) -> Result<Vec<Box<dyn Initializer>>> {
-        Ok(vec![Box::new(
-            initializers::view_engine::ViewEngineInitializer,
-        )])
+        Ok(vec![
+            Box::new(initializers::view_engine::ViewEngineInitializer),
+            Box::new(initializers::oidc::OidcInitializer),
+        ])
     }
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
         AppRoutes::with_default_routes() // controller routes below
             .add_route(controllers::movie::routes())
             .add_route(controllers::auth::routes())
+            .add_route(controllers::oidc::routes())
     }
     async fn connect_workers(ctx: &AppContext, queue: &Queue) -> Result<()> {
         queue.register(DownloadWorker::build(ctx)).await?;

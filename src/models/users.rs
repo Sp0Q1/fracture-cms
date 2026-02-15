@@ -5,10 +5,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use uuid::Uuid;
 
-pub use super::_entities::users::{self, ActiveModel, Entity, Model};
+pub use super::_entities::users::{self, ActiveModel, Column, Entity, Model};
 
 pub const MAGIC_LINK_LENGTH: i8 = 32;
 pub const MAGIC_LINK_EXPIRATION_MIN: i8 = 5;
+
+#[derive(Debug, Clone)]
+pub struct OidcUserInfo {
+    pub provider: String,
+    pub subject: String,
+    pub email: String,
+    pub name: Option<String>,
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoginParams {
@@ -201,6 +209,74 @@ impl Model {
             .one(db)
             .await?;
         user.ok_or_else(|| ModelError::EntityNotFound)
+    }
+
+    /// Finds or creates a user from OIDC authentication info.
+    ///
+    /// Lookup order:
+    /// 1. By OIDC provider + subject (existing OIDC link)
+    /// 2. By email (link existing account to OIDC)
+    /// 3. Create new user with random password and auto-verified email
+    ///
+    /// # Errors
+    ///
+    /// When DB query fails or user creation fails
+    pub async fn find_or_create_from_oidc(
+        db: &DatabaseConnection,
+        info: &OidcUserInfo,
+    ) -> ModelResult<Self> {
+        // 1. Find by OIDC provider + subject
+        if let Some(user) = users::Entity::find()
+            .filter(
+                model::query::condition()
+                    .eq(Column::OidcProvider, &info.provider)
+                    .eq(Column::OidcSubject, &info.subject)
+                    .build(),
+            )
+            .one(db)
+            .await?
+        {
+            return Ok(user);
+        }
+
+        // 2. Find by email and link OIDC
+        if let Some(user) = users::Entity::find()
+            .filter(
+                model::query::condition()
+                    .eq(Column::Email, &info.email)
+                    .build(),
+            )
+            .one(db)
+            .await?
+        {
+            let mut active: ActiveModel = user.into();
+            active.oidc_provider = ActiveValue::Set(Some(info.provider.clone()));
+            active.oidc_subject = ActiveValue::Set(Some(info.subject.clone()));
+            let updated = active.update(db).await?;
+            return Ok(updated);
+        }
+
+        // 3. Create new user
+        let password_hash = hash::hash_password(&Uuid::new_v4().to_string())
+            .map_err(|e| ModelError::Any(e.into()))?;
+        let name = info
+            .name
+            .clone()
+            .unwrap_or_else(|| info.email.split('@').next().unwrap_or("user").to_string());
+
+        let user = users::ActiveModel {
+            email: ActiveValue::Set(info.email.clone()),
+            password: ActiveValue::Set(password_hash),
+            name: ActiveValue::Set(name),
+            oidc_provider: ActiveValue::Set(Some(info.provider.clone())),
+            oidc_subject: ActiveValue::Set(Some(info.subject.clone())),
+            email_verified_at: ActiveValue::Set(Some(chrono::offset::Local::now().into())),
+            ..Default::default()
+        }
+        .insert(db)
+        .await?;
+
+        Ok(user)
     }
 
     /// Verifies whether the provided plain password matches the hashed password

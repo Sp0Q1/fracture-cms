@@ -68,6 +68,19 @@ mailer:
 #      - client_identifier: google # Identifier for the OAuth2 provider. Replace 'google' with your provider's name if different, must be unique within the oauth2 config.
 #        ... other fields
 
+# OIDC Single Sign-On Configuration
+# settings:
+#   oidc:
+#     provider_name: google
+#     issuer_url: https://accounts.google.com
+#     client_id: your-client-id
+#     client_secret: your-client-secret
+#     redirect_uri: http://localhost:5150/api/auth/oidc/callback
+#     scopes:
+#       - openid
+#       - email
+#       - profile
+
 # Database Configuration
 database:
   # Database connection URI
