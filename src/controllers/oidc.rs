@@ -44,7 +44,7 @@ async fn authorize(Extension(oidc): Extension<OidcContext>) -> Result<Response> 
         .client
         .authorize_url(
             CoreAuthenticationFlow::AuthorizationCode,
-            || openidconnect::CsrfToken::new_random(),
+            openidconnect::CsrfToken::new_random,
             move || nonce_clone,
         )
         .set_pkce_challenge(pkce_challenge);
@@ -75,9 +75,10 @@ async fn callback(
     State(ctx): State<AppContext>,
     Query(params): Query<CallbackParams>,
 ) -> Result<Response> {
-    let pending = oidc.state_store.take(&params.state).ok_or_else(|| {
-        loco_rs::Error::Unauthorized("Invalid or expired CSRF state".to_string())
-    })?;
+    let pending = oidc
+        .state_store
+        .take(&params.state)
+        .ok_or_else(|| loco_rs::Error::Unauthorized("Invalid or expired CSRF state".to_string()))?;
 
     let http_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())

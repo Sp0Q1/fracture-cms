@@ -32,7 +32,14 @@ pub struct OidcStateStore {
     ttl: Duration,
 }
 
+impl Default for OidcStateStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OidcStateStore {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(HashMap::new())),
@@ -40,6 +47,12 @@ impl OidcStateStore {
         }
     }
 
+    /// Inserts a pending auth entry keyed by the CSRF token.
+    /// Evicts any expired entries on each insert.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn insert(&self, csrf_token: &CsrfToken, pending: PendingAuth) {
         let mut map = self.inner.lock().expect("lock poisoned");
         let ttl = self.ttl;
@@ -48,9 +61,19 @@ impl OidcStateStore {
         map.insert(csrf_token.secret().clone(), pending);
     }
 
+    /// Takes and removes a pending auth entry by CSRF state value.
+    /// Returns `None` if the entry doesn't exist or has expired.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    #[must_use]
     pub fn take(&self, csrf_state: &str) -> Option<PendingAuth> {
-        let mut map = self.inner.lock().expect("lock poisoned");
-        let pending = map.remove(csrf_state)?;
+        let pending = self
+            .inner
+            .lock()
+            .expect("lock poisoned")
+            .remove(csrf_state)?;
         if pending.created_at.elapsed() >= self.ttl {
             return None;
         }
@@ -150,10 +173,7 @@ mod tests {
         // Force it into the map despite being "expired" by direct insertion
         {
             let mut map = store.inner.lock().unwrap();
-            map.insert(
-                "old".to_string(),
-                make_expired_pending(),
-            );
+            map.insert("old".to_string(), make_expired_pending());
         }
         assert_eq!(store.len(), 1);
 
