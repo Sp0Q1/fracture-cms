@@ -107,6 +107,6 @@ auth:
   # JWT authentication
   jwt:
     # Secret key for token generation and verification
-    secret: TV7uBBCLi918MqTr85uM
+    secret: {{ get_env(name="JWT_SECRET") }}
     # Token expiration time in seconds
     expiration: 604800 # 7 days

@@ -7,16 +7,25 @@ use crate::{
     views::auth::{CurrentResponse, LoginResponse},
 };
 use loco_rs::prelude::*;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
 
-pub static EMAIL_DOMAIN_RE: OnceLock<Regex> = OnceLock::new();
+fn get_allowed_email_domains(ctx: &AppContext) -> Vec<String> {
+    ctx.config
+        .settings
+        .as_ref()
+        .and_then(|s| s.get("auth"))
+        .and_then(|a| a.get("allowed_email_domains"))
+        .and_then(|d| serde_json::from_value::<Vec<String>>(d.clone()).ok())
+        .unwrap_or_default()
+}
 
-fn get_allow_email_domain_re() -> &'static Regex {
-    EMAIL_DOMAIN_RE.get_or_init(|| {
-        Regex::new(r"@example\.com$|@gmail\.com$").expect("Failed to compile regex")
-    })
+fn email_matches_allowed_domains(email: &str, domains: &[String]) -> bool {
+    if domains.is_empty() {
+        return true;
+    }
+    domains
+        .iter()
+        .any(|domain| email.ends_with(&format!("@{domain}")))
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -149,6 +158,10 @@ async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -
         return unauthorized("unauthorized!");
     }
 
+    if user.email_verified_at.is_none() {
+        return unauthorized("Email not verified");
+    }
+
     let jwt_secret = ctx.config.get_jwt_config()?;
 
     let token = user
@@ -182,8 +195,8 @@ async fn magic_link(
     State(ctx): State<AppContext>,
     Json(params): Json<MagicLinkParams>,
 ) -> Result<Response> {
-    let email_regex = get_allow_email_domain_re();
-    if !email_regex.is_match(&params.email) {
+    let allowed_domains = get_allowed_email_domains(&ctx);
+    if !email_matches_allowed_domains(&params.email, &allowed_domains) {
         tracing::debug!(
             email = params.email,
             "The provided email is invalid or does not match the allowed domains"
