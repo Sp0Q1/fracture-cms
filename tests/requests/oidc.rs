@@ -47,7 +47,9 @@ async fn callback_rejects_missing_query_params() {
         // No query params at all
         let response = request.get("/api/auth/oidc/callback").await;
         assert!(
-            response.status_code() == 400 || response.status_code() == 422 || response.status_code() == 500,
+            response.status_code() == 400
+                || response.status_code() == 422
+                || response.status_code() == 500,
             "Expected error status for missing query params, got {}",
             response.status_code()
         );
@@ -55,17 +57,19 @@ async fn callback_rejects_missing_query_params() {
         // Missing state param
         let response = request.get("/api/auth/oidc/callback?code=test").await;
         assert!(
-            response.status_code() == 400 || response.status_code() == 422 || response.status_code() == 500,
+            response.status_code() == 400
+                || response.status_code() == 422
+                || response.status_code() == 500,
             "Expected error status for missing state param, got {}",
             response.status_code()
         );
 
         // Missing code param
-        let response = request
-            .get("/api/auth/oidc/callback?state=test")
-            .await;
+        let response = request.get("/api/auth/oidc/callback?state=test").await;
         assert!(
-            response.status_code() == 400 || response.status_code() == 422 || response.status_code() == 500,
+            response.status_code() == 400
+                || response.status_code() == 422
+                || response.status_code() == 500,
             "Expected error status for missing code param, got {}",
             response.status_code()
         );
