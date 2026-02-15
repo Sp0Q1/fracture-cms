@@ -1,11 +1,11 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::unnecessary_struct_initialization)]
 #![allow(clippy::unused_async)]
-use loco_rs::prelude::*;
-use serde::{Deserialize, Serialize};
 use axum::response::Redirect;
 use axum_extra::extract::Form;
+use loco_rs::prelude::*;
 use sea_orm::{sea_query::Order, QueryOrder};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     models::_entities::movies::{ActiveModel, Column, Entity, Model},
@@ -15,12 +15,12 @@ use crate::{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Params {
     pub title: Option<String>,
-    }
+}
 
 impl Params {
     fn update(&self, item: &mut ActiveModel) {
-      item.title = Set(self.title.clone());
-      }
+        item.title = Set(self.title.clone());
+    }
 }
 
 async fn load_item(ctx: &AppContext, id: i32) -> Result<Model> {
@@ -82,10 +82,7 @@ pub async fn show(
 }
 
 #[debug_handler]
-pub async fn add(
-    State(ctx): State<AppContext>,
-    Form(params): Form<Params>,
-) -> Result<Redirect> {
+pub async fn add(State(ctx): State<AppContext>, Form(params): Form<Params>) -> Result<Redirect> {
     let mut item = ActiveModel {
         ..Default::default()
     };
