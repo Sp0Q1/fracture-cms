@@ -1,5 +1,5 @@
 use axum::{response::Redirect, Extension};
-use axum_extra::extract::cookie::{Cookie, SameSite};
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use loco_rs::prelude::*;
 use openidconnect::{
     core::CoreAuthenticationFlow, AuthorizationCode, EndUserEmail, EndUserName, LocalizedClaim,
@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
 use crate::{
-    controllers::oidc_state::{OidcContext, PendingAuth},
+    controllers::{
+        middleware,
+        oidc_state::{OidcContext, PendingAuth},
+    },
     models::{_entities::users, users::OidcUserInfo},
 };
 
@@ -146,10 +149,50 @@ async fn providers(oidc: Option<Extension<OidcContext>>) -> Result<Response> {
     format::json(ProvidersResponse { providers })
 }
 
+#[debug_handler]
+async fn logout() -> Result<Response> {
+    let cookie = Cookie::build(("jwt", ""))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .max_age(time::Duration::ZERO)
+        .build();
+    let mut response = Redirect::temporary("/").into_response();
+    response.headers_mut().insert(
+        axum::http::header::SET_COOKIE,
+        cookie.to_string().parse().unwrap(),
+    );
+    Ok(response)
+}
+
+#[debug_handler]
+async fn refresh(State(ctx): State<AppContext>, jar: CookieJar) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx)
+        .await
+        .ok_or_else(|| loco_rs::Error::Unauthorized("not authenticated".into()))?;
+    let jwt_config = ctx.config.get_jwt_config()?;
+    let token = user
+        .generate_jwt(&jwt_config.secret, jwt_config.expiration)
+        .map_err(|_| loco_rs::Error::Unauthorized("token generation failed".into()))?;
+    let cookie = Cookie::build(("jwt", token))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .build();
+    let mut response = format::empty_json()?.into_response();
+    response.headers_mut().insert(
+        axum::http::header::SET_COOKIE,
+        cookie.to_string().parse().unwrap(),
+    );
+    Ok(response)
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("/api/auth/oidc")
         .add("/authorize", get(authorize))
         .add("/callback", get(callback))
         .add("/providers", get(providers))
+        .add("/logout", get(logout))
+        .add("/refresh", get(refresh))
 }

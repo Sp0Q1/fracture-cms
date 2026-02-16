@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Fracture CMS{% endblock title %}
+
+{% block page_title %}{% if user_name %}My Movies{% else %}Welcome to Fracture CMS{% endif %}{% endblock page_title %}
+
+{% block content %}
+{% if user_name %}
+
+    {% if items %}
+    <div class="row">
+        {% for item in items %}
+        <div class="col-4">
+            <article class="card">
+                <header>{{ item.title | default(value="Untitled") | escape }}</header>
+                <p><a href="/movies/{{ item.id }}/edit">Edit</a></p>
+            </article>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <article class="card">
+        <header>Nothing Here Yet</header>
+        <p>You haven't added any movies. Start building your collection!</p>
+        <a href="/movies/new" class="button">Add Movie</a>
+    </article>
+    {% endif %}
+
+    <p class="mt-4"><a href="/movies/new" class="button">Add Movie</a></p>
+
+{% else %}
+
+<p>A content management system built with Rust and Loco, featuring OIDC single sign-on and movie management.</p>
+
+<div class="row">
+    <div class="col-4">
+        <article class="card">
+            <header>Sign in with Kanidm</header>
+            <p>Sign in to manage your movie collection.</p>
+            <a href="/api/auth/oidc/authorize" class="button">Sign in</a>
+        </article>
+    </div>
+</div>
+
+{% endif %}
+{% endblock content %}

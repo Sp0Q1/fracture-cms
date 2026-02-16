@@ -2,13 +2,13 @@
 #![allow(clippy::unnecessary_struct_initialization)]
 #![allow(clippy::unused_async)]
 use axum::response::Redirect;
-use axum_extra::extract::Form;
+use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
-use sea_orm::{sea_query::Order, QueryOrder};
 use serde::{Deserialize, Serialize};
 
+use super::middleware;
 use crate::{
-    models::_entities::movies::{ActiveModel, Column, Entity, Model},
+    models::_entities::movies::{ActiveModel, Model},
     views,
 };
 
@@ -23,39 +23,49 @@ impl Params {
     }
 }
 
-async fn load_item(ctx: &AppContext, id: i32) -> Result<Model> {
-    let item = Entity::find_by_id(id).one(&ctx.db).await?;
-    item.ok_or_else(|| Error::NotFound)
+fn require_user(
+    user: Option<crate::models::_entities::users::Model>,
+) -> Result<crate::models::_entities::users::Model> {
+    user.ok_or_else(|| Error::Unauthorized("Not authenticated".to_string()))
 }
 
 #[debug_handler]
 pub async fn list(
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
-    let item = Entity::find()
-        .order_by(Column::Id, Order::Desc)
-        .all(&ctx.db)
-        .await?;
-    views::movie::list(&v, &item)
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user(user)?;
+    let user_name = Some(user.name.clone());
+    let items = Model::find_by_user(&ctx.db, user.id).await;
+    views::movie::list(&v, &items, &user_name)
 }
 
 #[debug_handler]
 pub async fn new(
     ViewEngine(v): ViewEngine<TeraView>,
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
-    views::movie::create(&v)
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user(user)?;
+    let user_name = Some(user.name);
+    views::movie::create(&v, &user_name)
 }
 
 #[debug_handler]
 pub async fn update(
-    _auth: auth::JWT,
     Path(id): Path<i32>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
     Form(params): Form<Params>,
 ) -> Result<Redirect> {
-    let item = load_item(&ctx, id).await?;
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user(user)?;
+    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
     let mut item = item.into_active_model();
     params.update(&mut item);
     item.update(&ctx.db).await?;
@@ -67,9 +77,15 @@ pub async fn edit(
     Path(id): Path<i32>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
-    let item = load_item(&ctx, id).await?;
-    views::movie::edit(&v, &item)
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user(user)?;
+    let user_name = Some(user.name.clone());
+    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    views::movie::edit(&v, &item, &user_name)
 }
 
 #[debug_handler]
@@ -77,32 +93,46 @@ pub async fn show(
     Path(id): Path<i32>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
-    let item = load_item(&ctx, id).await?;
-    views::movie::show(&v, &item)
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user(user)?;
+    let user_name = Some(user.name.clone());
+    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    views::movie::show(&v, &item, &user_name)
 }
 
 #[debug_handler]
 pub async fn add(
-    _auth: auth::JWT,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
     Form(params): Form<Params>,
 ) -> Result<Redirect> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user(user)?;
     let mut item = ActiveModel {
         ..Default::default()
     };
     params.update(&mut item);
+    item.user_id = Set(Some(user.id));
     item.insert(&ctx.db).await?;
     Ok(Redirect::to("movies"))
 }
 
 #[debug_handler]
 pub async fn remove(
-    _auth: auth::JWT,
     Path(id): Path<i32>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
-    load_item(&ctx, id).await?.delete(&ctx.db).await?;
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user(user)?;
+    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    item.delete(&ctx.db).await?;
     format::empty()
 }
 

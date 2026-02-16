@@ -2,132 +2,93 @@
 set -euo pipefail
 
 COMPOSE="podman compose"
-KANIDM_API="https://localhost:8443"
+ZITADEL_API="http://localhost:8080"
 
-# Authenticate against the kanidm REST API, return a bearer token.
-# The 3-step auth flow uses the x-kanidm-auth-session-id header (a JWT)
-# to track the session across requests.
-kanidm_auth() {
-    local user="$1"
-    local pass="$2"
-    local hdr
-    hdr=$(mktemp)
-
-    # Step 1 – init: declare which account we're authenticating as
-    curl -sk -D "$hdr" -o /dev/null -X POST "$KANIDM_API/v1/auth" \
+# Authenticated API helper — passes PAT automatically.
+zapi() {
+    local method="$1" path="$2"
+    shift 2
+    curl -s -X "$method" "$ZITADEL_API$path" \
+        -H "Authorization: Bearer $PAT" \
         -H "Content-Type: application/json" \
-        -d "{\"step\":{\"init\":\"$user\"}}"
-    local sid
-    sid=$(grep -i x-kanidm-auth-session-id "$hdr" | tr -d '\r' | awk '{print $2}')
-
-    # Step 2 – begin: select "password" mechanism
-    curl -sk -D "$hdr" -o /dev/null -X POST "$KANIDM_API/v1/auth" \
-        -H "Content-Type: application/json" \
-        -H "x-kanidm-auth-session-id: $sid" \
-        -d '{"step":{"begin":"password"}}'
-    sid=$(grep -i x-kanidm-auth-session-id "$hdr" | tr -d '\r' | awk '{print $2}')
-
-    # Step 3 – cred: submit password via heredoc (stays out of process args)
-    local resp
-    resp=$(curl -sk -X POST "$KANIDM_API/v1/auth" \
-        -H "Content-Type: application/json" \
-        -H "x-kanidm-auth-session-id: $sid" \
-        --data-binary @- <<EOF
-{"step":{"cred":{"password":"$pass"}}}
-EOF
-    )
-    rm -f "$hdr"
-
-    echo "$resp" | jq -r '.state.success'
-}
-
-# Authenticated API helper – passes bearer token automatically.
-api() {
-    local token="$1" method="$2" path="$3"
-    shift 3
-    curl -sk -o /dev/null -X "$method" "$KANIDM_API$path" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $token" \
         "$@"
 }
 
-# --- 1. Generate TLS certificates ---
-echo "==> Generating TLS certificates..."
-$COMPOSE run --rm kanidm-init 2>&1
+# --- 1. Start Zitadel + Postgres ---
+echo "==> Starting Zitadel and database..."
+$COMPOSE up -d zitadel-db zitadel
 
-# --- 2. Start kanidm ---
-echo "==> Starting kanidm..."
-$COMPOSE up -d kanidm
 echo "    Waiting for readiness..."
-sleep 3
-until curl -sk "$KANIDM_API/status" > /dev/null 2>&1; do sleep 2; done
-echo "    Kanidm is ready."
+until curl -s "$ZITADEL_API/debug/ready" > /dev/null 2>&1; do sleep 2; done
+echo "    Zitadel is ready."
 
-# --- 3. Recover built-in account passwords ---
-echo "==> Recovering admin password..."
-ADMIN_PASS=$($COMPOSE exec -T kanidm kanidmd recover-account admin 2>&1 \
-    | grep -oP 'password: \K\S+' | tr -d '"')
+# --- 2. Get PAT from logs ---
+echo "==> Retrieving admin PAT..."
+# Zitadel prints the machine user PAT as a raw token on its own line
+PAT=""
+for _ in $(seq 1 10); do
+    PAT=$($COMPOSE logs zitadel 2>&1 \
+        | grep -E '^[A-Za-z0-9_-]{30,}$' \
+        | head -1) || true
+    if [ -n "$PAT" ]; then break; fi
+    sleep 2
+done
 
-echo "==> Recovering idm_admin password..."
-IDM_ADMIN_PASS=$($COMPOSE exec -T kanidm kanidmd recover-account idm_admin 2>&1 \
-    | grep -oP 'password: \K\S+' | tr -d '"')
+if [ -z "$PAT" ]; then
+    echo "ERROR: Could not find PAT in Zitadel logs."
+    echo "       Check: podman compose logs zitadel"
+    exit 1
+fi
+echo "    PAT retrieved."
 
-# --- 4. Authenticate via REST API ---
-echo "==> Authenticating as admin..."
-ADMIN_TOKEN=$(kanidm_auth admin "$ADMIN_PASS")
+# --- 3. Create project ---
+echo "==> Creating project 'Fracture CMS'..."
+PROJECT_ID=$(zapi POST /management/v1/projects \
+    -d '{"name":"Fracture CMS"}' | jq -r '.id')
+echo "    Project ID: $PROJECT_ID"
 
-echo "==> Authenticating as idm_admin..."
-IDM_TOKEN=$(kanidm_auth idm_admin "$IDM_ADMIN_PASS")
+# --- 4. Create OIDC application ---
+echo "==> Creating OIDC application..."
+APP_RESPONSE=$(zapi POST "/management/v1/projects/$PROJECT_ID/apps/oidc" \
+    -d '{
+        "name": "Fracture CMS",
+        "redirectUris": ["http://localhost:5150/api/auth/oidc/callback"],
+        "responseTypes": ["OIDC_RESPONSE_TYPE_CODE"],
+        "grantTypes": ["OIDC_GRANT_TYPE_AUTHORIZATION_CODE"],
+        "appType": "OIDC_APP_TYPE_WEB",
+        "authMethodType": "OIDC_AUTH_METHOD_TYPE_BASIC",
+        "postLogoutRedirectUris": ["http://localhost:5150"],
+        "devMode": true
+    }')
 
-# --- 5. Create OAuth2 client ---
-echo "==> Creating OAuth2 client 'fracture-cms'..."
-api "$IDM_TOKEN" POST /v1/oauth2/_basic \
-    -d '{"attrs":{
-        "name":["fracture-cms"],
-        "displayname":["Fracture CMS"],
-        "oauth2_rs_origin_landing":["http://localhost:5150/api/auth/oidc/callback"]
-    }}'
+CLIENT_ID=$(echo "$APP_RESPONSE" | jq -r '.clientId')
+CLIENT_SECRET=$(echo "$APP_RESPONSE" | jq -r '.clientSecret')
+echo "    Client ID: $CLIENT_ID"
 
-echo "==> Configuring scope map..."
-api "$IDM_TOKEN" POST /v1/oauth2/fracture-cms/_scopemap/idm_all_persons \
-    -d '["openid","email","profile"]'
+# --- 5. Create test user ---
+echo "==> Creating test user..."
+TEST_PASS="TestPassword1!"
+zapi POST /management/v1/users/human \
+    -d "{
+        \"userName\": \"testuser\",
+        \"profile\": {
+            \"firstName\": \"Test\",
+            \"lastName\": \"User\",
+            \"displayName\": \"Test User\"
+        },
+        \"email\": {
+            \"email\": \"testuser@example.com\",
+            \"isEmailVerified\": true
+        },
+        \"initialPassword\": \"$TEST_PASS\"
+    }" > /dev/null
 
-# Localhost redirects are implicit since our origin is already localhost.
-
-echo "==> Preferring short usernames..."
-api "$IDM_TOKEN" PATCH /v1/oauth2/fracture-cms \
-    -d '{"attrs":{"oauth2_prefer_short_username":["true"]}}'
-
-echo "==> Retrieving client secret..."
-CLIENT_SECRET=$(curl -sk "$KANIDM_API/v1/oauth2/fracture-cms/_basic_secret" \
-    -H "Authorization: Bearer $IDM_TOKEN" | jq -r '.')
-
-# --- 6. Create test user and group ---
-echo "==> Creating group 'fracture_users'..."
-api "$IDM_TOKEN" POST /v1/group \
-    -d '{"attrs":{"name":["fracture_users"]}}'
-
-echo "==> Creating person 'testuser'..."
-api "$IDM_TOKEN" POST /v1/person \
-    -d '{"attrs":{"name":["testuser"],"displayname":["Test User"]}}'
-
-echo "==> Setting test user email..."
-api "$IDM_TOKEN" PATCH /v1/person/testuser \
-    -d '{"attrs":{"mail":["testuser@example.com"]}}'
-
-echo "==> Adding testuser to fracture_users..."
-api "$IDM_TOKEN" POST /v1/group/fracture_users/_attr/member \
-    -d '["testuser"]'
-
-echo "==> Recovering testuser password..."
-TEST_PASS=$($COMPOSE exec -T kanidm kanidmd recover-account testuser 2>&1 \
-    | grep -oP 'password: \K\S+' | tr -d '"')
-
-# --- 7. Write .env ---
+# --- 6. Write .env ---
 echo "==> Writing .env..."
 JWT_SECRET=$(openssl rand -base64 32)
 cat > .env <<EOF
 JWT_SECRET=$JWT_SECRET
+OIDC_CLIENT_ID=$CLIENT_ID
 OIDC_CLIENT_SECRET=$CLIENT_SECRET
 EOF
 
@@ -137,7 +98,7 @@ echo "========================================"
 echo "  Dev Environment Setup Complete"
 echo "========================================"
 echo ""
-echo "  Kanidm (IdP):    https://localhost:8443"
+echo "  Zitadel (IdP):   http://localhost:8080"
 echo "  MailCrab (Email): http://localhost:1080"
 echo "  App:             http://localhost:5150"
 echo ""

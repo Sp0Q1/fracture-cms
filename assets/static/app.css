@@ -1,0 +1,8 @@
+.nav-end {
+    margin-left: auto;
+}
+
+#account-menu[popover] {
+    left: auto !important;
+    right: 1rem;
+}

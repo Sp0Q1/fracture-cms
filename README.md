@@ -1,58 +1,56 @@
-# Welcome to Loco :train:
+# Fracture CMS
 
-[Loco](https://loco.rs) is a web and API framework running on Rust.
+A content management system built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework, featuring OIDC single sign-on and user-owned movie management.
 
-This is the **SaaS starter** which includes a `User` model and authentication based on JWT.
-It also include configuration sections that help you pick either a frontend or a server-side template set up for your fullstack server.
+## Features
 
+- **OIDC Authentication** — single sign-on through OpenID Connect (Kanidm)
+- **Short-lived JWT Sessions** — 15-minute tokens with silent background refresh
+- **User-owned Movies** — each user manages their own movie collection (enforced via `user_id` foreign key)
+- **Account Menu** — SVG avatar icon with colored status indicator and dropdown menu (oat.ink `<ot-dropdown>`)
+- **Frontpage Dashboard** — logged-in users see their movie collection; guests see a welcome page
+- **Content Security Policy** — strict CSP headers with no inline scripts or styles
+- **Containerized Development** — Podman Compose environment with Kanidm IdP
 
 ## Quick Start
+
+### Local development
 
 ```sh
 cargo loco start
 ```
 
+Visit [http://localhost:5150](http://localhost:5150).
+
+### Full stack (with Kanidm, Mailcrab)
+
 ```sh
-$ cargo loco start
-Finished dev [unoptimized + debuginfo] target(s) in 21.63s
-    Running `target/debug/myapp start`
-
-    :
-    :
-    :
-
-controller/app_routes.rs:203: [Middleware] Adding log trace id
-
-                      ▄     ▀
-                                 ▀  ▄
-                  ▄       ▀     ▄  ▄ ▄▀
-                                    ▄ ▀▄▄
-                        ▄     ▀    ▀  ▀▄▀█▄
-                                          ▀█▄
-▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄   ▄▄▄▄▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄▄▄ ▀▀█
- ██████  █████   ███ █████   ███ █████   ███ ▀█
- ██████  █████   ███ █████   ▀▀▀ █████   ███ ▄█▄
- ██████  █████   ███ █████       █████   ███ ████▄
- ██████  █████   ███ █████   ▄▄▄ █████   ███ █████
- ██████  █████   ███  ████   ███ █████   ███ ████▀
-   ▀▀▀██▄ ▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀ ██▀
-       ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-                https://loco.rs
-
-environment: development
-   database: automigrate
-     logger: debug
-compilation: debug
-      modes: server
-
-listening on http://localhost:5150
+./dev/setup.sh
+podman compose up
 ```
 
-## Full Stack Serving
+See the `dev/` directory for environment configuration and service setup.
 
-You can check your [configuration](config/development.yaml) to pick either frontend setup or server-side rendered template, and activate the relevant configuration sections.
+## Architecture
 
+### Authentication Flow
 
-## Getting help
+1. User clicks **Sign in** → redirected to Kanidm OIDC provider
+2. After successful authentication → callback issues a short-lived JWT (15 min) in an HTTP-only cookie
+3. Frontend silently refreshes the token every 12 minutes via `/api/auth/oidc/refresh`
+4. On token expiry (inactivity) → "Session expired" message with sign-in link
+5. User clicks **Sign out** → cookie cleared, redirected to home
 
-Check out [a quick tour](https://loco.rs/docs/getting-started/tour/) or [the complete guide](https://loco.rs/docs/getting-started/guide/).
+### Movie Ownership
+
+- Movies are scoped to the authenticated user via a `user_id` foreign key
+- All movie endpoints require authentication — unauthenticated users are rejected
+- Users can only view, edit, and delete their own movies
+
+### Security
+
+- HTTP-only, SameSite=Lax cookies (not accessible to JavaScript)
+- Strict Content-Security-Policy: `default-src 'none'; script-src 'self'; style-src 'self'`
+- X-Content-Type-Options, X-Frame-Options, Referrer-Policy headers
+- No inline scripts or event handlers — all JS in external files
+- SVG icons use presentation attributes (`fill`, `stroke`) which are CSP-safe
