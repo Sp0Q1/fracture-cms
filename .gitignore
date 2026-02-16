@@ -20,3 +20,6 @@ target/
 
 *.sqlite
 *.sqlite-*
+
+# Environment variables (contains secrets)
+.env
