@@ -1,0 +1,46 @@
+services:
+  kanidm:
+    image: docker.io/kanidm/server:latest
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - ./dev/kanidm/server.toml:/data/server.toml:ro
+      - kanidm_data:/data
+
+  kanidm-init:
+    image: docker.io/kanidm/server:latest
+    volumes:
+      - ./dev/kanidm/server.toml:/data/server.toml:ro
+      - kanidm_data:/data
+    entrypoint: ["kanidmd", "cert-generate"]
+
+  mailcrab:
+    image: docker.io/marlonb/mailcrab:latest
+    ports:
+      - "127.0.0.1:1080:1080"
+      - "127.0.0.1:1025:1025"
+
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile.dev
+    ports:
+      - "127.0.0.1:5150:5150"
+    depends_on:
+      - kanidm
+      - mailcrab
+    volumes:
+      - kanidm_data:/certs:ro
+      - ./config:/app/config:ro
+    env_file:
+      - .env
+    environment:
+      - OIDC_ISSUER_URL=https://kanidm:8443/oauth2/openid/fracture-cms
+      - OIDC_CLIENT_ID=fracture-cms
+      - OIDC_REDIRECT_URI=http://localhost:5150/api/auth/oidc/callback
+      - MAILER_HOST=mailcrab
+      - SERVER_BINDING=0.0.0.0
+    entrypoint: ["/entrypoint.sh"]
+
+volumes:
+  kanidm_data:

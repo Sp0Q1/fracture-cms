@@ -19,7 +19,7 @@ server:
   # Port on which the server will listen. the server binding is 0.0.0.0:{PORT}
   port: 5150
   # Binding for the server (which interface to bind to)
-  binding: localhost
+  binding: {{ get_env(name="SERVER_BINDING", default="localhost") }}
   # The UI hostname or IP address that mailers will point to.
   host: http://localhost
   # Out of the box middleware configuration. to disable middleware you can changed the `enable` field to `false` of comment the middleware block
@@ -50,7 +50,7 @@ mailer:
     # Enable/Disable smtp mailer.
     enable: true
     # SMTP server host. e.x localhost, smtp.gmail.com
-    host: localhost
+    host: {{ get_env(name="MAILER_HOST", default="localhost") }}
     # SMTP server port
     port: 1025
     # Use secure connection (SSL/TLS).
@@ -69,17 +69,17 @@ mailer:
 #        ... other fields
 
 # OIDC Single Sign-On Configuration
-# settings:
-#   oidc:
-#     provider_name: google
-#     issuer_url: https://accounts.google.com
-#     client_id: your-client-id
-#     client_secret: your-client-secret
-#     redirect_uri: http://localhost:5150/api/auth/oidc/callback
-#     scopes:
-#       - openid
-#       - email
-#       - profile
+settings:
+  oidc:
+    provider_name: kanidm
+    issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="https://kanidm:8443/oauth2/openid/fracture-cms") }}
+    client_id: {{ get_env(name="OIDC_CLIENT_ID", default="fracture-cms") }}
+    client_secret: {{ get_env(name="OIDC_CLIENT_SECRET") }}
+    redirect_uri: {{ get_env(name="OIDC_REDIRECT_URI", default="http://localhost:5150/api/auth/oidc/callback") }}
+    scopes:
+      - openid
+      - email
+      - profile
 
 # Database Configuration
 database:
@@ -110,3 +110,8 @@ auth:
     secret: {{ get_env(name="JWT_SECRET") }}
     # Token expiration time in seconds
     expiration: 604800 # 7 days
+    # Accept JWT from both Authorization header and cookie
+    location:
+      - from: Bearer
+      - from: Cookie
+        name: jwt
