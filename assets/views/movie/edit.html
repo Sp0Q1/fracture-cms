@@ -12,8 +12,8 @@ Edit movie: {{ item.id }}
 <form action="/movies/{{ item.id }}" method="post">
     <label for="title">Title</label>
     <input id="title" name="title" type="text" value="{{item.title}}" />
-    <button type="submit">Submit</button>
-    <button data-variant="danger"
+    <button type="submit" class="mt-4">Submit</button>
+    <button class="mt-4" data-variant="danger"
             data-delete-url="/movies/{{ item.id }}"
             data-delete-redirect="/movies">Delete</button>
 </form>
