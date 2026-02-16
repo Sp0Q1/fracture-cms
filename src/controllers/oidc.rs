@@ -1,7 +1,4 @@
-use axum::{
-    Extension,
-    response::Redirect,
-};
+use axum::{response::Redirect, Extension};
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use loco_rs::prelude::*;
 use openidconnect::{
@@ -15,11 +12,6 @@ use crate::{
     controllers::oidc_state::{OidcContext, PendingAuth},
     models::{_entities::users, users::OidcUserInfo},
 };
-
-#[derive(Debug, Serialize)]
-struct AuthorizeResponse {
-    authorize_url: String,
-}
 
 #[derive(Debug, Serialize)]
 struct ProviderInfo {
