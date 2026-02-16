@@ -1,72 +1,37 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}{% endblock title %}</title>
-  <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,line-clamp"></script>
+  <link rel="stylesheet" href="/static/oat.min.css" integrity="sha384-Q7tDn81qF6GoBv+Rdj5l6JFr2qaiXG01Z5dT8jRpp5lE+6IZx8as9X/Igi7ISdBP" crossorigin="anonymous">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/oat.min.js" integrity="sha384-/Trl5iuXWQS6d7T9TWGsfbC7cIDm88CDZc+BdI3LCdclFglQVOz7AmU+M7R5IQE/" crossorigin="anonymous" defer></script>
+  <script src="/static/app.js" defer></script>
   {% block head %}
 
   {% endblock head %}
 </head>
 
-<body class="min-h-screen bg-background font-sans antialiased">
-    <div class="relative flex min-h-screen flex-col bg-background">
-        <nav class="border-b bg-white">
-            <div class="flex items-center gap-6 px-5 py-3">
-                <a href="/" class="font-semibold text-gray-900 hover:text-gray-600">Home</a>
-                <a href="/movies" class="text-gray-600 hover:text-gray-900">Movies</a>
-                <a href="/api/auth/oidc/authorize" class="text-gray-600 hover:text-gray-900">Sign in</a>
-            </div>
-        </nav>
-        <div class="themes-wrapper bg-background">
-                <main class="relative flex min-h-svh flex-1 flex-col bg-background peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow">
-                    <div class="flex flex-1 flex-col gap-4 p-5 pt-5">
-                        <h1 class="scroll-m-20 text-3xl font-bold tracking-tight">
-                            {% block page_title %}{% endblock page_title %}
-                        </h1>
-                        {% block content %}
-                        {% endblock content %}
-                    </div>
-                </main>
-        </div>
-    </div>
+<body{% if user_name %} data-authenticated{% endif %}>
+    <nav data-topnav>
+        <span><a href="/"><strong>Fracture CMS</strong></a></span>
+        <span><a href="/movies">Movies</a></span>
+        {% if user_name %}
+            <span class="nav-end">{{ user_name }} · <a href="/api/auth/oidc/logout">Sign out</a></span>
+        {% else %}
+            <span class="nav-end"><a href="/api/auth/oidc/authorize">Sign in</a></span>
+        {% endif %}
+    </nav>
+    <main class="container">
+        <h1>{% block page_title %}{% endblock page_title %}</h1>
+        {% block content %}
+        {% endblock content %}
+    </main>
   {% block js %}
 
   {% endblock js %}
-
-  <script>
-    function confirmDelete(event, delete_url, redirect_to) {
-        event.preventDefault();
-        if (confirm("Are you sure you want to delete this item?")) {
-            var xhr = new XMLHttpRequest();
-            xhr.open("DELETE", delete_url, true);
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState == 4 && xhr.status == 200) {
-                    window.location.href = redirect_to;
-                }
-            };
-            xhr.send();
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.add-more').forEach(button => {
-                button.addEventListener('click', function () {
-                    const group = this.getAttribute('data-group');
-                    const first = document.getElementById(`${group}-inputs`).querySelector('input');
-                    if (first) {
-                        const clonedInput = first.cloneNode();
-                        clonedInput.value = '';
-                        const container = document.getElementById(`${group}-inputs`);
-                        container.appendChild(clonedInput);
-                    } 
-                });
-            });
-        });
-  </script>
 </body>
 
 </html>
