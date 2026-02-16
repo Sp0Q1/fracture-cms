@@ -14,6 +14,13 @@
 
 <body class="min-h-screen bg-background font-sans antialiased">
     <div class="relative flex min-h-screen flex-col bg-background">
+        <nav class="border-b bg-white">
+            <div class="flex items-center gap-6 px-5 py-3">
+                <a href="/" class="font-semibold text-gray-900 hover:text-gray-600">Home</a>
+                <a href="/movies" class="text-gray-600 hover:text-gray-900">Movies</a>
+                <a href="/api/auth/oidc/authorize" class="text-gray-600 hover:text-gray-900">Sign in</a>
+            </div>
+        </nav>
         <div class="themes-wrapper bg-background">
                 <main class="relative flex min-h-svh flex-1 flex-col bg-background peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow">
                     <div class="flex flex-1 flex-col gap-4 p-5 pt-5">
