@@ -1,4 +1,8 @@
-use axum::Extension;
+use axum::{
+    Extension,
+    response::Redirect,
+};
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use loco_rs::prelude::*;
 use openidconnect::{
     core::CoreAuthenticationFlow, AuthorizationCode, EndUserEmail, EndUserName, LocalizedClaim,
@@ -10,7 +14,6 @@ use std::time::Instant;
 use crate::{
     controllers::oidc_state::{OidcContext, PendingAuth},
     models::{_entities::users, users::OidcUserInfo},
-    views::auth::LoginResponse,
 };
 
 #[derive(Debug, Serialize)]
@@ -64,9 +67,7 @@ async fn authorize(Extension(oidc): Extension<OidcContext>) -> Result<Response> 
         },
     );
 
-    format::json(AuthorizeResponse {
-        authorize_url: authorize_url.to_string(),
-    })
+    Ok(Redirect::temporary(authorize_url.as_str()).into_response())
 }
 
 #[debug_handler]
@@ -128,7 +129,18 @@ async fn callback(
         .generate_jwt(&jwt_secret.secret, jwt_secret.expiration)
         .or_else(|_| unauthorized("unauthorized!"))?;
 
-    format::json(LoginResponse::new(&user, &token))
+    let cookie = Cookie::build(("jwt", token))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .build();
+
+    let mut response = Redirect::temporary("/movies").into_response();
+    response.headers_mut().insert(
+        axum::http::header::SET_COOKIE,
+        cookie.to_string().parse().unwrap(),
+    );
+    Ok(response)
 }
 
 #[debug_handler]
