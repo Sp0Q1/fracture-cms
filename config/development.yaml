@@ -110,3 +110,8 @@ auth:
     secret: {{ get_env(name="JWT_SECRET") }}
     # Token expiration time in seconds
     expiration: 604800 # 7 days
+    # Accept JWT from both Authorization header and cookie
+    location:
+      - from: Bearer
+      - from: Cookie
+        name: jwt
