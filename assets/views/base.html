@@ -7,8 +7,6 @@
   <title>{% block title %}{% endblock title %}</title>
   <link rel="stylesheet" href="/static/oat.min.css" integrity="sha384-Q7tDn81qF6GoBv+Rdj5l6JFr2qaiXG01Z5dT8jRpp5lE+6IZx8as9X/Igi7ISdBP" crossorigin="anonymous">
   <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/oat.min.js" integrity="sha384-/Trl5iuXWQS6d7T9TWGsfbC7cIDm88CDZc+BdI3LCdclFglQVOz7AmU+M7R5IQE/" crossorigin="anonymous" defer></script>
-  <script src="/static/app.js" defer></script>
   {% block head %}
 
   {% endblock head %}
@@ -18,17 +16,40 @@
     <nav data-topnav>
         <span><a href="/"><strong>Fracture CMS</strong></a></span>
         <span><a href="/movies">Movies</a></span>
-        {% if user_name %}
-            <span class="nav-end">{{ user_name }} · <a href="/api/auth/oidc/logout">Sign out</a></span>
-        {% else %}
-            <span class="nav-end"><a href="/api/auth/oidc/authorize">Sign in</a></span>
-        {% endif %}
+        <ot-dropdown class="nav-end">
+            <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+                    {% if user_name %}
+                    <circle cx="18" cy="18" r="4.5" fill="#22c55e" stroke="none"/>
+                    <path d="M16 18l1.5 1.5L20 17" stroke="white" stroke-width="1.5" fill="none"/>
+                    {% else %}
+                    <circle cx="18" cy="18" r="4.5" fill="#ef4444" stroke="none"/>
+                    <path d="M16.5 16.5l3 3M19.5 16.5l-3 3" stroke="white" stroke-width="1.5" fill="none"/>
+                    {% endif %}
+                </svg>
+            </button>
+            <div id="account-menu" popover>
+                {% if user_name %}
+                <span role="menuitem">{{ user_name }}</span>
+                <hr>
+                <a href="/movies" role="menuitem">My Movies</a>
+                <a href="/api/auth/oidc/logout" role="menuitem">Sign out</a>
+                {% else %}
+                <a href="/api/auth/oidc/authorize" role="menuitem">Sign in with Kanidm</a>
+                <a href="/api/auth/oidc/authorize" role="menuitem">Create account</a>
+                {% endif %}
+            </div>
+        </ot-dropdown>
     </nav>
     <main class="container">
         <h1>{% block page_title %}{% endblock page_title %}</h1>
         {% block content %}
         {% endblock content %}
     </main>
+  <script src="/static/oat.min.js" integrity="sha384-/Trl5iuXWQS6d7T9TWGsfbC7cIDm88CDZc+BdI3LCdclFglQVOz7AmU+M7R5IQE/" crossorigin="anonymous"></script>
+  <script src="/static/app.js"></script>
   {% block js %}
 
   {% endblock js %}

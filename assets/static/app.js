@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", function () {
             fetch("/api/auth/oidc/refresh").then(function (r) {
                 if (!r.ok) {
                     document.body.innerHTML =
-                        '<div class="session-expired">' +
+                        '<div class="text-center mt-6">' +
                         "<h2>Session expired</h2><p>You have been logged out.</p>" +
                         '<a href="/api/auth/oidc/authorize">Sign in again</a></div>';
                 }
