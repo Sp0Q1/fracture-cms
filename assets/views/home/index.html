@@ -5,22 +5,31 @@
 {% block page_title %}Welcome to Fracture CMS{% endblock page_title %}
 
 {% block content %}
-<p class="text-lg text-gray-600 mb-8">A content management system built with Rust and Loco, featuring OIDC single sign-on and movie management.</p>
+<p>A content management system built with Rust and Loco, featuring OIDC single sign-on and movie management.</p>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <a href="/movies" class="block p-6 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-        <h2 class="text-xl font-semibold mb-2">Browse Movies</h2>
-        <p class="text-gray-600">View and manage the movie collection.</p>
-    </a>
+<div class="row">
+    <div class="col-4">
+        <article class="card">
+            <header>Browse Movies</header>
+            <p>View and manage the movie collection.</p>
+            <a href="/movies" class="button">Browse</a>
+        </article>
+    </div>
 
-    <a href="/movies/new" class="block p-6 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-        <h2 class="text-xl font-semibold mb-2">Add a Movie</h2>
-        <p class="text-gray-600">Add a new movie to the catalog.</p>
-    </a>
+    <div class="col-4">
+        <article class="card">
+            <header>Add a Movie</header>
+            <p>Add a new movie to the catalog.</p>
+            <a href="/movies/new" class="button">Add</a>
+        </article>
+    </div>
 
-    <a href="/api/auth/oidc/authorize" class="block p-6 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-        <h2 class="text-xl font-semibold mb-2">Sign in with Kanidm</h2>
-        <p class="text-gray-600">Authenticate via OpenID Connect.</p>
-    </a>
+    <div class="col-4">
+        <article class="card">
+            <header>Sign in with Kanidm</header>
+            <p>Authenticate via OpenID Connect.</p>
+            <a href="/api/auth/oidc/authorize" class="button">Sign in</a>
+        </article>
+    </div>
 </div>
 {% endblock content %}

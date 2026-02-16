@@ -2,11 +2,12 @@
 #![allow(clippy::unnecessary_struct_initialization)]
 #![allow(clippy::unused_async)]
 use axum::response::Redirect;
-use axum_extra::extract::Form;
+use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
 use sea_orm::{sea_query::Order, QueryOrder};
 use serde::{Deserialize, Serialize};
 
+use super::middleware;
 use crate::{
     models::_entities::movies::{ActiveModel, Column, Entity, Model},
     views,
@@ -32,20 +33,26 @@ async fn load_item(ctx: &AppContext, id: i32) -> Result<Model> {
 pub async fn list(
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user_name = user.map(|u| u.name);
     let item = Entity::find()
         .order_by(Column::Id, Order::Desc)
         .all(&ctx.db)
         .await?;
-    views::movie::list(&v, &item)
+    views::movie::list(&v, &item, &user_name)
 }
 
 #[debug_handler]
 pub async fn new(
     ViewEngine(v): ViewEngine<TeraView>,
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
-    views::movie::create(&v)
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user_name = user.map(|u| u.name);
+    views::movie::create(&v, &user_name)
 }
 
 #[debug_handler]
@@ -67,9 +74,12 @@ pub async fn edit(
     Path(id): Path<i32>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user_name = user.map(|u| u.name);
     let item = load_item(&ctx, id).await?;
-    views::movie::edit(&v, &item)
+    views::movie::edit(&v, &item, &user_name)
 }
 
 #[debug_handler]
@@ -77,9 +87,12 @@ pub async fn show(
     Path(id): Path<i32>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user_name = user.map(|u| u.name);
     let item = load_item(&ctx, id).await?;
-    views::movie::show(&v, &item)
+    views::movie::show(&v, &item, &user_name)
 }
 
 #[debug_handler]

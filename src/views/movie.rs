@@ -7,8 +7,16 @@ use crate::models::_entities::movies;
 /// # Errors
 ///
 /// When there is an issue with rendering the view.
-pub fn list(v: &impl ViewRenderer, items: &Vec<movies::Model>) -> Result<Response> {
-    format::render().view(v, "movie/list.html", data!({"items": items}))
+pub fn list(
+    v: &impl ViewRenderer,
+    items: &Vec<movies::Model>,
+    user_name: &Option<String>,
+) -> Result<Response> {
+    format::render().view(
+        v,
+        "movie/list.html",
+        data!({"items": items, "user_name": user_name}),
+    )
 }
 
 /// Render a single `movie` view.
@@ -16,8 +24,16 @@ pub fn list(v: &impl ViewRenderer, items: &Vec<movies::Model>) -> Result<Respons
 /// # Errors
 ///
 /// When there is an issue with rendering the view.
-pub fn show(v: &impl ViewRenderer, item: &movies::Model) -> Result<Response> {
-    format::render().view(v, "movie/show.html", data!({"item": item}))
+pub fn show(
+    v: &impl ViewRenderer,
+    item: &movies::Model,
+    user_name: &Option<String>,
+) -> Result<Response> {
+    format::render().view(
+        v,
+        "movie/show.html",
+        data!({"item": item, "user_name": user_name}),
+    )
 }
 
 /// Render a `movie` create form.
@@ -25,8 +41,8 @@ pub fn show(v: &impl ViewRenderer, item: &movies::Model) -> Result<Response> {
 /// # Errors
 ///
 /// When there is an issue with rendering the view.
-pub fn create(v: &impl ViewRenderer) -> Result<Response> {
-    format::render().view(v, "movie/create.html", data!({}))
+pub fn create(v: &impl ViewRenderer, user_name: &Option<String>) -> Result<Response> {
+    format::render().view(v, "movie/create.html", data!({"user_name": user_name}))
 }
 
 /// Render a `movie` edit form.
@@ -34,6 +50,14 @@ pub fn create(v: &impl ViewRenderer) -> Result<Response> {
 /// # Errors
 ///
 /// When there is an issue with rendering the view.
-pub fn edit(v: &impl ViewRenderer, item: &movies::Model) -> Result<Response> {
-    format::render().view(v, "movie/edit.html", data!({"item": item}))
+pub fn edit(
+    v: &impl ViewRenderer,
+    item: &movies::Model,
+    user_name: &Option<String>,
+) -> Result<Response> {
+    format::render().view(
+        v,
+        "movie/edit.html",
+        data!({"item": item, "user_name": user_name}),
+    )
 }
