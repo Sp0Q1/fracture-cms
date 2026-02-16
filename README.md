@@ -1,58 +1,29 @@
-# Welcome to Loco :train:
+# Fracture CMS
 
-[Loco](https://loco.rs) is a web and API framework running on Rust.
+A content management system built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework, featuring OIDC single sign-on and movie CRUD management.
 
-This is the **SaaS starter** which includes a `User` model and authentication based on JWT.
-It also include configuration sections that help you pick either a frontend or a server-side template set up for your fullstack server.
+## Features
 
+- **JWT Authentication** — token-based API authentication
+- **OIDC via Kanidm** — single sign-on through OpenID Connect
+- **Email Verification** — user registration with email confirmation
+- **Movie Management** — full CRUD for movie entries with server-side rendered views
 
 ## Quick Start
+
+### Local development
 
 ```sh
 cargo loco start
 ```
 
+Visit [http://localhost:5150](http://localhost:5150).
+
+### Full stack (with Kanidm, Postgres, Mailcrab)
+
 ```sh
-$ cargo loco start
-Finished dev [unoptimized + debuginfo] target(s) in 21.63s
-    Running `target/debug/myapp start`
-
-    :
-    :
-    :
-
-controller/app_routes.rs:203: [Middleware] Adding log trace id
-
-                      ▄     ▀
-                                 ▀  ▄
-                  ▄       ▀     ▄  ▄ ▄▀
-                                    ▄ ▀▄▄
-                        ▄     ▀    ▀  ▀▄▀█▄
-                                          ▀█▄
-▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄   ▄▄▄▄▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄▄▄ ▀▀█
- ██████  █████   ███ █████   ███ █████   ███ ▀█
- ██████  █████   ███ █████   ▀▀▀ █████   ███ ▄█▄
- ██████  █████   ███ █████       █████   ███ ████▄
- ██████  █████   ███ █████   ▄▄▄ █████   ███ █████
- ██████  █████   ███  ████   ███ █████   ███ ████▀
-   ▀▀▀██▄ ▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀ ██▀
-       ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-                https://loco.rs
-
-environment: development
-   database: automigrate
-     logger: debug
-compilation: debug
-      modes: server
-
-listening on http://localhost:5150
+./dev/setup.sh
+podman compose up
 ```
 
-## Full Stack Serving
-
-You can check your [configuration](config/development.yaml) to pick either frontend setup or server-side rendered template, and activate the relevant configuration sections.
-
-
-## Getting help
-
-Check out [a quick tour](https://loco.rs/docs/getting-started/tour/) or [the complete guide](https://loco.rs/docs/getting-started/guide/).
+See the `dev/` directory for environment configuration and service setup.
