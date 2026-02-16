@@ -2,7 +2,7 @@
     margin-left: auto;
 }
 
-.session-expired {
-    text-align: center;
-    padding: 4rem;
+#account-menu[popover] {
+    left: auto !important;
+    right: 1rem;
 }

@@ -4,7 +4,7 @@ use axum_extra::extract::CookieJar;
 use loco_rs::prelude::*;
 
 use super::middleware;
-use crate::views;
+use crate::{models::movies, views};
 
 #[debug_handler]
 pub async fn index(
@@ -13,8 +13,14 @@ pub async fn index(
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user_name = user.map(|u| u.name);
-    views::home::index(&v, &user_name)
+    match user {
+        Some(user) => {
+            let items = movies::Model::find_by_user(&ctx.db, user.id).await;
+            let user_name = Some(user.name);
+            views::home::index(&v, &user_name, &items)
+        }
+        None => views::home::index(&v, &None, &vec![]),
+    }
 }
 
 pub fn routes() -> Routes {
