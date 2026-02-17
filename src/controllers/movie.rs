@@ -61,14 +61,14 @@ pub async fn new(
 
 #[debug_handler]
 pub async fn update(
-    Path(id): Path<i32>,
+    Path(pid): Path<String>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
     Form(params): Form<Params>,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
-    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+    let item = Model::find_by_pid_and_user(&ctx.db, &pid, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let mut item = item.into_active_model();
@@ -79,7 +79,7 @@ pub async fn update(
 
 #[debug_handler]
 pub async fn edit(
-    Path(id): Path<i32>,
+    Path(pid): Path<String>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
@@ -87,7 +87,7 @@ pub async fn edit(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let user_name = Some(user.name.clone());
-    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+    let item = Model::find_by_pid_and_user(&ctx.db, &pid, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     views::movie::edit(&v, &item, &user_name)
@@ -95,7 +95,7 @@ pub async fn edit(
 
 #[debug_handler]
 pub async fn show(
-    Path(id): Path<i32>,
+    Path(pid): Path<String>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
@@ -103,7 +103,7 @@ pub async fn show(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let user_name = Some(user.name.clone());
-    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+    let item = Model::find_by_pid_and_user(&ctx.db, &pid, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     views::movie::show(&v, &item, &user_name)
@@ -128,13 +128,13 @@ pub async fn add(
 
 #[debug_handler]
 pub async fn remove(
-    Path(id): Path<i32>,
+    Path(pid): Path<String>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
-    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+    let item = Model::find_by_pid_and_user(&ctx.db, &pid, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     item.delete(&ctx.db).await?;
@@ -147,8 +147,8 @@ pub fn routes() -> Routes {
         .add("/", get(list))
         .add("/", post(add))
         .add("new", get(new))
-        .add("{id}", get(show))
-        .add("{id}/edit", get(edit))
-        .add("{id}", delete(remove))
-        .add("{id}", post(update))
+        .add("{pid}", get(show))
+        .add("{pid}/edit", get(edit))
+        .add("{pid}", delete(remove))
+        .add("{pid}", post(update))
 }

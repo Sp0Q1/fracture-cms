@@ -6,6 +6,7 @@ mod m20220101_000001_users;
 mod m20260214_221003_movies;
 mod m20260215_000001_add_oidc_to_users;
 mod m20260216_000001_add_user_id_to_movies;
+mod m20260217_000001_add_pid_to_movies;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -16,6 +17,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260214_221003_movies::Migration),
             Box::new(m20260215_000001_add_oidc_to_users::Migration),
             Box::new(m20260216_000001_add_user_id_to_movies::Migration),
+            Box::new(m20260217_000001_add_pid_to_movies::Migration),
             // inject-above (do not remove this comment)
         ]
     }

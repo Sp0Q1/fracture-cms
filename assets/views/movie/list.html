@@ -21,7 +21,7 @@ Movies
            {% for item in items %}
             <tr>
                 <td>{{item.title | escape }}</td>
-                <td><a href="/movies/{{ item.id }}/edit">Edit</a></td>
+                <td><a href="/movies/{{ item.pid }}/edit">Edit</a></td>
             </tr>
             {% endfor %}
         </tbody>

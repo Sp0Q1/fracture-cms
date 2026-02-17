@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %}
-View movie: {{ item.id }}
+View movie: {{ item.pid }}
 {% endblock title %}
 
 {% block content %}
-<h2>View movie: {{ item.id }}</h2>
+<h2>View movie: {{ item.pid }}</h2>
 <p><strong>Title:</strong> {{item.title}}</p>
 <br />
 <a href="/movies">Back to movies</a>
