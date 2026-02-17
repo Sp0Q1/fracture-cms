@@ -71,9 +71,9 @@ mailer:
 # OIDC Single Sign-On Configuration
 settings:
   oidc:
-    provider_name: kanidm
-    issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="https://kanidm:8443/oauth2/openid/fracture-cms") }}
-    client_id: {{ get_env(name="OIDC_CLIENT_ID", default="fracture-cms") }}
+    provider_name: zitadel
+    issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="http://localhost:8080") }}
+    client_id: "{{ get_env(name='OIDC_CLIENT_ID') }}"
     client_secret: {{ get_env(name="OIDC_CLIENT_SECRET") }}
     redirect_uri: {{ get_env(name="OIDC_REDIRECT_URI", default="http://localhost:5150/api/auth/oidc/callback") }}
     scopes:
