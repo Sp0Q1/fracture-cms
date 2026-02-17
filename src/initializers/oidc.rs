@@ -19,6 +19,8 @@ struct OidcConfig {
     client_id: String,
     client_secret: String,
     redirect_uri: String,
+    #[serde(default)]
+    project_id: String,
     #[serde(default = "default_scopes")]
     scopes: Vec<String>,
 }
@@ -85,6 +87,7 @@ impl Initializer for OidcInitializer {
             client,
             state_store: OidcStateStore::new(),
             provider_name: config.provider_name,
+            project_id: config.project_id,
             scopes: config.scopes,
         };
 

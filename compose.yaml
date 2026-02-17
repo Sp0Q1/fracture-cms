@@ -4,6 +4,8 @@ services:
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: zitadel
+    volumes:
+      - zitadel_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d zitadel"]
       interval: 5s
@@ -66,4 +68,8 @@ services:
       - OIDC_ISSUER_URL=http://localhost:8080
       - OIDC_REDIRECT_URI=http://localhost:5150/api/auth/oidc/callback
       - MAILER_HOST=localhost
+      - SERVER_BINDING=0.0.0.0
     entrypoint: ["/entrypoint.sh"]
+
+volumes:
+  zitadel_data:

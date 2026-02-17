@@ -94,7 +94,15 @@ async fn callback(
         .id_token()
         .ok_or_else(|| loco_rs::Error::Message("No ID token in response".to_string()))?;
 
-    let verifier = oidc.client.id_token_verifier();
+    let expected_project_id = oidc.project_id.clone();
+    let verifier = oidc
+        .client
+        .id_token_verifier()
+        .set_other_audience_verifier_fn(move |aud| {
+            // Zitadel includes the project ID in the aud claim alongside the client ID.
+            // Only accept our own project ID as an additional audience.
+            aud.as_str() == expected_project_id
+        });
     let claims = id_token
         .claims(&verifier, &pending.nonce)
         .map_err(|e| loco_rs::Error::Message(format!("ID token verification failed: {e}")))?;

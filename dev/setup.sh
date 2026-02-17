@@ -41,13 +41,18 @@ if [ -z "$PAT" ]; then
 fi
 echo "    PAT retrieved."
 
-# --- 3. Create project ---
+# --- 3. Use v1 login UI (v2 is not bundled in self-hosted image) ---
+echo "==> Configuring login UI..."
+zapi PUT /v2/features/instance \
+    -d '{"loginV2":{"required":false}}' > /dev/null
+
+# --- 4. Create project ---
 echo "==> Creating project 'Fracture CMS'..."
 PROJECT_ID=$(zapi POST /management/v1/projects \
     -d '{"name":"Fracture CMS"}' | jq -r '.id')
 echo "    Project ID: $PROJECT_ID"
 
-# --- 4. Create OIDC application ---
+# --- 5. Create OIDC application ---
 echo "==> Creating OIDC application..."
 APP_RESPONSE=$(zapi POST "/management/v1/projects/$PROJECT_ID/apps/oidc" \
     -d '{
@@ -65,7 +70,7 @@ CLIENT_ID=$(echo "$APP_RESPONSE" | jq -r '.clientId')
 CLIENT_SECRET=$(echo "$APP_RESPONSE" | jq -r '.clientSecret')
 echo "    Client ID: $CLIENT_ID"
 
-# --- 5. Create test user ---
+# --- 6. Create test user ---
 echo "==> Creating test user..."
 TEST_PASS="TestPassword1!"
 zapi POST /management/v1/users/human \
@@ -83,11 +88,12 @@ zapi POST /management/v1/users/human \
         \"initialPassword\": \"$TEST_PASS\"
     }" > /dev/null
 
-# --- 6. Write .env ---
+# --- 7. Write .env ---
 echo "==> Writing .env..."
 JWT_SECRET=$(openssl rand -base64 32)
 cat > .env <<EOF
 JWT_SECRET=$JWT_SECRET
+OIDC_PROJECT_ID=$PROJECT_ID
 OIDC_CLIENT_ID=$CLIENT_ID
 OIDC_CLIENT_SECRET=$CLIENT_SECRET
 EOF

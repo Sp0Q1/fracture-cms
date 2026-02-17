@@ -23,10 +23,15 @@ impl Params {
     }
 }
 
-fn require_user(
-    user: Option<crate::models::_entities::users::Model>,
-) -> Result<crate::models::_entities::users::Model> {
-    user.ok_or_else(|| Error::Unauthorized("Not authenticated".to_string()))
+const LOGIN_REDIRECT: &str = "/api/auth/oidc/authorize";
+
+macro_rules! require_user {
+    ($user:expr) => {
+        match $user {
+            Some(u) => u,
+            None => return Ok(Redirect::temporary(LOGIN_REDIRECT).into_response()),
+        }
+    };
 }
 
 #[debug_handler]
@@ -36,7 +41,7 @@ pub async fn list(
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let user_name = Some(user.name.clone());
     let items = Model::find_by_user(&ctx.db, user.id).await;
     views::movie::list(&v, &items, &user_name)
@@ -49,7 +54,7 @@ pub async fn new(
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let user_name = Some(user.name);
     views::movie::create(&v, &user_name)
 }
@@ -60,16 +65,16 @@ pub async fn update(
     State(ctx): State<AppContext>,
     jar: CookieJar,
     Form(params): Form<Params>,
-) -> Result<Redirect> {
+) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let mut item = item.into_active_model();
     params.update(&mut item);
     item.update(&ctx.db).await?;
-    Ok(Redirect::to("../movies"))
+    Ok(Redirect::to("../movies").into_response())
 }
 
 #[debug_handler]
@@ -80,7 +85,7 @@ pub async fn edit(
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let user_name = Some(user.name.clone());
     let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
         .await
@@ -96,7 +101,7 @@ pub async fn show(
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let user_name = Some(user.name.clone());
     let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
         .await
@@ -109,16 +114,16 @@ pub async fn add(
     State(ctx): State<AppContext>,
     jar: CookieJar,
     Form(params): Form<Params>,
-) -> Result<Redirect> {
+) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let mut item = ActiveModel {
         ..Default::default()
     };
     params.update(&mut item);
     item.user_id = Set(Some(user.id));
     item.insert(&ctx.db).await?;
-    Ok(Redirect::to("movies"))
+    Ok(Redirect::to("movies").into_response())
 }
 
 #[debug_handler]
@@ -128,7 +133,7 @@ pub async fn remove(
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
