@@ -46,11 +46,11 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
-      interval: 5s
-      timeout: 3s
+      test: ["CMD", "/app/zitadel", "ready"]
+      interval: 10s
+      timeout: 5s
       start_period: 30s
-      retries: 10
+      retries: 5
 
   mailcrab:
     image: docker.io/marlonb/mailcrab:latest
