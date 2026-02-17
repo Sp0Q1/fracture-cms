@@ -149,11 +149,17 @@ async fn callback(
     let headers = response.headers_mut();
     headers.append(
         axum::http::header::SET_COOKIE,
-        jwt_cookie.to_string().parse().unwrap(),
+        jwt_cookie
+            .to_string()
+            .parse()
+            .expect("cookie is valid ASCII"),
     );
     headers.append(
         axum::http::header::SET_COOKIE,
-        id_token_cookie.to_string().parse().unwrap(),
+        id_token_cookie
+            .to_string()
+            .parse()
+            .expect("cookie is valid ASCII"),
     );
     Ok(response)
 }
@@ -211,11 +217,17 @@ async fn logout(Extension(oidc): Extension<OidcContext>, jar: CookieJar) -> Resu
     let headers = response.headers_mut();
     headers.append(
         axum::http::header::SET_COOKIE,
-        clear_jwt.to_string().parse().unwrap(),
+        clear_jwt
+            .to_string()
+            .parse()
+            .expect("cookie is valid ASCII"),
     );
     headers.append(
         axum::http::header::SET_COOKIE,
-        clear_id_token.to_string().parse().unwrap(),
+        clear_id_token
+            .to_string()
+            .parse()
+            .expect("cookie is valid ASCII"),
     );
     Ok(response)
 }
@@ -237,7 +249,7 @@ async fn refresh(State(ctx): State<AppContext>, jar: CookieJar) -> Result<Respon
     let mut response = format::empty_json()?.into_response();
     response.headers_mut().insert(
         axum::http::header::SET_COOKIE,
-        cookie.to_string().parse().unwrap(),
+        cookie.to_string().parse().expect("cookie is valid ASCII"),
     );
     Ok(response)
 }

@@ -45,6 +45,12 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 10
 
   mailcrab:
     image: docker.io/marlonb/mailcrab:latest
@@ -58,8 +64,10 @@ services:
       dockerfile: Containerfile.dev
     network_mode: host
     depends_on:
-      - zitadel
-      - mailcrab
+      zitadel:
+        condition: service_healthy
+      mailcrab:
+        condition: service_started
     volumes:
       - ./config:/app/config:ro
     env_file:

@@ -63,7 +63,8 @@ impl Initializer for OidcInitializer {
             "Initializing OIDC provider"
         );
 
-        let issuer_url = IssuerUrl::new(config.issuer_url.clone())
+        // Validate issuer URL early.
+        let _issuer_url = IssuerUrl::new(config.issuer_url.clone())
             .map_err(|e| loco_rs::Error::Message(format!("Invalid issuer URL: {e}")))?;
 
         let http_client = reqwest::Client::builder()
@@ -71,25 +72,34 @@ impl Initializer for OidcInitializer {
             .build()
             .map_err(|e| loco_rs::Error::Message(format!("Failed to build HTTP client: {e}")))?;
 
-        // Fetch end_session_endpoint from the discovery document (not exposed
-        // by CoreProviderMetadata which uses EmptyAdditionalProviderMetadata).
+        // Single discovery fetch — parse both CoreProviderMetadata and
+        // end_session_endpoint from the same response body (the latter isn't
+        // exposed by CoreProviderMetadata's EmptyAdditionalProviderMetadata).
         let discovery_url = format!(
             "{}/.well-known/openid-configuration",
             config.issuer_url.trim_end_matches('/')
         );
-        let end_session_url: Option<String> =
-            if let Ok(resp) = http_client.get(&discovery_url).send().await {
-                resp.text().await.ok().and_then(|body| {
-                    let doc: serde_json::Value = serde_json::from_str(&body).ok()?;
-                    doc.get("end_session_endpoint")?.as_str().map(String::from)
-                })
-            } else {
-                None
-            };
-
-        let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, &http_client)
+        let discovery_body = http_client
+            .get(&discovery_url)
+            .send()
             .await
-            .map_err(|e| loco_rs::Error::Message(format!("OIDC discovery failed: {e}")))?;
+            .map_err(|e| loco_rs::Error::Message(format!("OIDC discovery fetch failed: {e}")))?
+            .text()
+            .await
+            .map_err(|e| loco_rs::Error::Message(format!("OIDC discovery read failed: {e}")))?;
+
+        let provider_metadata: CoreProviderMetadata = serde_json::from_str(&discovery_body)
+            .map_err(|e| loco_rs::Error::Message(format!("OIDC discovery parse failed: {e}")))?;
+
+        let end_session_url: Option<String> =
+            serde_json::from_str::<serde_json::Value>(&discovery_body)
+                .ok()
+                .and_then(|doc| doc.get("end_session_endpoint")?.as_str().map(String::from));
+
+        tracing::info!(
+            end_session = ?end_session_url,
+            "OIDC end_session_endpoint discovery"
+        );
 
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
