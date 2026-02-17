@@ -21,6 +21,8 @@ struct OidcConfig {
     redirect_uri: String,
     #[serde(default)]
     project_id: String,
+    #[serde(default)]
+    post_logout_redirect_uri: String,
     #[serde(default = "default_scopes")]
     scopes: Vec<String>,
 }
@@ -69,6 +71,22 @@ impl Initializer for OidcInitializer {
             .build()
             .map_err(|e| loco_rs::Error::Message(format!("Failed to build HTTP client: {e}")))?;
 
+        // Fetch end_session_endpoint from the discovery document (not exposed
+        // by CoreProviderMetadata which uses EmptyAdditionalProviderMetadata).
+        let discovery_url = format!(
+            "{}/.well-known/openid-configuration",
+            config.issuer_url.trim_end_matches('/')
+        );
+        let end_session_url: Option<String> =
+            if let Ok(resp) = http_client.get(&discovery_url).send().await {
+                resp.text().await.ok().and_then(|body| {
+                    let doc: serde_json::Value = serde_json::from_str(&body).ok()?;
+                    doc.get("end_session_endpoint")?.as_str().map(String::from)
+                })
+            } else {
+                None
+            };
+
         let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, &http_client)
             .await
             .map_err(|e| loco_rs::Error::Message(format!("OIDC discovery failed: {e}")))?;
@@ -89,6 +107,8 @@ impl Initializer for OidcInitializer {
             provider_name: config.provider_name,
             project_id: config.project_id,
             scopes: config.scopes,
+            end_session_url,
+            post_logout_redirect_uri: config.post_logout_redirect_uri,
         };
 
         tracing::info!("OIDC initializer loaded successfully");
