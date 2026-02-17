@@ -14,6 +14,14 @@ if ! podman image exists "$RUST_IMAGE" 2>/dev/null; then
     podman build -t fracture-ci -f "$SRC/dev/Dockerfile.ci" "$SRC/dev"
 fi
 
+# Warn if there are uncommitted changes — the container mounts the working
+# tree, so local CI will pass even if those changes aren't committed.
+if [ -d "$SRC/.git" ] && ! git -C "$SRC" diff --quiet 2>/dev/null; then
+    echo "⚠  WARNING: uncommitted changes detected — local CI tests your"
+    echo "   working tree, not what is committed. CI in GitHub will differ."
+    echo ""
+fi
+
 # Named volume for cargo registry cache (speeds up repeat runs)
 podman volume exists "$CARGO_CACHE" 2>/dev/null || podman volume create "$CARGO_CACHE" > /dev/null
 
