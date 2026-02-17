@@ -52,6 +52,22 @@ jobs:
           command: clippy
           args: --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery -W rust-2018-idioms
 
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    container:
+      image: semgrep/semgrep
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+      - name: Run semgrep
+        run: semgrep scan --config auto --error --exclude-rule python.django.security.django-no-csrf-token.django-no-csrf-token .
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest

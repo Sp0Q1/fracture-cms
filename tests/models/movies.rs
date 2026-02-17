@@ -50,24 +50,24 @@ async fn test_find_by_user() {
 
 #[tokio::test]
 #[serial]
-async fn test_find_by_id_and_user() {
+async fn test_find_by_pid_and_user() {
     let boot = boot_test::<App>().await.unwrap();
     let db = &boot.app_context.db;
 
-    let user = create_test_user(db, "findid").await;
+    let user = create_test_user(db, "findpid").await;
     let movie = create_movie(db, "Owned Movie", user.id).await;
 
-    let found = Model::find_by_id_and_user(db, movie.id, user.id).await;
+    let found = Model::find_by_pid_and_user(db, &movie.pid.to_string(), user.id).await;
     assert!(found.is_some());
     assert_eq!(found.unwrap().title, Some("Owned Movie".to_string()));
 
-    let not_found = Model::find_by_id_and_user(db, movie.id, user.id + 999).await;
+    let not_found = Model::find_by_pid_and_user(db, &movie.pid.to_string(), user.id + 999).await;
     assert!(not_found.is_none());
 }
 
 #[tokio::test]
 #[serial]
-async fn test_movie_sets_user_id_on_insert() {
+async fn test_movie_sets_user_id_and_pid_on_insert() {
     let boot = boot_test::<App>().await.unwrap();
     let db = &boot.app_context.db;
 
@@ -75,9 +75,11 @@ async fn test_movie_sets_user_id_on_insert() {
     let movie = create_movie(db, "My Movie", user.id).await;
 
     assert_eq!(movie.user_id, Some(user.id));
+    assert!(!movie.pid.is_nil());
 
     let found = Entity::find_by_id(movie.id).one(db).await.unwrap().unwrap();
     assert_eq!(found.user_id, Some(user.id));
+    assert_eq!(found.pid, movie.pid);
 }
 
 /// Verifies complete ownership isolation: user1 cannot list, view, edit, or
@@ -104,21 +106,27 @@ async fn test_cross_user_ownership_isolation() {
     assert_eq!(bob_list[0].id, bob_movie.id);
 
     // --- Viewing: alice cannot access bob's movie ---
-    assert!(Model::find_by_id_and_user(db, bob_movie.id, alice.id)
-        .await
-        .is_none());
-    assert!(Model::find_by_id_and_user(db, alice_movie.id, bob.id)
-        .await
-        .is_none());
+    assert!(
+        Model::find_by_pid_and_user(db, &bob_movie.pid.to_string(), alice.id)
+            .await
+            .is_none()
+    );
+    assert!(
+        Model::find_by_pid_and_user(db, &alice_movie.pid.to_string(), bob.id)
+            .await
+            .is_none()
+    );
 
     // --- Editing: ownership gate prevents cross-user updates ---
     // Alice tries to edit Bob's movie — lookup returns None, so she can't
     // obtain the ActiveModel. Meanwhile, a direct edit on Bob's movie by Bob
     // succeeds, proving the gate is the only barrier.
-    assert!(Model::find_by_id_and_user(db, bob_movie.id, alice.id)
-        .await
-        .is_none());
-    let bobs_item = Model::find_by_id_and_user(db, bob_movie.id, bob.id)
+    assert!(
+        Model::find_by_pid_and_user(db, &bob_movie.pid.to_string(), alice.id)
+            .await
+            .is_none()
+    );
+    let bobs_item = Model::find_by_pid_and_user(db, &bob_movie.pid.to_string(), bob.id)
         .await
         .expect("Bob should be able to access his own movie");
     let mut bobs_active = bobs_item.into_active_model();
@@ -144,12 +152,14 @@ async fn test_cross_user_ownership_isolation() {
 
     // --- Deletion: ownership gate prevents cross-user deletes ---
     // Alice cannot obtain Bob's movie, so she can't delete it.
-    assert!(Model::find_by_id_and_user(db, bob_movie.id, alice.id)
-        .await
-        .is_none());
+    assert!(
+        Model::find_by_pid_and_user(db, &bob_movie.pid.to_string(), alice.id)
+            .await
+            .is_none()
+    );
 
     // Bob deletes his own movie — this should succeed.
-    let bobs_item = Model::find_by_id_and_user(db, bob_movie.id, bob.id)
+    let bobs_item = Model::find_by_pid_and_user(db, &bob_movie.pid.to_string(), bob.id)
         .await
         .expect("Bob should still be able to access his movie");
     bobs_item

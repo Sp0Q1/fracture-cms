@@ -94,7 +94,15 @@ async fn callback(
         .id_token()
         .ok_or_else(|| loco_rs::Error::Message("No ID token in response".to_string()))?;
 
-    let verifier = oidc.client.id_token_verifier();
+    let expected_project_id = oidc.project_id.clone();
+    let verifier = oidc
+        .client
+        .id_token_verifier()
+        .set_other_audience_verifier_fn(move |aud| {
+            // Zitadel includes the project ID in the aud claim alongside the client ID.
+            // Only accept our own project ID as an additional audience.
+            aud.as_str() == expected_project_id
+        });
     let claims = id_token
         .claims(&verifier, &pending.nonce)
         .map_err(|e| loco_rs::Error::Message(format!("ID token verification failed: {e}")))?;
@@ -124,16 +132,34 @@ async fn callback(
         .generate_jwt(&jwt_secret.secret, jwt_secret.expiration)
         .or_else(|_| unauthorized("unauthorized!"))?;
 
-    let cookie = Cookie::build(("jwt", token))
+    let jwt_cookie = Cookie::build(("jwt", token))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .build();
+
+    // Store the raw ID token for use as id_token_hint during logout.
+    let id_token_cookie = Cookie::build(("id_token", id_token.to_string()))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
         .build();
 
     let mut response = Redirect::temporary("/movies").into_response();
-    response.headers_mut().insert(
+    let headers = response.headers_mut();
+    headers.append(
         axum::http::header::SET_COOKIE,
-        cookie.to_string().parse().unwrap(),
+        jwt_cookie
+            .to_string()
+            .parse()
+            .expect("cookie is valid ASCII"),
+    );
+    headers.append(
+        axum::http::header::SET_COOKIE,
+        id_token_cookie
+            .to_string()
+            .parse()
+            .expect("cookie is valid ASCII"),
     );
     Ok(response)
 }
@@ -150,17 +176,58 @@ async fn providers(oidc: Option<Extension<OidcContext>>) -> Result<Response> {
 }
 
 #[debug_handler]
-async fn logout() -> Result<Response> {
-    let cookie = Cookie::build(("jwt", ""))
+async fn logout(Extension(oidc): Extension<OidcContext>, jar: CookieJar) -> Result<Response> {
+    let clear_jwt = Cookie::build(("jwt", ""))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
         .max_age(time::Duration::ZERO)
         .build();
-    let mut response = Redirect::temporary("/").into_response();
-    response.headers_mut().insert(
+    let clear_id_token = Cookie::build(("id_token", ""))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .max_age(time::Duration::ZERO)
+        .build();
+
+    // Redirect to the IdP's end_session endpoint so the browser session is
+    // terminated there as well.  Falls back to "/" if the IdP didn't advertise
+    // an end_session_endpoint.
+    let redirect_url = if let Some(end_session) = &oidc.end_session_url {
+        let mut url = end_session.clone();
+        if let Some(hint) = jar.get("id_token") {
+            url.push_str("?id_token_hint=");
+            url.push_str(hint.value());
+        }
+        if !oidc.post_logout_redirect_uri.is_empty() {
+            url.push(if jar.get("id_token").is_some() {
+                '&'
+            } else {
+                '?'
+            });
+            url.push_str("post_logout_redirect_uri=");
+            url.push_str(&oidc.post_logout_redirect_uri);
+        }
+        url
+    } else {
+        "/".to_string()
+    };
+
+    let mut response = Redirect::temporary(&redirect_url).into_response();
+    let headers = response.headers_mut();
+    headers.append(
         axum::http::header::SET_COOKIE,
-        cookie.to_string().parse().unwrap(),
+        clear_jwt
+            .to_string()
+            .parse()
+            .expect("cookie is valid ASCII"),
+    );
+    headers.append(
+        axum::http::header::SET_COOKIE,
+        clear_id_token
+            .to_string()
+            .parse()
+            .expect("cookie is valid ASCII"),
     );
     Ok(response)
 }
@@ -182,7 +249,7 @@ async fn refresh(State(ctx): State<AppContext>, jar: CookieJar) -> Result<Respon
     let mut response = format::empty_json()?.into_response();
     response.headers_mut().insert(
         axum::http::header::SET_COOKIE,
-        cookie.to_string().parse().unwrap(),
+        cookie.to_string().parse().expect("cookie is valid ASCII"),
     );
     Ok(response)
 }

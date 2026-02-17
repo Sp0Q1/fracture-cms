@@ -23,10 +23,15 @@ impl Params {
     }
 }
 
-fn require_user(
-    user: Option<crate::models::_entities::users::Model>,
-) -> Result<crate::models::_entities::users::Model> {
-    user.ok_or_else(|| Error::Unauthorized("Not authenticated".to_string()))
+const LOGIN_REDIRECT: &str = "/api/auth/oidc/authorize";
+
+macro_rules! require_user {
+    ($user:expr) => {
+        match $user {
+            Some(u) => u,
+            None => return Ok(Redirect::temporary(LOGIN_REDIRECT).into_response()),
+        }
+    };
 }
 
 #[debug_handler]
@@ -36,7 +41,7 @@ pub async fn list(
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let user_name = Some(user.name.clone());
     let items = Model::find_by_user(&ctx.db, user.id).await;
     views::movie::list(&v, &items, &user_name)
@@ -49,40 +54,40 @@ pub async fn new(
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let user_name = Some(user.name);
     views::movie::create(&v, &user_name)
 }
 
 #[debug_handler]
 pub async fn update(
-    Path(id): Path<i32>,
+    Path(pid): Path<String>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
     Form(params): Form<Params>,
-) -> Result<Redirect> {
+) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
-    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+    let user = require_user!(user);
+    let item = Model::find_by_pid_and_user(&ctx.db, &pid, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let mut item = item.into_active_model();
     params.update(&mut item);
     item.update(&ctx.db).await?;
-    Ok(Redirect::to("../movies"))
+    Ok(Redirect::to("../movies").into_response())
 }
 
 #[debug_handler]
 pub async fn edit(
-    Path(id): Path<i32>,
+    Path(pid): Path<String>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let user_name = Some(user.name.clone());
-    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+    let item = Model::find_by_pid_and_user(&ctx.db, &pid, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     views::movie::edit(&v, &item, &user_name)
@@ -90,15 +95,15 @@ pub async fn edit(
 
 #[debug_handler]
 pub async fn show(
-    Path(id): Path<i32>,
+    Path(pid): Path<String>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let user_name = Some(user.name.clone());
-    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+    let item = Model::find_by_pid_and_user(&ctx.db, &pid, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     views::movie::show(&v, &item, &user_name)
@@ -109,27 +114,27 @@ pub async fn add(
     State(ctx): State<AppContext>,
     jar: CookieJar,
     Form(params): Form<Params>,
-) -> Result<Redirect> {
+) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
+    let user = require_user!(user);
     let mut item = ActiveModel {
         ..Default::default()
     };
     params.update(&mut item);
     item.user_id = Set(Some(user.id));
     item.insert(&ctx.db).await?;
-    Ok(Redirect::to("movies"))
+    Ok(Redirect::to("movies").into_response())
 }
 
 #[debug_handler]
 pub async fn remove(
-    Path(id): Path<i32>,
+    Path(pid): Path<String>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
-    let user = require_user(user)?;
-    let item = Model::find_by_id_and_user(&ctx.db, id, user.id)
+    let user = require_user!(user);
+    let item = Model::find_by_pid_and_user(&ctx.db, &pid, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     item.delete(&ctx.db).await?;
@@ -142,8 +147,8 @@ pub fn routes() -> Routes {
         .add("/", get(list))
         .add("/", post(add))
         .add("new", get(new))
-        .add("{id}", get(show))
-        .add("{id}/edit", get(edit))
-        .add("{id}", delete(remove))
-        .add("{id}", post(update))
+        .add("{pid}", get(show))
+        .add("{pid}/edit", get(edit))
+        .add("{pid}", delete(remove))
+        .add("{pid}", post(update))
 }

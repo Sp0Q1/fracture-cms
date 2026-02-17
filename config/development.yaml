@@ -75,7 +75,9 @@ settings:
     issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="http://localhost:8080") }}
     client_id: "{{ get_env(name='OIDC_CLIENT_ID') }}"
     client_secret: {{ get_env(name="OIDC_CLIENT_SECRET") }}
+    project_id: "{{ get_env(name='OIDC_PROJECT_ID', default='') }}"
     redirect_uri: {{ get_env(name="OIDC_REDIRECT_URI", default="http://localhost:5150/api/auth/oidc/callback") }}
+    post_logout_redirect_uri: {{ get_env(name="OIDC_POST_LOGOUT_REDIRECT_URI", default="http://localhost:5150") }}
     scopes:
       - openid
       - email

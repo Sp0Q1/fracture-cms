@@ -99,7 +99,10 @@ pub struct OidcContext {
     pub client: DiscoveredClient,
     pub state_store: OidcStateStore,
     pub provider_name: String,
+    pub project_id: String,
     pub scopes: Vec<String>,
+    pub end_session_url: Option<String>,
+    pub post_logout_redirect_uri: String,
 }
 
 #[cfg(test)]

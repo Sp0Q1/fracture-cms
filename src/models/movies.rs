@@ -10,13 +10,13 @@ impl ActiveModelBehavior for ActiveModel {
     where
         C: ConnectionTrait,
     {
-        if !insert && self.updated_at.is_unchanged() {
-            let mut this = self;
+        let mut this = self;
+        if insert {
+            this.pid = sea_orm::ActiveValue::Set(Uuid::new_v4());
+        } else if this.updated_at.is_unchanged() {
             this.updated_at = sea_orm::ActiveValue::Set(chrono::Utc::now().into());
-            Ok(this)
-        } else {
-            Ok(self)
         }
+        Ok(this)
     }
 }
 
@@ -36,6 +36,21 @@ impl Model {
         user_id: i32,
     ) -> Option<Self> {
         Entity::find_by_id(id)
+            .filter(Column::UserId.eq(user_id))
+            .one(db)
+            .await
+            .ok()
+            .flatten()
+    }
+
+    pub async fn find_by_pid_and_user(
+        db: &DatabaseConnection,
+        pid: &str,
+        user_id: i32,
+    ) -> Option<Self> {
+        let uuid = Uuid::parse_str(pid).ok()?;
+        Entity::find()
+            .filter(Column::Pid.eq(uuid))
             .filter(Column::UserId.eq(user_id))
             .one(db)
             .await

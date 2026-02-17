@@ -41,13 +41,36 @@ if [ -z "$PAT" ]; then
 fi
 echo "    PAT retrieved."
 
-# --- 3. Create project ---
+# --- 3. Use v1 login UI (v2 is not bundled in self-hosted image) ---
+echo "==> Configuring login UI..."
+zapi PUT /v2/features/instance \
+    -d '{"loginV2":{"required":false}}' > /dev/null
+
+# --- 3b. Configure SMTP (env vars only apply on first-ever init) ---
+echo "==> Configuring SMTP for MailCrab..."
+SMTP_ID=$(curl -s -X POST "$ZITADEL_API/admin/v1/smtp" \
+    -H "Authorization: Bearer $PAT" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "senderAddress": "noreply@fracture-cms.local",
+        "senderName": "Fracture CMS",
+        "host": "mailcrab:1025",
+        "user": "",
+        "password": "",
+        "tls": false
+    }' | jq -r '.id')
+curl -s -X POST "$ZITADEL_API/admin/v1/smtp/$SMTP_ID/_activate" \
+    -H "Authorization: Bearer $PAT" \
+    -H "Content-Type: application/json" > /dev/null
+echo "    SMTP configured (mailcrab:1025)."
+
+# --- 4. Create project ---
 echo "==> Creating project 'Fracture CMS'..."
 PROJECT_ID=$(zapi POST /management/v1/projects \
     -d '{"name":"Fracture CMS"}' | jq -r '.id')
 echo "    Project ID: $PROJECT_ID"
 
-# --- 4. Create OIDC application ---
+# --- 5. Create OIDC application ---
 echo "==> Creating OIDC application..."
 APP_RESPONSE=$(zapi POST "/management/v1/projects/$PROJECT_ID/apps/oidc" \
     -d '{
@@ -58,14 +81,15 @@ APP_RESPONSE=$(zapi POST "/management/v1/projects/$PROJECT_ID/apps/oidc" \
         "appType": "OIDC_APP_TYPE_WEB",
         "authMethodType": "OIDC_AUTH_METHOD_TYPE_BASIC",
         "postLogoutRedirectUris": ["http://localhost:5150"],
-        "devMode": true
+        "devMode": true,
+        "idTokenUserinfoAssertion": true
     }')
 
 CLIENT_ID=$(echo "$APP_RESPONSE" | jq -r '.clientId')
 CLIENT_SECRET=$(echo "$APP_RESPONSE" | jq -r '.clientSecret')
 echo "    Client ID: $CLIENT_ID"
 
-# --- 5. Create test user ---
+# --- 6. Create test user ---
 echo "==> Creating test user..."
 TEST_PASS="TestPassword1!"
 zapi POST /management/v1/users/human \
@@ -83,11 +107,12 @@ zapi POST /management/v1/users/human \
         \"initialPassword\": \"$TEST_PASS\"
     }" > /dev/null
 
-# --- 6. Write .env ---
+# --- 7. Write .env ---
 echo "==> Writing .env..."
 JWT_SECRET=$(openssl rand -base64 32)
 cat > .env <<EOF
 JWT_SECRET=$JWT_SECRET
+OIDC_PROJECT_ID=$PROJECT_ID
 OIDC_CLIENT_ID=$CLIENT_ID
 OIDC_CLIENT_SECRET=$CLIENT_SECRET
 EOF

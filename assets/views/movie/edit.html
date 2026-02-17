@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 
 {% block title %}
-Edit movie: {{ item.id }}
+Edit movie: {{ item.pid }}
 {% endblock title %}
 
 {% block page_title %}
-Edit movie: {{ item.id }}
+Edit movie: {{ item.pid }}
 {% endblock page_title %}
 
 {% block content %}
-<form action="/movies/{{ item.id }}" method="post">
+<form action="/movies/{{ item.pid }}" method="post">
     <label for="title">Title</label>
     <input id="title" name="title" type="text" value="{{item.title}}" />
     <button type="submit" class="mt-4">Submit</button>
     <button class="mt-4" data-variant="danger"
-            data-delete-url="/movies/{{ item.id }}"
+            data-delete-url="/movies/{{ item.pid }}"
             data-delete-redirect="/movies">Delete</button>
 </form>
 <br />
