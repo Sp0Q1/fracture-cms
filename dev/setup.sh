@@ -46,6 +46,24 @@ echo "==> Configuring login UI..."
 zapi PUT /v2/features/instance \
     -d '{"loginV2":{"required":false}}' > /dev/null
 
+# --- 3b. Configure SMTP (env vars only apply on first-ever init) ---
+echo "==> Configuring SMTP for MailCrab..."
+SMTP_ID=$(curl -s -X POST "$ZITADEL_API/admin/v1/smtp" \
+    -H "Authorization: Bearer $PAT" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "senderAddress": "noreply@fracture-cms.local",
+        "senderName": "Fracture CMS",
+        "host": "mailcrab:1025",
+        "user": "",
+        "password": "",
+        "tls": false
+    }' | jq -r '.id')
+curl -s -X POST "$ZITADEL_API/admin/v1/smtp/$SMTP_ID/_activate" \
+    -H "Authorization: Bearer $PAT" \
+    -H "Content-Type: application/json" > /dev/null
+echo "    SMTP configured (mailcrab:1025)."
+
 # --- 4. Create project ---
 echo "==> Creating project 'Fracture CMS'..."
 PROJECT_ID=$(zapi POST /management/v1/projects \
@@ -63,7 +81,8 @@ APP_RESPONSE=$(zapi POST "/management/v1/projects/$PROJECT_ID/apps/oidc" \
         "appType": "OIDC_APP_TYPE_WEB",
         "authMethodType": "OIDC_AUTH_METHOD_TYPE_BASIC",
         "postLogoutRedirectUris": ["http://localhost:5150"],
-        "devMode": true
+        "devMode": true,
+        "idTokenUserinfoAssertion": true
     }')
 
 CLIENT_ID=$(echo "$APP_RESPONSE" | jq -r '.clientId')
