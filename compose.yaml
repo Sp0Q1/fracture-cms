@@ -13,7 +13,7 @@ services:
       retries: 5
 
   zitadel:
-    image: ghcr.io/zitadel/zitadel:latest
+    image: ghcr.io/zitadel/zitadel:latest-debug
     command: start-from-init --masterkey "MasterkeyNeedsToHave32Characters" --tlsMode disabled
     environment:
       ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
@@ -25,6 +25,7 @@ services:
       ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
       ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: postgres
       ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+      ZITADEL_TLS_ENABLED: "false"
       ZITADEL_EXTERNALSECURE: "false"
       ZITADEL_EXTERNALPORT: 8080
       ZITADEL_EXTERNALDOMAIN: localhost
@@ -46,7 +47,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     healthcheck:
-      test: ["CMD", "/app/zitadel", "ready"]
+      test: ["CMD-SHELL", "/app/zitadel ready"]
       interval: 10s
       timeout: 5s
       start_period: 30s
