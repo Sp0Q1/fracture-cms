@@ -4,7 +4,8 @@ use axum_extra::extract::CookieJar;
 use loco_rs::prelude::*;
 
 use super::middleware;
-use crate::{models::movies, views};
+use crate::models::{organizations as org_model, projects};
+use crate::views;
 
 #[debug_handler]
 pub async fn index(
@@ -15,14 +16,19 @@ pub async fn index(
     let user = middleware::get_current_user(&jar, &ctx).await;
     match user {
         Some(user) => {
-            let items = movies::Model::find_by_user(&ctx.db, user.id).await;
-            let user_name = Some(user.name);
-            views::home::index(&v, &user_name, &items)
+            let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+            let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+            let project_count = if let Some(ref oc) = org_ctx {
+                projects::Model::find_by_org(&ctx.db, oc.org.id).await.len()
+            } else {
+                0
+            };
+            views::home::index(&v, &user, &org_ctx, &user_orgs, project_count)
         }
-        None => views::home::index(&v, &None, &vec![]),
+        None => views::home::index_guest(&v),
     }
 }
 
 pub fn routes() -> Routes {
-    Routes::new().prefix("/").add("/", get(index))
+    Routes::new().prefix("/").add("", get(index))
 }

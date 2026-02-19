@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}New Project — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<div class="page-header">
+    <h1>New Project</h1>
+    <p class="page-subtitle">Create a project in {{ org_name | default(value="your organization") }}</p>
+</div>
+
+<article class="card form-card">
+    <form action="/projects" method="post">
+        <div data-field>
+            <label for="title">Title</label>
+            <input id="title" name="title" type="text" value="" placeholder="Enter project title" required />
+            <small data-hint>The display name for this project.</small>
+        </div>
+        <div data-field>
+            <label for="description">Description</label>
+            <textarea id="description" name="description" placeholder="Optional description" rows="3"></textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Create Project</button>
+            <a href="/projects" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+{% endblock content %}

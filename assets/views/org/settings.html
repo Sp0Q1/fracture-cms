@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Organization Settings — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/orgs">Organizations</a>
+    <span class="separator">/</span>
+    <span>{{ org.name }}</span>
+    <span class="separator">/</span>
+    <span>Settings</span>
+</nav>
+
+<div class="page-header">
+    <h1>Organization Settings</h1>
+    <p class="page-subtitle">{{ org.name }} &middot; <code>{{ org.slug }}</code></p>
+</div>
+
+<article class="card form-card">
+    <form action="/orgs/{{ org.pid }}/settings" method="post">
+        <div data-field>
+            <label for="name">Organization Name</label>
+            <input id="name" name="name" type="text" value="{{ org.name }}" required />
+        </div>
+        <div class="form-actions">
+            <button type="submit">Save Changes</button>
+            <a href="/orgs" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+
+<div style="margin-top: 1rem;">
+    <a href="/orgs/{{ org.pid }}/members" class="button outline">Manage Members</a>
+</div>
+{% endblock content %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Members — {{ org.name }} — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/orgs">Organizations</a>
+    <span class="separator">/</span>
+    <a href="/orgs/{{ org.pid }}/settings">{{ org.name }}</a>
+    <span class="separator">/</span>
+    <span>Members</span>
+</nav>
+
+<div class="page-header">
+    <div class="hstack">
+        <div>
+            <h1>Members <span class="badge secondary">{{ members | length }}</span></h1>
+            <p class="page-subtitle">{{ org.name }}</p>
+        </div>
+    </div>
+</div>
+
+{% if user_role == "admin" or user_role == "owner" %}
+<article class="card form-card" style="margin-bottom: 2rem;">
+    <header><h3>Invite Member</h3></header>
+    <form action="/orgs/{{ org.pid }}/members/invite" method="post">
+        <div class="row">
+            <div class="col-6">
+                <div data-field>
+                    <label for="email">Email Address</label>
+                    <input id="email" name="email" type="email" placeholder="user@example.com" required />
+                </div>
+            </div>
+            <div class="col-4">
+                <div data-field>
+                    <label for="role">Role</label>
+                    <select id="role" name="role">
+                        <option value="viewer">Viewer</option>
+                        <option value="member" selected>Member</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-2" style="display: flex; align-items: flex-end;">
+                <button type="submit" style="margin-bottom: 1rem;">Invite</button>
+            </div>
+        </div>
+    </form>
+</article>
+{% endif %}
+
+{% if members %}
+<table class="members-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            {% if user_role == "admin" or user_role == "owner" %}
+            <th>Actions</th>
+            {% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for member in members %}
+        <tr>
+            <td>{{ member.user_name }}</td>
+            <td>{{ member.user_email }}</td>
+            <td><span class="role-badge" data-role="{{ member.role }}">{{ member.role }}</span></td>
+            {% if user_role == "admin" or user_role == "owner" %}
+            <td>
+                {% if member.user_pid != user_pid %}
+                <form action="/orgs/{{ org.pid }}/members/{{ member.user_pid }}/role" method="post" style="display:inline;">
+                    <select name="role" onchange="this.form.submit()">
+                        <option value="viewer"{% if member.role == "viewer" %} selected{% endif %}>Viewer</option>
+                        <option value="member"{% if member.role == "member" %} selected{% endif %}>Member</option>
+                        <option value="admin"{% if member.role == "admin" %} selected{% endif %}>Admin</option>
+                        <option value="owner"{% if member.role == "owner" %} selected{% endif %}>Owner</option>
+                    </select>
+                </form>
+                <form action="/orgs/{{ org.pid }}/members/{{ member.user_pid }}/remove" method="post" style="display:inline; margin-left: 0.5rem;">
+                    <button type="submit" class="outline small" data-variant="danger">Remove</button>
+                </form>
+                {% else %}
+                <span class="badge">You</span>
+                {% endif %}
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock content %}

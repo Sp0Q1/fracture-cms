@@ -43,6 +43,7 @@ time = { version = "0.3" }
 openidconnect = { version = "4.0" }
 jsonwebtoken = { version = "9" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots"] }
+slug = { version = "0.1" }
 
 [[bin]]
 name = "fracture_cms-cli"

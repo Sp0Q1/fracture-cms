@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item.title }} — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/projects">Projects</a>
+    <span class="separator">/</span>
+    <span>{{ item.title }}</span>
+</nav>
+
+<article class="card detail-card">
+    <header><h2>{{ item.title }}</h2></header>
+
+    {% if item.description %}
+    <div class="detail-row">
+        <span class="detail-label">Description</span>
+        <span class="detail-value">{{ item.description }}</span>
+    </div>
+    {% endif %}
+    <div class="detail-row">
+        <span class="detail-label">ID</span>
+        <span class="detail-value"><code>{{ item.pid }}</code></span>
+    </div>
+
+    <div class="form-actions">
+        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        <a href="/projects/{{ item.pid }}/edit" class="button">Edit</a>
+        {% endif %}
+        <a href="/projects" class="button" data-variant="secondary">Back to Projects</a>
+        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        <span class="spacer"></span>
+        <button class="outline" data-variant="danger"
+                data-delete-url="/projects/{{ item.pid }}"
+                data-delete-redirect="/projects">Delete</button>
+        {% endif %}
+    </div>
+</article>
+
+<div class="page-header" style="margin-top: 2rem;">
+    <div class="hstack">
+        <div>
+            <h2>Notes <span class="badge secondary">{{ notes | length }}</span></h2>
+        </div>
+        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        <a href="/projects/{{ item.pid }}/notes/new" class="button">Add Note</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if notes %}
+    <table class="clickable-rows">
+        <thead>
+            <tr>
+                <th>Title</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for note in notes %}
+            <tr data-href="/projects/{{ item.pid }}/notes/{{ note.pid }}">
+                <td>{{ note.title }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <article class="card empty-state">
+        <h3>No Notes Yet</h3>
+        <p>Add a note to this project.</p>
+        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        <a href="/projects/{{ item.pid }}/notes/new" class="button">Add Note</a>
+        {% endif %}
+    </article>
+{% endif %}
+{% endblock content %}

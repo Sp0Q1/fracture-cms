@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Project — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Edit Project</h1>
+    <p class="page-subtitle">Editing <code>{{ item.pid }}</code></p>
+</div>
+
+<article class="card form-card">
+    <form action="/projects/{{ item.pid }}" method="post">
+        <div data-field>
+            <label for="title">Title</label>
+            <input id="title" name="title" type="text" value="{{ item.title }}" required />
+        </div>
+        <div data-field>
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3">{{ item.description | default(value="") }}</textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Save Changes</button>
+            <a href="/projects/{{ item.pid }}" class="button" data-variant="secondary">Cancel</a>
+            <span class="spacer"></span>
+            <button type="button" class="outline" data-variant="danger"
+                    data-delete-url="/projects/{{ item.pid }}"
+                    data-delete-redirect="/projects">Delete</button>
+        </div>
+    </form>
+</article>
+{% endblock content %}

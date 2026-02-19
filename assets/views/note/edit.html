@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Note — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/projects">Projects</a>
+    <span class="separator">/</span>
+    <a href="/projects/{{ project.pid }}">{{ project.title }}</a>
+    <span class="separator">/</span>
+    <a href="/projects/{{ project.pid }}/notes/{{ item.pid }}">{{ item.title }}</a>
+    <span class="separator">/</span>
+    <span>Edit</span>
+</nav>
+
+<div class="page-header">
+    <h1>Edit Note</h1>
+    <p class="page-subtitle">Editing <code>{{ item.pid }}</code></p>
+</div>
+
+<article class="card form-card">
+    <form action="/projects/{{ project.pid }}/notes/{{ item.pid }}" method="post">
+        <div data-field>
+            <label for="title">Title</label>
+            <input id="title" name="title" type="text" value="{{ item.title }}" required />
+        </div>
+        <div data-field>
+            <label for="body">Body</label>
+            <textarea id="body" name="body" rows="6">{{ item.body | default(value="") }}</textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Save Changes</button>
+            <a href="/projects/{{ project.pid }}/notes/{{ item.pid }}" class="button" data-variant="secondary">Cancel</a>
+            <span class="spacer"></span>
+            <button type="button" class="outline" data-variant="danger"
+                    data-delete-url="/projects/{{ project.pid }}/notes/{{ item.pid }}"
+                    data-delete-redirect="/projects/{{ project.pid }}">Delete</button>
+        </div>
+    </form>
+</article>
+{% endblock content %}

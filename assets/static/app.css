@@ -191,20 +191,104 @@ nav[data-topnav] a[aria-current="page"] {
     cursor: pointer;
 }
 
-/* --- Movie Cards --- */
-.movie-card {
+/* --- Project Cards --- */
+.project-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     border-top: 3px solid transparent;
     border-image: linear-gradient(90deg, #62cb98, #5a60ce) 1;
 }
 
-.movie-card:hover {
+.project-card:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 24px rgba(98, 203, 152, 0.12);
 }
 
-.movie-card header {
+.project-card header {
     font-weight: 600;
+}
+
+/* --- Org Switcher Badge --- */
+.org-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(98, 203, 152, 0.3);
+    background: rgba(98, 203, 152, 0.08);
+    color: #62cb98;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.org-badge:hover {
+    border-color: rgba(98, 203, 152, 0.5);
+    background: rgba(98, 203, 152, 0.14);
+}
+
+.org-switcher-nav {
+    display: inline-flex;
+    align-items: center;
+}
+
+#org-switcher[popover] a.active {
+    color: #62cb98;
+    font-weight: 600;
+}
+
+/* --- Role Badges --- */
+.role-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.role-badge[data-role="owner"] {
+    background: rgba(98, 203, 152, 0.15);
+    color: #62cb98;
+}
+
+.role-badge[data-role="admin"] {
+    background: rgba(90, 96, 206, 0.15);
+    color: #8b8ff5;
+}
+
+.role-badge[data-role="member"] {
+    background: rgba(255, 255, 255, 0.08);
+    color: #d1d5db;
+}
+
+.role-badge[data-role="viewer"] {
+    background: rgba(255, 255, 255, 0.05);
+    color: #9ca3af;
+}
+
+/* --- Members Table --- */
+.members-table {
+    width: 100%;
+}
+
+.members-table th {
+    text-align: left;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-light, #9ca3af);
+}
+
+.members-table td {
+    vertical-align: middle;
+}
+
+.members-table select {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.85rem;
 }
 
 /* --- Page Header --- */

@@ -1,6 +1,6 @@
 # Fracture CMS
 
-A content management system built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework. Users authenticate via OpenID Connect (Zitadel) and manage their own movie collections.
+A multi-tenant content management template built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework. Features organization-based RBAC, OIDC authentication, and org-scoped data isolation. Designed as a reusable template for downstream projects.
 
 ## Quick Start
 
@@ -19,7 +19,7 @@ podman compose up -d mailcrab app
 | Service | URL | Purpose |
 |---------|-----|---------|
 | App | http://localhost:5150 | Fracture CMS |
-| Zitadel | http://localhost:8080 | Identity provider |
+| Zitadel | http://localhost:8080 | Identity provider (OIDC) |
 | MailCrab | http://localhost:1080 | Email testing |
 
 A test user is created automatically. Credentials are printed at the end of `setup.sh`.
@@ -37,54 +37,66 @@ cargo loco start
 ```
 src/
   controllers/
-    middleware.rs       # JWT cookie authentication
-    movie.rs            # Movie CRUD (list, create, show, edit, delete)
+    middleware.rs       # JWT auth + OrgContext + RBAC macros
+    org.rs              # Organization CRUD, members, invites, switching
+    project.rs          # Project CRUD (org-scoped)
+    note.rs             # Note CRUD (project-scoped, org-scoped)
     oidc.rs             # OIDC login, logout, back-channel logout
     oidc_state.rs       # OIDC state store (CSRF tokens, PKCE verifiers)
   initializers/
     oidc.rs             # OIDC discovery, client setup, JWKS URI extraction
     view_engine.rs      # Tera templates + Fluent i18n
+    security_headers.rs # CSP, X-Frame-Options, etc.
   models/
     _entities/          # SeaORM entity definitions (hand-edited)
-    movies.rs           # Movie queries scoped to user
+    organizations.rs    # Org creation, personal orgs, slug lookup
+    org_members.rs      # Membership, OrgRole enum, role hierarchy
+    org_invites.rs      # Email invitations, auto-accept on signup
+    projects.rs         # Org-scoped project queries
+    notes.rs            # Project-scoped note queries
     users.rs            # User lookup, OIDC account creation/linking
+  views/                # View helpers (Rust → template context)
 migration/src/          # Database migrations (SQLite)
 assets/
   views/                # Tera HTML templates
   static/               # CSS, JS, images
   i18n/                 # Fluent locale files (en-US, de-DE)
 config/                 # Loco YAML config per environment
+docs/                   # Architecture, template guide, resource recipes
 dev/
-  setup.sh              # Provisions Zitadel + writes .env
+  setup.sh              # Provisions Kanidm + writes .env
   ci.sh                 # Runs all CI checks locally in containers
   Dockerfile.ci         # CI container image (Rust + SQLite + clippy + rustfmt)
 ```
 
 ## Architecture
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full details.
+
+### Organizations & RBAC
+
+- **Personal org**: Auto-created on first OIDC login. User is owner.
+- **Team orgs**: Created manually. Members invited via email.
+- **Four roles**: Owner > Admin > Member > Viewer
+- **Org context**: Resolved from `org_pid` cookie on every request
+- **Row-level isolation**: All queries scoped by `org_id`
+
 ### Authentication
 
-The app delegates all authentication to [Zitadel](https://zitadel.com/) via OpenID Connect:
+The app delegates all authentication to an OIDC provider:
 
 - **Login**: PKCE authorization code flow with audience verification
-- **Sessions**: Short-lived JWT cookies (15 min), silently refreshed by the frontend
-- **Logout**: Clears the cookie and redirects to Zitadel's end-session endpoint
-- **Back-channel logout**: When a user logs out from Zitadel directly, the IdP POSTs a signed `logout_token`. The app verifies the signature against the IdP's JWKS, then sets `session_invalidated_at` on the user. Middleware rejects requests until the user re-authenticates.
-- **Account creation**: First OIDC login creates an account automatically. If an account with the same verified email exists, the OIDC identity is linked to it.
-
-### Data Model
-
-- **Users** have OIDC identity fields (`oidc_provider`, `oidc_subject`) and a `session_invalidated_at` timestamp for back-channel logout
-- **Movies** belong to a user via `user_id` foreign key. All queries are scoped to the authenticated user
-- Both entities use UUIDs (`pid`) as public-facing identifiers; internal `id` (integer) is never exposed
+- **Sessions**: Short-lived JWT cookies, silently refreshed by the frontend
+- **Logout**: Clears cookies and redirects to IdP's end-session endpoint
+- **Back-channel logout**: IdP POSTs signed `logout_token`, app verifies and invalidates session
+- **Account creation**: First OIDC login creates account + personal org. Pending invites auto-accepted.
 
 ### Security
 
 - HTTP-only, SameSite=Lax cookies
 - Content-Security-Policy: `default-src 'none'; script-src 'self'; style-src 'self'`
 - X-Content-Type-Options, X-Frame-Options, Referrer-Policy headers
-- OIDC audience verification
-- JWKS signature verification on back-channel logout tokens
+- OIDC audience verification + JWKS signature verification
 
 ## Routes
 
@@ -92,39 +104,93 @@ The app delegates all authentication to [Zitadel](https://zitadel.com/) via Open
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/auth/oidc/providers` | List configured providers |
 | GET | `/api/auth/oidc/authorize` | Start login flow |
 | GET | `/api/auth/oidc/callback` | OIDC callback |
 | GET | `/api/auth/oidc/logout` | Logout |
 | GET | `/api/auth/oidc/refresh` | Refresh JWT |
-| POST | `/api/auth/oidc/backchannel-logout` | Back-channel logout (called by IdP) |
+| POST | `/api/auth/oidc/backchannel-logout` | Back-channel logout |
 
-### Movies (authenticated)
+### Organizations
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/movies` | List |
-| GET | `/movies/new` | New form |
-| POST | `/movies` | Create |
-| GET | `/movies/:pid` | Show |
-| GET | `/movies/:pid/edit` | Edit form |
-| POST | `/movies/:pid` | Update |
-| POST | `/movies/:pid/delete` | Delete |
+| Method | Path | Min Role |
+|--------|------|----------|
+| GET | `/orgs` | (any authed) |
+| POST | `/orgs` | (any authed) |
+| GET | `/orgs/new` | (any authed) |
+| GET | `/orgs/{pid}/settings` | Admin |
+| POST | `/orgs/{pid}/settings` | Admin |
+| GET | `/orgs/{pid}/members` | Viewer |
+| POST | `/orgs/{pid}/members/invite` | Admin |
+| POST | `/orgs/{pid}/members/{user_pid}/role` | Admin |
+| POST | `/orgs/{pid}/members/{user_pid}/remove` | Admin |
+| GET | `/orgs/switch/{pid}` | (member) |
+| GET | `/invites/{token}/accept` | (any authed) |
 
-## Configuration
+### Projects (org-scoped)
 
-Configured via `config/<environment>.yaml` with environment variable overrides:
+| Method | Path | Min Role |
+|--------|------|----------|
+| GET | `/projects` | Viewer |
+| POST | `/projects` | Member |
+| GET | `/projects/new` | Member |
+| GET | `/projects/{pid}` | Viewer |
+| GET/POST | `/projects/{pid}/edit` | Member |
+| DELETE | `/projects/{pid}` | Member |
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `JWT_SECRET` | JWT signing secret | (required) |
-| `OIDC_CLIENT_ID` | OIDC client ID | (required) |
-| `OIDC_CLIENT_SECRET` | OIDC client secret | (required) |
-| `OIDC_PROJECT_ID` | Zitadel project ID for audience verification | (optional) |
-| `OIDC_ISSUER_URL` | OIDC issuer URL | `http://localhost:8080` |
-| `OIDC_REDIRECT_URI` | OIDC callback URL | `http://localhost:5150/api/auth/oidc/callback` |
-| `DATABASE_URL` | SQLite connection string | `sqlite://fracture-cms_development.sqlite?mode=rwc` |
-| `MAILER_HOST` | SMTP host | `localhost` |
+### Notes (project-scoped)
+
+| Method | Path | Min Role |
+|--------|------|----------|
+| POST | `/projects/{pid}/notes` | Member |
+| GET | `/projects/{pid}/notes/new` | Member |
+| GET | `/projects/{pid}/notes/{note_pid}` | Viewer |
+| GET/POST | `/projects/{pid}/notes/{note_pid}/edit` | Member |
+| DELETE | `/projects/{pid}/notes/{note_pid}` | Member |
+
+## User Flows
+
+### First-Time Sign In
+1. User clicks "Sign in" → redirected to OIDC provider
+2. After authenticating, the callback creates a user account
+3. A **personal organization** is auto-created (user is owner)
+4. Any **pending invites** matching the user's email are auto-accepted
+5. User lands on the dashboard scoped to their personal org
+
+### Organization Management
+- **Create org**: Any user can create team organizations from `/orgs/new`
+- **Switch org**: Click the org badge in the nav bar to switch between orgs
+- **Org settings**: Admins+ can rename orgs at `/orgs/{pid}/settings`
+- **Members**: View members at `/orgs/{pid}/members`, admins+ can invite/remove/change roles
+
+### Invite Flow
+1. Admin invites a user by email at `/orgs/{pid}/members`
+2. An invite record is created (expires in 7 days)
+3. If the user already has an account, they accept at `/invites/{token}/accept`
+4. If the user doesn't have an account yet, the invite is **auto-accepted** when they sign in via OIDC with the matching email
+
+### Project & Note CRUD
+- Members+ can create, edit, and delete projects and notes
+- Viewers can only view projects and notes
+- All data is scoped to the active organization — switching orgs shows different projects
+- Notes are nested under projects: `/projects/{pid}/notes`
+
+### Role Hierarchy
+| Role | View | Create/Edit/Delete | Invite Members | Org Settings |
+|------|------|-------------------|----------------|--------------|
+| Viewer | Yes | No | No | No |
+| Member | Yes | Yes | No | No |
+| Admin | Yes | Yes | Yes | Yes |
+| Owner | Yes | Yes | Yes | Yes |
+
+## Using as a Template
+
+See [docs/TEMPLATE_GUIDE.md](docs/TEMPLATE_GUIDE.md) for forking and customization instructions.
+
+See [docs/ADDING_RESOURCES.md](docs/ADDING_RESOURCES.md) for a step-by-step recipe for adding new org-scoped resources.
+
+See [docs/UPSTREAM_UPDATES.md](docs/UPSTREAM_UPDATES.md) for pulling upstream changes.
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment instructions.
 
 ## CI
 
@@ -136,8 +202,6 @@ To run the same checks locally:
 ./dev/ci.sh
 ```
 
-This uses a pre-built container image (`dev/Dockerfile.ci`) so no local Rust toolchain is required.
-
 ## Tech Stack
 
 | | |
@@ -146,5 +210,5 @@ This uses a pre-built container image (`dev/Dockerfile.ci`) so no local Rust too
 | Database | SQLite / [SeaORM](https://www.sea-ql.org/SeaORM/) |
 | Templates | [Tera](https://keats.github.io/tera/) + [Fluent](https://projectfluent.org/) i18n |
 | Auth | OpenID Connect ([openidconnect-rs](https://github.com/ramosbugs/openidconnect-rs)) |
-| IdP | [Zitadel](https://zitadel.com/) (self-hosted) |
+| IdP | Any OIDC provider (Zitadel, Keycloak, Auth0, etc.) |
 | Runtime | [Podman](https://podman.io/) |

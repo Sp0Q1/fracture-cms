@@ -1,0 +1,49 @@
+# Fracture CMS — Production multi-stage build
+#
+# Build:  podman build -f Containerfile.prod -t fracture-cms:latest .
+# Run:    podman run --env-file .env.prod -p 5150:5150 -v ./data:/app/data fracture-cms:latest
+
+# ── Stage 1: Plan dependencies ─────────────────────────────────────
+FROM rust:latest AS chef
+RUN cargo install cargo-chef
+RUN apt-get update && apt-get install -y libsqlite3-dev && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ── Stage 2: Build release binary ──────────────────────────────────
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
+RUN cargo build --release
+
+# ── Stage 3: Minimal runtime image ─────────────────────────────────
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsqlite3-0 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash appuser
+WORKDIR /app
+
+# Copy binary
+COPY --from=builder /app/target/release/fracture_cms-cli ./fracture_cms-cli
+
+# Copy runtime assets
+COPY config/ ./config/
+COPY assets/ ./assets/
+
+# Data directory for SQLite
+RUN mkdir -p /app/data && chown appuser:appuser /app/data
+VOLUME /app/data
+
+USER appuser
+EXPOSE 5150
+
+ENV LOCO_ENV=production
+ENV DATABASE_URL=sqlite:///app/data/fracture-cms.sqlite?mode=rwc
+
+CMD ["./fracture_cms-cli", "start"]

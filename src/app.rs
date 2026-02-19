@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use axum::Router as AxumRouter;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
     bgworker::{BackgroundWorker, Queue},
@@ -15,7 +16,10 @@ use std::path::Path;
 
 #[allow(unused_imports)]
 use crate::{
-    controllers, initializers, models::_entities::users, tasks, workers::downloader::DownloadWorker,
+    controllers, initializers,
+    models::_entities::{notes, org_invites, org_members, organizations, projects, users},
+    tasks,
+    workers::downloader::DownloadWorker,
 };
 
 pub struct App;
@@ -54,9 +58,16 @@ impl Hooks for App {
     fn routes(_ctx: &AppContext) -> AppRoutes {
         AppRoutes::with_default_routes() // controller routes below
             .add_route(controllers::home::routes())
-            .add_route(controllers::movie::routes())
+            .add_route(controllers::org::routes())
+            .add_route(controllers::org::invite_routes())
+            .add_route(controllers::project::routes())
+            .add_route(controllers::note::routes())
             .add_route(controllers::oidc::routes())
     }
+    async fn after_routes(router: AxumRouter, _ctx: &AppContext) -> Result<AxumRouter> {
+        Ok(router.fallback(controllers::fallback::not_found))
+    }
+
     async fn connect_workers(ctx: &AppContext, queue: &Queue) -> Result<()> {
         queue.register(DownloadWorker::build(ctx)).await?;
         Ok(())
@@ -67,6 +78,11 @@ impl Hooks for App {
         // tasks-inject (do not remove)
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {
+        truncate_table(&ctx.db, notes::Entity).await?;
+        truncate_table(&ctx.db, projects::Entity).await?;
+        truncate_table(&ctx.db, org_invites::Entity).await?;
+        truncate_table(&ctx.db, org_members::Entity).await?;
+        truncate_table(&ctx.db, organizations::Entity).await?;
         truncate_table(&ctx.db, users::Entity).await?;
         Ok(())
     }

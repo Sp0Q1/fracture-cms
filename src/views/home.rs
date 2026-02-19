@@ -1,20 +1,22 @@
 use loco_rs::prelude::*;
 
-use crate::models::_entities::movies;
+use crate::controllers::middleware::OrgContext;
+use crate::models::_entities::{organizations, users};
 
-/// Render the home page.
-///
-/// # Errors
-///
-/// When there is an issue with rendering the view.
+/// Render the home page for an authenticated user.
 pub fn index(
     v: &impl ViewRenderer,
-    user_name: &Option<String>,
-    items: &Vec<movies::Model>,
+    user: &users::Model,
+    org_ctx: &Option<OrgContext>,
+    user_orgs: &[organizations::Model],
+    project_count: usize,
 ) -> Result<Response> {
-    format::render().view(
-        v,
-        "home/index.html",
-        data!({"user_name": user_name, "items": items}),
-    )
+    let mut ctx = super::base_context(user, org_ctx, user_orgs);
+    ctx["project_count"] = serde_json::json!(project_count);
+    format::render().view(v, "home/index.html", data!(ctx))
+}
+
+/// Render the home page for a guest (unauthenticated) user.
+pub fn index_guest(v: &impl ViewRenderer) -> Result<Response> {
+    format::render().view(v, "home/index.html", data!({}))
 }

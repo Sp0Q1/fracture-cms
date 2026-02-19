@@ -1,6 +1,9 @@
 use fracture_cms::{
     app::App,
-    models::users::{self, Model, OidcUserInfo},
+    models::{
+        org_members, organizations,
+        users::{self, Model, OidcUserInfo},
+    },
 };
 use insta::assert_debug_snapshot;
 use loco_rs::testing::prelude::*;
@@ -182,4 +185,32 @@ async fn oidc_creates_user_without_name_falls_back_to_email_prefix() {
     assert_eq!(user.oidc_provider, Some("github".to_string()));
     assert_eq!(user.oidc_subject, Some("gh-subject-789".to_string()));
     assert!(user.email_verified_at.is_some());
+}
+
+#[tokio::test]
+#[serial]
+async fn oidc_creates_personal_org_for_new_user() {
+    let boot = boot_test::<App>()
+        .await
+        .expect("Failed to boot test application");
+
+    let info = OidcUserInfo {
+        provider: "test".to_string(),
+        subject: "test-personal-org".to_string(),
+        email: "personal-org@example.com".to_string(),
+        name: Some("Personal Org User".to_string()),
+    };
+
+    let user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
+        .await
+        .expect("Failed to create user from OIDC");
+
+    let orgs = organizations::Model::find_orgs_for_user(&boot.app_context.db, user.id).await;
+    assert_eq!(orgs.len(), 1, "New OIDC user should have one personal org");
+    assert!(orgs[0].is_personal);
+
+    let membership =
+        org_members::Model::find_membership(&boot.app_context.db, orgs[0].id, user.id).await;
+    assert!(membership.is_some());
+    assert_eq!(membership.unwrap().role, "owner");
 }
