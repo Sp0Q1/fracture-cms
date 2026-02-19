@@ -40,6 +40,7 @@ pub fn settings(
     format::render().view(v, "org/settings.html", data!(ctx))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn members(
     v: &impl ViewRenderer,
     user: &users::Model,
