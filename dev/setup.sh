@@ -82,7 +82,8 @@ APP_RESPONSE=$(zapi POST "/management/v1/projects/$PROJECT_ID/apps/oidc" \
         "authMethodType": "OIDC_AUTH_METHOD_TYPE_BASIC",
         "postLogoutRedirectUris": ["http://localhost:5150"],
         "devMode": true,
-        "idTokenUserinfoAssertion": true
+        "idTokenUserinfoAssertion": true,
+        "backChannelLogoutUri": "http://host.containers.internal:5150/api/auth/oidc/backchannel-logout"
     }')
 
 CLIENT_ID=$(echo "$APP_RESPONSE" | jq -r '.clientId')

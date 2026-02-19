@@ -41,6 +41,7 @@ unic-langid = { version = "0.9" }
 axum-extra = { version = "0.10", features = ["form", "cookie"] }
 time = { version = "0.3" }
 openidconnect = { version = "4.0" }
+jsonwebtoken = { version = "9" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots"] }
 
 [[bin]]

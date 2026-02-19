@@ -41,6 +41,8 @@ services:
       ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_TLS: "false"
       ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_FROM: noreply@fracture-cms.local
       ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_FROMNAME: Fracture CMS
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
     depends_on:
       zitadel-db:
         condition: service_healthy

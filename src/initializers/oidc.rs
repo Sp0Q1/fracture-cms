@@ -84,23 +84,40 @@ impl Initializer for OidcInitializer {
             "{}/.well-known/openid-configuration",
             config.issuer_url.trim_end_matches('/')
         );
-        let end_session_url: Option<String> =
+        let (end_session_url, jwks_uri) =
             if let Ok(resp) = http_client.get(&discovery_url).send().await {
-                resp.text().await.ok().and_then(|body| {
-                    serde_json::from_str::<serde_json::Value>(&body)
-                        .ok()?
-                        .get("end_session_endpoint")?
-                        .as_str()
-                        .map(String::from)
-                })
+                let (mut end_session, mut jwks) = (None, None);
+                if let Some(doc) = resp
+                    .text()
+                    .await
+                    .ok()
+                    .and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())
+                {
+                    end_session = doc
+                        .get("end_session_endpoint")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                    jwks = doc
+                        .get("jwks_uri")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                }
+                (end_session, jwks)
             } else {
-                None
+                (None, None)
             };
+
+        let jwks_uri = jwks_uri.ok_or_else(|| {
+            loco_rs::Error::Message("OIDC discovery did not return jwks_uri".to_string())
+        })?;
 
         tracing::info!(
             end_session = ?end_session_url,
             "OIDC end_session_endpoint discovery"
         );
+
+        let client_id_str = config.client_id.clone();
+        let issuer_url_str = config.issuer_url.clone();
 
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
@@ -120,6 +137,9 @@ impl Initializer for OidcInitializer {
             scopes: config.scopes,
             end_session_url,
             post_logout_redirect_uri: config.post_logout_redirect_uri,
+            issuer_url: issuer_url_str,
+            client_id: client_id_str,
+            jwks_uri,
         };
 
         tracing::info!("OIDC initializer loaded successfully");
