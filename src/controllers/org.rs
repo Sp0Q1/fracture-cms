@@ -10,6 +10,7 @@ use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::middleware;
+use crate::mailers::invite::InviteMailer;
 use crate::models::_entities::{org_members, organizations, users as users_entity};
 use crate::models::org_members::OrgRole;
 use crate::models::{org_invites, organizations as org_model};
@@ -194,8 +195,19 @@ pub async fn members(
             member_users.push((m, u));
         }
     }
+    let pending_invites = org_invites::Model::find_pending_by_org(&ctx.db, org.id).await;
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
-    views::org::members(&v, &user, &org_ctx, &user_orgs, &org, &member_users)
+    let app_url = ctx.config.server.host.clone();
+    views::org::members(
+        &v,
+        &user,
+        &org_ctx,
+        &user_orgs,
+        &org,
+        &member_users,
+        &pending_invites,
+        &app_url,
+    )
 }
 
 /// POST /orgs/:pid/members/invite — invite a member
@@ -223,7 +235,21 @@ pub async fn invite(
     require_role!(org_ctx, OrgRole::Admin);
 
     let invite_role = OrgRole::from_str_role(&params.role).unwrap_or(OrgRole::Member);
-    org_invites::Model::create_invite(&ctx.db, org.id, &params.email, invite_role, user.id).await?;
+    let invite =
+        org_invites::Model::create_invite(&ctx.db, org.id, &params.email, invite_role, user.id)
+            .await?;
+
+    let host = ctx.config.server.host.clone();
+    let accept_url = format!("{host}/invites/{}/accept", invite.pid);
+    let _ = InviteMailer::send_invite(
+        &ctx,
+        &params.email,
+        &org.name,
+        &user.name,
+        &params.role,
+        &accept_url,
+    )
+    .await;
 
     Ok(Redirect::to(&format!("/orgs/{pid}/members")).into_response())
 }

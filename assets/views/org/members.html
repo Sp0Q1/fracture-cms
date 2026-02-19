@@ -23,36 +23,53 @@
 </div>
 
 {% if user_role == "admin" or user_role == "owner" %}
-<article class="card form-card" style="margin-bottom: 2rem;">
+<article class="card form-card mb-6">
     <header><h3>Invite Member</h3></header>
     <form action="/orgs/{{ org.pid }}/members/invite" method="post">
-        <div class="row">
-            <div class="col-6">
-                <div data-field>
-                    <label for="email">Email Address</label>
-                    <input id="email" name="email" type="email" placeholder="user@example.com" required />
-                </div>
-            </div>
-            <div class="col-4">
-                <div data-field>
-                    <label for="role">Role</label>
-                    <select id="role" name="role">
-                        <option value="viewer">Viewer</option>
-                        <option value="member" selected>Member</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                </div>
-            </div>
-            <div class="col-2" style="display: flex; align-items: flex-end;">
-                <button type="submit" style="margin-bottom: 1rem;">Invite</button>
-            </div>
+        <div data-field>
+            <label for="email">Email Address</label>
+            <input id="email" name="email" type="email" placeholder="user@example.com" required />
+        </div>
+        <div data-field>
+            <label for="role">Role</label>
+            <select id="role" name="role">
+                <option value="viewer">Viewer</option>
+                <option value="member" selected>Member</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Send Invite</button>
         </div>
     </form>
 </article>
 {% endif %}
 
+{% if pending_invites | length > 0 %}
+<h3>Pending Invites <span class="badge secondary">{{ pending_invites | length }}</span></h3>
+<div class="vstack mb-6">
+    {% for invite in pending_invites %}
+    <article class="card">
+        <div class="hstack">
+            <strong>{{ invite.email }}</strong>
+            <span class="role-badge" data-role="{{ invite.role }}">{{ invite.role }}</span>
+            <span class="badge warning">Pending</span>
+        </div>
+        <div class="mt-4">
+            <small class="text-lighter">Share this link with the invitee:</small>
+            <fieldset class="group mt-2">
+                <input type="text" value="{{ invite.accept_url }}" readonly data-select-on-focus />
+                <button type="button" data-copy="{{ invite.accept_url }}">Copy</button>
+            </fieldset>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% if members %}
-<table class="members-table">
+<h3>Current Members</h3>
+<table>
     <thead>
         <tr>
             <th>Name</th>
@@ -72,17 +89,19 @@
             {% if user_role == "admin" or user_role == "owner" %}
             <td>
                 {% if member.user_pid != user_pid %}
-                <form action="/orgs/{{ org.pid }}/members/{{ member.user_pid }}/role" method="post" style="display:inline;">
-                    <select name="role" onchange="this.form.submit()">
-                        <option value="viewer"{% if member.role == "viewer" %} selected{% endif %}>Viewer</option>
-                        <option value="member"{% if member.role == "member" %} selected{% endif %}>Member</option>
-                        <option value="admin"{% if member.role == "admin" %} selected{% endif %}>Admin</option>
-                        <option value="owner"{% if member.role == "owner" %} selected{% endif %}>Owner</option>
-                    </select>
-                </form>
-                <form action="/orgs/{{ org.pid }}/members/{{ member.user_pid }}/remove" method="post" style="display:inline; margin-left: 0.5rem;">
-                    <button type="submit" class="outline small" data-variant="danger">Remove</button>
-                </form>
+                <div class="hstack">
+                    <form action="/orgs/{{ org.pid }}/members/{{ member.user_pid }}/role" method="post">
+                        <select name="role" data-submit-on-change>
+                            <option value="viewer"{% if member.role == "viewer" %} selected{% endif %}>Viewer</option>
+                            <option value="member"{% if member.role == "member" %} selected{% endif %}>Member</option>
+                            <option value="admin"{% if member.role == "admin" %} selected{% endif %}>Admin</option>
+                            <option value="owner"{% if member.role == "owner" %} selected{% endif %}>Owner</option>
+                        </select>
+                    </form>
+                    <form action="/orgs/{{ org.pid }}/members/{{ member.user_pid }}/remove" method="post">
+                        <button type="submit" class="outline small" data-variant="danger">Remove</button>
+                    </form>
+                </div>
                 {% else %}
                 <span class="badge">You</span>
                 {% endif %}

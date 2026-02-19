@@ -73,6 +73,45 @@ Request → get_current_user(jwt cookie)
 | projects       | Org-scoped projects               | belongs_to organizations, has_many notes |
 | notes          | Project-scoped notes              | belongs_to projects, organizations |
 
+## Invite Flow
+
+1. Admin submits invite form on `/orgs/{pid}/members` with email + role
+2. `org_invites` row created with 7-day expiry, `pid` (UUID) as the invite token
+3. `InviteMailer::send_invite()` sends an email via the background worker (SMTP)
+4. Accept link is shown on the members page for the creator to copy/share
+5. Existing users accept at `/invites/{token}/accept` → membership created
+6. New users: `find_or_create_from_oidc()` calls `find_pending_by_email()` and auto-accepts matching invites on first login
+
+Emails are sent asynchronously via Loco's `MailerWorker` background queue. In development, MailCrab catches all outbound email at `http://localhost:1080`.
+
+## Email (Mailer)
+
+Mailers live in `src/mailers/` with Tera templates in subdirectories:
+
+```
+src/mailers/
+  invite.rs                    # InviteMailer struct
+  invite/invite/
+    subject.t                  # Email subject template
+    html.t                     # HTML body template
+    text.t                     # Plain text body template
+```
+
+Emails are enqueued as background jobs via `Mailer::mail_template()` and processed by `MailerWorker`. SMTP is configured in `config/*.yaml` under the `mailer.smtp` key.
+
+## Frontend Conventions
+
+- **CSS framework**: [oat.ink](https://oat.ink) — semantic HTML styling with no classes needed for basic elements
+- **No inline CSS**: Use oat.ink utility classes (`.mt-4`, `.mb-6`, `.hstack`, `.vstack`, etc.) or `app.css`
+- **No inline JavaScript**: All behavior uses `data-` attributes handled by `app.js`
+  - `data-href` — clickable rows/cards
+  - `data-delete-url` + `data-delete-redirect` — delete confirmation
+  - `data-copy` — copy to clipboard
+  - `data-select-on-focus` — select input text on focus
+  - `data-submit-on-change` — auto-submit form on select change
+- **CSP enforced**: `script-src 'self'; style-src 'self'` — no `unsafe-inline` or `unsafe-eval`
+- **Tera auto-escaping**: `.html` templates auto-escape by default — do not use `| escape` filters (causes double-escaping)
+
 ## Public IDs
 
 All entities use `pid` (UUID v4) as the public-facing identifier. Internal `id` (i32 auto-increment) is never exposed in URLs or API responses. `pid` is generated in `before_save()` on insert.

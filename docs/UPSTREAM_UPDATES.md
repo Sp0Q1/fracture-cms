@@ -27,6 +27,7 @@ When merging upstream changes, you'll likely see conflicts in these files:
 
 ### Sometimes conflicting (shared + customized)
 - `assets/static/app.css` — If you changed colors or added styles near the same lines
+- `assets/static/app.js` — If you added data-attribute handlers near the same lines
 - `assets/views/home/index.html` — If upstream changed the dashboard layout
 - `Cargo.toml` — If both sides added dependencies
 
@@ -36,6 +37,7 @@ When merging upstream changes, you'll likely see conflicts in these files:
 - `src/models/organizations.rs`
 - `src/models/org_members.rs`
 - `src/models/org_invites.rs`
+- `src/mailers/invite.rs` — Invite email mailer
 - `migration/src/lib.rs` — Only if both sides added migrations
 
 ## Resolution Strategy

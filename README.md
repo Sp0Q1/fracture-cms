@@ -55,6 +55,8 @@ src/
     projects.rs         # Org-scoped project queries
     notes.rs            # Project-scoped note queries
     users.rs            # User lookup, OIDC account creation/linking
+  mailers/
+    invite.rs           # Invitation email (SMTP via background worker)
   views/                # View helpers (Rust → template context)
 migration/src/          # Database migrations (SQLite)
 assets/
@@ -64,7 +66,7 @@ assets/
 config/                 # Loco YAML config per environment
 docs/                   # Architecture, template guide, resource recipes
 dev/
-  setup.sh              # Provisions Kanidm + writes .env
+  setup.sh              # Provisions Zitadel + writes .env
   ci.sh                 # Runs all CI checks locally in containers
   Dockerfile.ci         # CI container image (Rust + SQLite + clippy + rustfmt)
 ```
@@ -164,9 +166,10 @@ The app delegates all authentication to an OIDC provider:
 
 ### Invite Flow
 1. Admin invites a user by email at `/orgs/{pid}/members`
-2. An invite record is created (expires in 7 days)
-3. If the user already has an account, they accept at `/invites/{token}/accept`
-4. If the user doesn't have an account yet, the invite is **auto-accepted** when they sign in via OIDC with the matching email
+2. An invite record is created (expires in 7 days) and an **invitation email** is sent via SMTP
+3. The invite accept link is also shown on the members page so it can be copied and shared directly
+4. If the user already has an account, they accept at `/invites/{token}/accept`
+5. If the user doesn't have an account yet, the invite is **auto-accepted** when they sign in via OIDC with the matching email
 
 ### Project & Note CRUD
 - Members+ can create, edit, and delete projects and notes
@@ -210,5 +213,6 @@ To run the same checks locally:
 | Database | SQLite / [SeaORM](https://www.sea-ql.org/SeaORM/) |
 | Templates | [Tera](https://keats.github.io/tera/) + [Fluent](https://projectfluent.org/) i18n |
 | Auth | OpenID Connect ([openidconnect-rs](https://github.com/ramosbugs/openidconnect-rs)) |
+| CSS | [oat.ink](https://oat.ink) (semantic, zero-dependency) |
 | IdP | Any OIDC provider (Zitadel, Keycloak, Auth0, etc.) |
 | Runtime | [Podman](https://podman.io/) |

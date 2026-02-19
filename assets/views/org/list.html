@@ -32,8 +32,10 @@
                     {% if org.pid == org_pid %}<span class="badge success">Active</span>{% endif %}
                 </td>
                 <td>{% if org.is_personal %}<span class="badge">Personal</span>{% else %}<span class="badge secondary">Team</span>{% endif %}</td>
-                <td>
+                <td class="action-links">
                     <a href="/orgs/switch/{{ org.pid }}" class="button outline small">Switch</a>
+                    <a href="/orgs/{{ org.pid }}/members" class="button outline small">Members</a>
+                    <a href="/orgs/{{ org.pid }}/settings" class="button outline small">Settings</a>
                 </td>
             </tr>
             {% endfor %}

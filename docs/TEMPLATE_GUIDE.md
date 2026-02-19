@@ -38,6 +38,7 @@ These files implement the org/auth/RBAC infrastructure. Take upstream updates fo
 - `src/models/org_members.rs` — Membership + OrgRole
 - `src/models/org_invites.rs` — Invite flow
 - `src/models/_entities/organizations.rs`, `org_members.rs`, `org_invites.rs`
+- `src/mailers/invite.rs` — Invitation email mailer
 - `src/initializers/` — OIDC, view engine, security headers
 - `migration/src/m20260220_*` — Org/RBAC migrations
 
@@ -52,7 +53,9 @@ These files are where you add your domain-specific logic:
 - `assets/views/base.html` — Nav links, branding
 - `assets/views/home/index.html` — Dashboard content
 - `assets/static/app.css` — Colors, custom component styles
+- `assets/static/app.js` — Add new `data-` attribute handlers for your features
 - `src/app.rs` — Route registration, truncate order
+- `src/mailers/` — Add your own mailers alongside invite.rs
 - `README.md` — Project-specific documentation
 
 ## Adding a New Org-Scoped Resource

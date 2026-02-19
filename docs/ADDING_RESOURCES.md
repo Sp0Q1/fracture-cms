@@ -85,7 +85,12 @@ Create `assets/views/<resource>/`:
 - `show.html` — Detail view, role-gated edit/delete buttons
 - `edit.html` — Edit form, role-gated delete button
 
-All templates extend `base.html`.
+All templates extend `base.html`. Follow these conventions:
+
+- **No inline CSS** — use oat.ink utility classes (`.mt-4`, `.mb-6`, `.hstack`, `.vstack`)
+- **No inline JavaScript** — use `data-` attributes handled by `app.js`
+- **No `| escape` filter** — Tera auto-escapes `.html` files by default
+- **Role-gate** create/edit/delete buttons with `{% if user_role == "member" or ... %}`
 
 ## 7. Route Registration
 
@@ -95,7 +100,26 @@ In `src/app.rs`:
 .add_route(controllers::<resource>::routes())
 ```
 
-## 8. Tests
+## 8. JavaScript Behavior (optional)
+
+If your templates need interactive behavior (copy buttons, auto-submit selects, etc.), add `data-` attributes to the HTML and handle them in `assets/static/app.js`. Never use inline event handlers (`onclick`, `onchange`, etc.) — the CSP blocks them.
+
+## 9. Mailer (optional)
+
+If your resource needs email notifications, create a mailer in `src/mailers/`:
+
+```
+src/mailers/
+  <resource>.rs              # Mailer struct implementing loco_rs::mailer::Mailer
+  <resource>/<action>/
+    subject.t                # Tera template for subject line
+    html.t                   # Tera template for HTML body
+    text.t                   # Tera template for plain text body
+```
+
+Register in `src/mailers/mod.rs`.
+
+## 10. Tests
 
 Create `tests/models/<resource>.rs`:
 
@@ -105,6 +129,6 @@ Create `tests/models/<resource>.rs`:
 
 Register in `tests/models/mod.rs`.
 
-## 9. Truncation Order
+## 11. Truncation Order
 
 Update `truncate()` in `src/app.rs` — child tables before parent tables (foreign key order).
