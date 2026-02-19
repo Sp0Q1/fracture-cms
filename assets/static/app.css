@@ -1,3 +1,43 @@
+/* ==========================================================================
+   Fracture CMS — Enterprise Dark Theme
+   Accent colors: #62cb98 (green) + #5a60ce (indigo)
+   ========================================================================== */
+
+/* --- OAT Variable Overrides --- */
+:root[data-theme="dark"] {
+    --primary: #62cb98;
+    --primary-foreground: #fff;
+    --ring: #62cb98;
+}
+
+/* --- Layout --- */
+main.container {
+    padding-top: calc(var(--topnav-height) + 2rem);
+}
+
+/* --- Nav --- */
+nav[data-topnav] {
+    backdrop-filter: blur(12px);
+    background-color: rgba(var(--background-rgb, 11, 13, 19), 0.85);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+nav[data-topnav] a {
+    color: var(--text-light, #9ca3af);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.15s ease;
+}
+
+nav[data-topnav] a:hover {
+    color: var(--foreground, #e5e7eb);
+}
+
+nav[data-topnav] > span {
+    display: inline-flex;
+    align-items: center;
+}
+
 .nav-end {
     margin-left: auto;
 }
@@ -5,4 +45,431 @@
 #account-menu[popover] {
     left: auto !important;
     right: 1rem;
+}
+
+nav[data-topnav] .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+}
+
+nav[data-topnav] .brand svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, #62cb98, #5a60ce);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+nav[data-topnav] a[aria-current="page"] {
+    color: #62cb98;
+    border-bottom: 2px solid #62cb98;
+    padding-bottom: 2px;
+}
+
+.user-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #62cb98, #5a60ce);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* --- Hero Section --- */
+.hero {
+    text-align: center;
+    padding: 4rem 1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(98, 203, 152, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 50%, rgba(90, 96, 206, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 0%, rgba(98, 203, 152, 0.08) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.hero > * {
+    position: relative;
+    z-index: 1;
+}
+
+.hero h1 {
+    font-size: 2.75rem;
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 1rem;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.hero .subtitle {
+    font-size: 1.15rem;
+    color: var(--text-light, #9ca3af);
+    max-width: 540px;
+    margin: 0 auto 2rem;
+    line-height: 1.6;
+}
+
+.hero .cta-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* --- Card Accent --- */
+.card-accent {
+    border-top: 3px solid transparent;
+    border-image: linear-gradient(90deg, #62cb98, #5a60ce) 1;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-accent:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(98, 203, 152, 0.12);
+}
+
+/* --- Feature Cards --- */
+.feature-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(98, 203, 152, 0.2), rgba(90, 96, 206, 0.15));
+    color: #62cb98;
+    margin-bottom: 1rem;
+}
+
+.feature-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* --- Stat Cards --- */
+.stat-card {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.stat-card .stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #62cb98;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.stat-card .stat-label {
+    font-size: 0.875rem;
+    color: var(--text-light, #9ca3af);
+}
+
+/* --- Clickable elements (rows, cards) --- */
+[data-href] {
+    cursor: pointer;
+}
+
+/* --- Movie Cards --- */
+.movie-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-top: 3px solid transparent;
+    border-image: linear-gradient(90deg, #62cb98, #5a60ce) 1;
+}
+
+.movie-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(98, 203, 152, 0.12);
+}
+
+.movie-card header {
+    font-weight: 600;
+}
+
+/* --- Page Header --- */
+.page-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.page-header h1 {
+    margin-bottom: 0.25rem;
+}
+
+.page-header .page-subtitle {
+    color: var(--text-light, #9ca3af);
+    font-size: 0.95rem;
+}
+
+.page-header .hstack {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+/* --- Empty State --- */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+}
+
+.empty-state svg {
+    width: 64px;
+    height: 64px;
+    color: #6b7280;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: var(--text-light, #9ca3af);
+    margin-bottom: 1.5rem;
+}
+
+/* --- Form Card --- */
+.form-card {
+    max-width: 560px;
+}
+
+.form-card [data-field] {
+    margin-bottom: 1.5rem;
+}
+
+.form-card [data-hint] {
+    font-size: 0.85rem;
+    color: var(--text-light, #9ca3af);
+    margin-top: 0.25rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+.form-actions .spacer {
+    margin-left: auto;
+}
+
+/* --- Breadcrumb --- */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-light, #9ca3af);
+    margin-bottom: 1.5rem;
+}
+
+.breadcrumb a {
+    color: var(--text-light, #9ca3af);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    color: #62cb98;
+}
+
+.breadcrumb .separator {
+    color: #4b5563;
+}
+
+/* --- Detail Card --- */
+.detail-card {
+    max-width: 640px;
+}
+
+.detail-card header h2 {
+    margin: 0;
+}
+
+/* --- Detail Row --- */
+.detail-row {
+    display: flex;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.detail-row:last-of-type {
+    border-bottom: none;
+}
+
+.detail-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-light, #9ca3af);
+    min-width: 80px;
+}
+
+.detail-value {
+    font-weight: 500;
+}
+
+/* --- Trust/Tech Badges --- */
+.trust-section {
+    text-align: center;
+    padding: 2rem 0;
+    margin-top: 2rem;
+}
+
+.trust-section p {
+    color: var(--text-light, #9ca3af);
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.trust-badges {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* --- Footer --- */
+.site-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 4rem;
+    padding: 2.5rem 0 1.5rem;
+    font-size: 0.875rem;
+    color: var(--text-light, #9ca3af);
+}
+
+.footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+.footer-brand p {
+    margin: 0.5rem 0 0;
+    line-height: 1.5;
+}
+
+.footer-col h4 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #d1d5db;
+    margin-bottom: 0.75rem;
+}
+
+.footer-col ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.footer-col li {
+    margin-bottom: 0.4rem;
+}
+
+.footer-col a {
+    color: var(--text-light, #9ca3af);
+    text-decoration: none;
+}
+
+.footer-col a:hover {
+    color: #62cb98;
+}
+
+.footer-bottom {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.8rem;
+    color: #6b7280;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* --- Table Enhancements --- */
+table.clickable-rows tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* --- Error Page (404) --- */
+.error-page {
+    text-align: center;
+    padding: 2rem;
+    min-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.error-code {
+    font-size: 8rem;
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, #62cb98, #5a60ce);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.error-message {
+    font-size: 1.5rem;
+    margin: 1rem 0 0.5rem;
+    font-weight: 600;
+}
+
+.error-hint {
+    color: var(--text-light, #6b7280);
+    margin-bottom: 2rem;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .hero h1 {
+        font-size: 2rem;
+    }
+
+    .footer-grid {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .page-header .hstack {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }

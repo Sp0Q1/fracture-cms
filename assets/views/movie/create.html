@@ -1,23 +1,26 @@
 {% extends "base.html" %}
 
-{% block title %}
-Create movie
-{% endblock title %}
+{% block title %}Add Movie — Fracture CMS{% endblock title %}
 
-{% block page_title %}
-Create new movie
-{% endblock page_title %}
+{% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
-<form action="/movies" method="post">
-    <label for="title">Title</label>
-    <input id="title" name="title" type="text" value="" />
-    <button type="submit" class="mt-4">Submit</button>
-</form>
-<br />
-<a href="/movies">Back to movies</a>
+<div class="page-header">
+    <h1>Add New Movie</h1>
+    <p class="page-subtitle">Add a movie to your collection</p>
+</div>
+
+<article class="card form-card">
+    <form action="/movies" method="post">
+        <div data-field>
+            <label for="title">Title</label>
+            <input id="title" name="title" type="text" value="" placeholder="Enter movie title" required />
+            <small data-hint>The display name for this movie.</small>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Add Movie</button>
+            <a href="/movies" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
 {% endblock content %}
-
-{% block js %}
-
-{% endblock js %}

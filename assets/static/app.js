@@ -32,6 +32,13 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    // Clickable rows/cards: navigates to data-href on click
+    document.querySelectorAll("[data-href]").forEach(function (el) {
+        el.addEventListener("click", function () {
+            window.location.href = el.getAttribute("data-href");
+        });
+    });
+
     // Session refresh: only runs when body has data-authenticated
     if (document.body.hasAttribute("data-authenticated")) {
         setInterval(function () {
