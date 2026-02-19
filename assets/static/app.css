@@ -269,28 +269,6 @@ nav[data-topnav] a[aria-current="page"] {
     color: #9ca3af;
 }
 
-/* --- Members Table --- */
-.members-table {
-    width: 100%;
-}
-
-.members-table th {
-    text-align: left;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-light, #9ca3af);
-}
-
-.members-table td {
-    vertical-align: middle;
-}
-
-.members-table select {
-    padding: 0.2rem 0.4rem;
-    font-size: 0.85rem;
-}
-
 /* --- Page Header --- */
 .page-header {
     margin-bottom: 2rem;
@@ -308,11 +286,8 @@ nav[data-topnav] a[aria-current="page"] {
 }
 
 .page-header .hstack {
-    display: flex;
-    align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 1rem;
 }
 
 /* --- Empty State --- */

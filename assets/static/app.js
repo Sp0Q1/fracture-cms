@@ -39,6 +39,35 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    // Copy to clipboard: uses data-copy attribute
+    document.querySelectorAll("[data-copy]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            var text = this.getAttribute("data-copy");
+            var btn = this;
+            var original = btn.textContent;
+            navigator.clipboard.writeText(text).then(function () {
+                btn.textContent = "Copied!";
+                window.setTimeout(function () {
+                    btn.textContent = original;
+                }, 1500);
+            });
+        });
+    });
+
+    // Select on focus: uses data-select-on-focus attribute
+    document.querySelectorAll("[data-select-on-focus]").forEach(function (input) {
+        input.addEventListener("focus", function () {
+            this.select();
+        });
+    });
+
+    // Auto-submit form on change: uses data-submit-on-change attribute
+    document.querySelectorAll("[data-submit-on-change]").forEach(function (el) {
+        el.addEventListener("change", function () {
+            this.form.submit();
+        });
+    });
+
     // Session refresh: only runs when body has data-authenticated
     if (document.body.hasAttribute("data-authenticated")) {
         setInterval(function () {

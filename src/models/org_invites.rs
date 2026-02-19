@@ -55,6 +55,18 @@ impl Model {
             .unwrap_or_default()
     }
 
+    /// Finds all pending (non-accepted, non-expired) invites for an org.
+    pub async fn find_pending_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+        let now = chrono::Utc::now();
+        Entity::find()
+            .filter(Column::OrgId.eq(org_id))
+            .filter(Column::AcceptedAt.is_null())
+            .filter(Column::ExpiresAt.gt(now))
+            .all(db)
+            .await
+            .unwrap_or_default()
+    }
+
     /// Finds an invite by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
         let uuid = Uuid::parse_str(pid).ok()?;

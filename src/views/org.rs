@@ -1,7 +1,7 @@
 use loco_rs::prelude::*;
 
 use crate::controllers::middleware::OrgContext;
-use crate::models::_entities::{org_members, organizations, users};
+use crate::models::_entities::{org_invites, org_members, organizations, users};
 
 pub fn list(
     v: &impl ViewRenderer,
@@ -47,6 +47,8 @@ pub fn members(
     user_orgs: &[organizations::Model],
     org: &organizations::Model,
     member_users: &[(org_members::Model, users::Model)],
+    pending_invites: &[org_invites::Model],
+    app_url: &str,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
     ctx["org"] = serde_json::json!({
@@ -63,6 +65,17 @@ pub fn members(
                 "user_email": u.email,
                 "user_pid": u.pid.to_string(),
                 "role": m.role,
+            })
+        })
+        .collect::<Vec<_>>());
+    ctx["pending_invites"] = serde_json::json!(pending_invites
+        .iter()
+        .map(|i| {
+            serde_json::json!({
+                "email": i.email,
+                "role": i.role,
+                "pid": i.pid.to_string(),
+                "accept_url": format!("{}/invites/{}/accept", app_url, i.pid),
             })
         })
         .collect::<Vec<_>>());
