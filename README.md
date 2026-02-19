@@ -1,56 +1,150 @@
 # Fracture CMS
 
-A content management system built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework, featuring OIDC single sign-on and user-owned movie management.
-
-## Features
-
-- **OIDC Authentication** — single sign-on through OpenID Connect (Kanidm)
-- **Short-lived JWT Sessions** — 15-minute tokens with silent background refresh
-- **User-owned Movies** — each user manages their own movie collection (enforced via `user_id` foreign key)
-- **Account Menu** — SVG avatar icon with colored status indicator and dropdown menu (oat.ink `<ot-dropdown>`)
-- **Frontpage Dashboard** — logged-in users see their movie collection; guests see a welcome page
-- **Content Security Policy** — strict CSP headers with no inline scripts or styles
-- **Containerized Development** — Podman Compose environment with Kanidm IdP
+A content management system built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework. Users authenticate via OpenID Connect (Zitadel) and manage their own movie collections.
 
 ## Quick Start
 
-### Local development
+### Prerequisites
+
+- [Rust](https://rustup.rs/) (for local development)
+- [Podman](https://podman.io/) and `podman-compose` (for the full stack)
+
+### Full stack (recommended)
 
 ```sh
+./dev/setup.sh            # Provisions Zitadel, creates OIDC app, writes .env
+podman compose up -d mailcrab app
+```
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| App | http://localhost:5150 | Fracture CMS |
+| Zitadel | http://localhost:8080 | Identity provider |
+| MailCrab | http://localhost:1080 | Email testing |
+
+A test user is created automatically. Credentials are printed at the end of `setup.sh`.
+
+### Local development (app only)
+
+```sh
+cp .env.example .env
+# Fill in JWT_SECRET, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_PROJECT_ID
 cargo loco start
 ```
 
-Visit [http://localhost:5150](http://localhost:5150).
+## Project Structure
 
-### Full stack (with Kanidm, Mailcrab)
-
-```sh
-./dev/setup.sh
-podman compose up
 ```
-
-See the `dev/` directory for environment configuration and service setup.
+src/
+  controllers/
+    middleware.rs       # JWT cookie authentication
+    movie.rs            # Movie CRUD (list, create, show, edit, delete)
+    oidc.rs             # OIDC login, logout, back-channel logout
+    oidc_state.rs       # OIDC state store (CSRF tokens, PKCE verifiers)
+  initializers/
+    oidc.rs             # OIDC discovery, client setup, JWKS URI extraction
+    view_engine.rs      # Tera templates + Fluent i18n
+  models/
+    _entities/          # SeaORM entity definitions (hand-edited)
+    movies.rs           # Movie queries scoped to user
+    users.rs            # User lookup, OIDC account creation/linking
+migration/src/          # Database migrations (SQLite)
+assets/
+  views/                # Tera HTML templates
+  static/               # CSS, JS, images
+  i18n/                 # Fluent locale files (en-US, de-DE)
+config/                 # Loco YAML config per environment
+dev/
+  setup.sh              # Provisions Zitadel + writes .env
+  ci.sh                 # Runs all CI checks locally in containers
+  Dockerfile.ci         # CI container image (Rust + SQLite + clippy + rustfmt)
+```
 
 ## Architecture
 
-### Authentication Flow
+### Authentication
 
-1. User clicks **Sign in** → redirected to Kanidm OIDC provider
-2. After successful authentication → callback issues a short-lived JWT (15 min) in an HTTP-only cookie
-3. Frontend silently refreshes the token every 12 minutes via `/api/auth/oidc/refresh`
-4. On token expiry (inactivity) → "Session expired" message with sign-in link
-5. User clicks **Sign out** → cookie cleared, redirected to home
+The app delegates all authentication to [Zitadel](https://zitadel.com/) via OpenID Connect:
 
-### Movie Ownership
+- **Login**: PKCE authorization code flow with audience verification
+- **Sessions**: Short-lived JWT cookies (15 min), silently refreshed by the frontend
+- **Logout**: Clears the cookie and redirects to Zitadel's end-session endpoint
+- **Back-channel logout**: When a user logs out from Zitadel directly, the IdP POSTs a signed `logout_token`. The app verifies the signature against the IdP's JWKS, then sets `session_invalidated_at` on the user. Middleware rejects requests until the user re-authenticates.
+- **Account creation**: First OIDC login creates an account automatically. If an account with the same verified email exists, the OIDC identity is linked to it.
 
-- Movies are scoped to the authenticated user via a `user_id` foreign key
-- All movie endpoints require authentication — unauthenticated users are rejected
-- Users can only view, edit, and delete their own movies
+### Data Model
+
+- **Users** have OIDC identity fields (`oidc_provider`, `oidc_subject`) and a `session_invalidated_at` timestamp for back-channel logout
+- **Movies** belong to a user via `user_id` foreign key. All queries are scoped to the authenticated user
+- Both entities use UUIDs (`pid`) as public-facing identifiers; internal `id` (integer) is never exposed
 
 ### Security
 
-- HTTP-only, SameSite=Lax cookies (not accessible to JavaScript)
-- Strict Content-Security-Policy: `default-src 'none'; script-src 'self'; style-src 'self'`
+- HTTP-only, SameSite=Lax cookies
+- Content-Security-Policy: `default-src 'none'; script-src 'self'; style-src 'self'`
 - X-Content-Type-Options, X-Frame-Options, Referrer-Policy headers
-- No inline scripts or event handlers — all JS in external files
-- SVG icons use presentation attributes (`fill`, `stroke`) which are CSP-safe
+- OIDC audience verification
+- JWKS signature verification on back-channel logout tokens
+
+## Routes
+
+### Authentication
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/auth/oidc/providers` | List configured providers |
+| GET | `/api/auth/oidc/authorize` | Start login flow |
+| GET | `/api/auth/oidc/callback` | OIDC callback |
+| GET | `/api/auth/oidc/logout` | Logout |
+| GET | `/api/auth/oidc/refresh` | Refresh JWT |
+| POST | `/api/auth/oidc/backchannel-logout` | Back-channel logout (called by IdP) |
+
+### Movies (authenticated)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/movies` | List |
+| GET | `/movies/new` | New form |
+| POST | `/movies` | Create |
+| GET | `/movies/:pid` | Show |
+| GET | `/movies/:pid/edit` | Edit form |
+| POST | `/movies/:pid` | Update |
+| POST | `/movies/:pid/delete` | Delete |
+
+## Configuration
+
+Configured via `config/<environment>.yaml` with environment variable overrides:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `JWT_SECRET` | JWT signing secret | (required) |
+| `OIDC_CLIENT_ID` | OIDC client ID | (required) |
+| `OIDC_CLIENT_SECRET` | OIDC client secret | (required) |
+| `OIDC_PROJECT_ID` | Zitadel project ID for audience verification | (optional) |
+| `OIDC_ISSUER_URL` | OIDC issuer URL | `http://localhost:8080` |
+| `OIDC_REDIRECT_URI` | OIDC callback URL | `http://localhost:5150/api/auth/oidc/callback` |
+| `DATABASE_URL` | SQLite connection string | `sqlite://fracture-cms_development.sqlite?mode=rwc` |
+| `MAILER_HOST` | SMTP host | `localhost` |
+
+## CI
+
+GitHub Actions runs 4 checks: **rustfmt**, **clippy**, **semgrep**, and **tests**.
+
+To run the same checks locally:
+
+```sh
+./dev/ci.sh
+```
+
+This uses a pre-built container image (`dev/Dockerfile.ci`) so no local Rust toolchain is required.
+
+## Tech Stack
+
+| | |
+|---|---|
+| Framework | [Loco](https://loco.rs) (Axum) |
+| Database | SQLite / [SeaORM](https://www.sea-ql.org/SeaORM/) |
+| Templates | [Tera](https://keats.github.io/tera/) + [Fluent](https://projectfluent.org/) i18n |
+| Auth | OpenID Connect ([openidconnect-rs](https://github.com/ramosbugs/openidconnect-rs)) |
+| IdP | [Zitadel](https://zitadel.com/) (self-hosted) |
+| Runtime | [Podman](https://podman.io/) |
