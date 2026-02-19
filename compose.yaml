@@ -73,6 +73,7 @@ services:
         condition: service_started
     volumes:
       - ./config:/app/config:ro
+      - ./assets:/app/assets:ro
     env_file:
       - .env
     environment:

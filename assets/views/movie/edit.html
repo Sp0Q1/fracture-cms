@@ -1,26 +1,29 @@
 {% extends "base.html" %}
 
-{% block title %}
-Edit movie: {{ item.pid }}
-{% endblock title %}
+{% block title %}Edit Movie — Fracture CMS{% endblock title %}
 
-{% block page_title %}
-Edit movie: {{ item.pid }}
-{% endblock page_title %}
+{% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
-<form action="/movies/{{ item.pid }}" method="post">
-    <label for="title">Title</label>
-    <input id="title" name="title" type="text" value="{{item.title}}" />
-    <button type="submit" class="mt-4">Submit</button>
-    <button class="mt-4" data-variant="danger"
-            data-delete-url="/movies/{{ item.pid }}"
-            data-delete-redirect="/movies">Delete</button>
-</form>
-<br />
-<a href="/movies">Back to movies</a>
+<div class="page-header">
+    <h1>Edit Movie</h1>
+    <p class="page-subtitle">Editing <code>{{ item.pid }}</code></p>
+</div>
+
+<article class="card form-card">
+    <form action="/movies/{{ item.pid }}" method="post">
+        <div data-field>
+            <label for="title">Title</label>
+            <input id="title" name="title" type="text" value="{{ item.title | escape }}" required />
+        </div>
+        <div class="form-actions">
+            <button type="submit">Save Changes</button>
+            <a href="/movies/{{ item.pid }}" class="button" data-variant="secondary">Cancel</a>
+            <span class="spacer"></span>
+            <button type="button" class="outline" data-variant="danger"
+                    data-delete-url="/movies/{{ item.pid }}"
+                    data-delete-redirect="/movies">Delete</button>
+        </div>
+    </form>
+</article>
 {% endblock content %}
-
-{% block js %}
-
-{% endblock js %}

@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Fracture CMS — Secure content management built with Rust, featuring OIDC single sign-on.">
   <title>{% block title %}{% endblock title %}</title>
   <link rel="stylesheet" href="/static/oat.min.css" integrity="sha384-Q7tDn81qF6GoBv+Rdj5l6JFr2qaiXG01Z5dT8jRpp5lE+6IZx8as9X/Igi7ISdBP" crossorigin="anonymous">
   <link rel="stylesheet" href="/static/app.css">
@@ -14,22 +15,28 @@
 
 <body{% if user_name %} data-authenticated{% endif %}>
     <nav data-topnav>
-        <span><a href="/"><strong>Fracture CMS</strong></a></span>
+        <span>
+            <a href="/" class="brand">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 26" fill="none" stroke="#62cb98" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L3 7v6c0 5.25 3.75 10.14 9 11.43C17.25 23.14 21 18.25 21 13V7l-9-5z"/>
+                </svg>
+                <strong class="gradient-text">Fracture CMS</strong>
+            </a>
+        </span>
         <span><a href="/movies">Movies</a></span>
         <ot-dropdown class="nav-end">
+            {% if user_name %}
+            <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">
+                <span class="user-avatar">{{ user_name | truncate(length=1, end="") | upper }}</span>
+            </button>
+            {% else %}
             <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">
                 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="8" r="4"/>
                     <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
-                    {% if user_name %}
-                    <circle cx="18" cy="18" r="4.5" fill="#22c55e" stroke="none"/>
-                    <path d="M16 18l1.5 1.5L20 17" stroke="white" stroke-width="1.5" fill="none"/>
-                    {% else %}
-                    <circle cx="18" cy="18" r="4.5" fill="#ef4444" stroke="none"/>
-                    <path d="M16.5 16.5l3 3M19.5 16.5l-3 3" stroke="white" stroke-width="1.5" fill="none"/>
-                    {% endif %}
                 </svg>
             </button>
+            {% endif %}
             <div id="account-menu" popover>
                 {% if user_name %}
                 <span role="menuitem">{{ user_name }}</span>
@@ -44,12 +51,39 @@
         </ot-dropdown>
     </nav>
     <main class="container">
-        <h1>{% block page_title %}{% endblock page_title %}</h1>
+        {% block page_title_block %}
+        {% endblock page_title_block %}
         {% block content %}
         {% endblock content %}
     </main>
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <strong class="gradient-text">Fracture CMS</strong>
+                <p>Secure content management built with Rust and enterprise-grade authentication.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Navigation</h4>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/movies">Movies</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Built With</h4>
+                <ul>
+                    <li>Rust + Loco</li>
+                    <li>OIDC / Kanidm</li>
+                    <li>SQLite</li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            Fracture CMS — Built with Loco in Rust
+        </div>
+    </footer>
   <script src="/static/oat.min.js" integrity="sha384-/Trl5iuXWQS6d7T9TWGsfbC7cIDm88CDZc+BdI3LCdclFglQVOz7AmU+M7R5IQE/" crossorigin="anonymous"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=2"></script>
   {% block js %}
 
   {% endblock js %}

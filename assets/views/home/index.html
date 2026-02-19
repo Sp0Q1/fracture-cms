@@ -2,45 +2,116 @@
 
 {% block title %}Fracture CMS{% endblock title %}
 
-{% block page_title %}{% if user_name %}My Movies{% else %}Welcome to Fracture CMS{% endif %}{% endblock page_title %}
+{% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
 {% if user_name %}
+
+    <div class="page-header">
+        <div class="hstack">
+            <div>
+                <h1>Welcome back, {{ user_name | escape }}</h1>
+                <p class="page-subtitle">Manage your movie collection</p>
+            </div>
+            <a href="/movies/new" class="button">Add Movie</a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-6">
+            <article class="card stat-card card-accent">
+                <div class="stat-number">{{ items | length }}</div>
+                <div class="stat-label">Total Movies</div>
+            </article>
+        </div>
+        <div class="col-6">
+            <article class="card stat-card card-accent">
+                <div class="stat-number"><span class="badge success">Active</span></div>
+                <div class="stat-label">Session Status</div>
+            </article>
+        </div>
+    </div>
 
     {% if items %}
     <div class="row">
         {% for item in items %}
         <div class="col-4">
-            <article class="card">
+            <article class="card movie-card" data-href="/movies/{{ item.pid }}">
                 <header>{{ item.title | default(value="Untitled") | escape }}</header>
-                <p><a href="/movies/{{ item.id }}/edit">Edit</a></p>
             </article>
         </div>
         {% endfor %}
     </div>
     {% else %}
-    <article class="card">
-        <header>Nothing Here Yet</header>
+    <article class="card empty-state">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2"/>
+            <path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/>
+        </svg>
+        <h3>Nothing Here Yet</h3>
         <p>You haven't added any movies. Start building your collection!</p>
-        <a href="/movies/new" class="button">Add Movie</a>
+        <a href="/movies/new" class="button">Add Your First Movie</a>
     </article>
     {% endif %}
 
-    <p class="mt-4"><a href="/movies/new" class="button">Add Movie</a></p>
-
 {% else %}
 
-<p>A content management system built with Rust and Loco, featuring OIDC single sign-on and movie management.</p>
+    <section class="hero">
+        <h1><span class="gradient-text">Secure Content Management,</span><br>Built for Enterprise</h1>
+        <p class="subtitle">Manage your media library with enterprise-grade security, OIDC single sign-on, and a modern developer experience.</p>
+        <div class="cta-group">
+            <a href="/api/auth/oidc/authorize" class="button large">Get Started</a>
+            <a href="#features" class="button outline large">Learn More</a>
+        </div>
+    </section>
 
-<div class="row">
-    <div class="col-4">
-        <article class="card">
-            <header>Get Started</header>
-            <p>Sign in to manage your movie collection.</p>
-            <a href="/api/auth/oidc/authorize" class="button">Sign in</a>
-        </article>
+    <div class="row" id="features">
+        <div class="col-4">
+            <article class="card card-accent">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L3 7v6c0 5.25 3.75 10.14 9 11.43C17.25 23.14 21 18.25 21 13V7l-9-5z"/>
+                    </svg>
+                </div>
+                <header>Security First</header>
+                <p>OIDC-based authentication with Kanidm. No passwords stored, no sessions to leak.</p>
+            </article>
+        </div>
+        <div class="col-4">
+            <article class="card card-accent">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                </div>
+                <header>Performance</header>
+                <p>Built in Rust with the Loco framework. Compiled, fast, and memory-safe by default.</p>
+            </article>
+        </div>
+        <div class="col-4">
+            <article class="card card-accent">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16 18 22 12 16 6"/>
+                        <polyline points="8 6 2 12 8 18"/>
+                    </svg>
+                </div>
+                <header>Developer Experience</header>
+                <p>Clean architecture, simple templates, and a SQLite backend. Easy to extend and deploy.</p>
+            </article>
+        </div>
     </div>
-</div>
+
+    <div class="trust-section">
+        <p>Built with</p>
+        <div class="trust-badges">
+            <span class="badge outline">Rust</span>
+            <span class="badge outline">Loco</span>
+            <span class="badge outline">OIDC</span>
+            <span class="badge outline">SQLite</span>
+            <span class="badge outline">Kanidm</span>
+        </div>
+    </div>
 
 {% endif %}
 {% endblock content %}
