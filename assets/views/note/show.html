@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item.title }} — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/projects">Projects</a>
+    <span class="separator">/</span>
+    <a href="/projects/{{ project.pid }}">{{ project.title }}</a>
+    <span class="separator">/</span>
+    <span>{{ item.title }}</span>
+</nav>
+
+<article class="card detail-card">
+    <header><h2>{{ item.title }}</h2></header>
+
+    {% if item.body %}
+    <div class="detail-row">
+        <span class="detail-label">Body</span>
+        <span class="detail-value">{{ item.body }}</span>
+    </div>
+    {% endif %}
+    <div class="detail-row">
+        <span class="detail-label">ID</span>
+        <span class="detail-value"><code>{{ item.pid }}</code></span>
+    </div>
+
+    <div class="form-actions">
+        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        <a href="/projects/{{ project.pid }}/notes/{{ item.pid }}/edit" class="button">Edit</a>
+        {% endif %}
+        <a href="/projects/{{ project.pid }}" class="button" data-variant="secondary">Back to Project</a>
+        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        <span class="spacer"></span>
+        <button class="outline" data-variant="danger"
+                data-delete-url="/projects/{{ project.pid }}/notes/{{ item.pid }}"
+                data-delete-redirect="/projects/{{ project.pid }}">Delete</button>
+        {% endif %}
+    </div>
+</article>
+{% endblock content %}

@@ -23,7 +23,27 @@
                 <strong class="gradient-text">Fracture CMS</strong>
             </a>
         </span>
-        <span><a href="/movies">Movies</a></span>
+        {% if user_name %}
+        <ot-dropdown class="org-switcher-nav">
+            <button class="org-badge" popovertarget="org-switcher" aria-label="Switch organization">
+                {{ org_name | default(value="No Org") | truncate(length=20, end="...") }}
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="org-switcher" popover>
+                {% if user_orgs %}
+                {% for org in user_orgs %}
+                <a href="/orgs/switch/{{ org.pid }}" role="menuitem"{% if org.pid == org_pid %} class="active"{% endif %}>
+                    {{ org.name }}{% if org.is_personal %} <small>(Personal)</small>{% endif %}
+                </a>
+                {% endfor %}
+                <hr>
+                {% endif %}
+                <a href="/orgs/new" role="menuitem">Create Organization</a>
+                <a href="/orgs" role="menuitem">Manage Organizations</a>
+            </div>
+        </ot-dropdown>
+        {% endif %}
+        <span><a href="/projects">Projects</a></span>
         <ot-dropdown class="nav-end">
             {% if user_name %}
             <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">
@@ -41,7 +61,8 @@
                 {% if user_name %}
                 <span role="menuitem">{{ user_name }}</span>
                 <hr>
-                <a href="/movies" role="menuitem">My Movies</a>
+                <a href="/projects" role="menuitem">Projects</a>
+                <a href="/orgs" role="menuitem">Organizations</a>
                 <a href="/api/auth/oidc/logout" role="menuitem">Sign out</a>
                 {% else %}
                 <a href="/api/auth/oidc/authorize" role="menuitem">Sign in</a>
@@ -66,14 +87,15 @@
                 <h4>Navigation</h4>
                 <ul>
                     <li><a href="/">Home</a></li>
-                    <li><a href="/movies">Movies</a></li>
+                    <li><a href="/projects">Projects</a></li>
+                    <li><a href="/orgs">Organizations</a></li>
                 </ul>
             </div>
             <div class="footer-col">
                 <h4>Built With</h4>
                 <ul>
                     <li>Rust + Loco</li>
-                    <li>OIDC / Kanidm</li>
+                    <li>OIDC SSO</li>
                     <li>SQLite</li>
                 </ul>
             </div>

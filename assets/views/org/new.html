@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}New Organization — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<div class="page-header">
+    <h1>New Organization</h1>
+    <p class="page-subtitle">Create a new team organization</p>
+</div>
+
+<article class="card form-card">
+    <form action="/orgs" method="post">
+        <div data-field>
+            <label for="name">Organization Name</label>
+            <input id="name" name="name" type="text" value="" placeholder="Enter organization name" required />
+            <small data-hint>A unique name for your organization. A URL slug will be generated automatically.</small>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Create Organization</button>
+            <a href="/orgs" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+{% endblock content %}

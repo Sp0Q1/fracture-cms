@@ -1,0 +1,72 @@
+# Fracture CMS — Production Configuration
+#
+# All secrets and environment-specific values MUST be set via environment
+# variables. Never commit secrets to this file.
+
+logger:
+  enable: true
+  pretty_backtrace: false
+  level: warn
+  format: json
+
+server:
+  port: {{ get_env(name="PORT", default="5150") }}
+  binding: {{ get_env(name="SERVER_BINDING", default="0.0.0.0") }}
+  host: {{ get_env(name="APP_URL", default="https://example.com") }}
+  middlewares:
+    static:
+      enable: true
+      must_exist: true
+      precompressed: false
+      folder:
+        uri: "/static"
+        path: "assets/static"
+      fallback: "assets/static/404.html"
+
+workers:
+  mode: BackgroundAsync
+
+mailer:
+  smtp:
+    enable: true
+    host: {{ get_env(name="MAILER_HOST", default="localhost") }}
+    port: {{ get_env(name="MAILER_PORT", default="587") }}
+    secure: true
+    auth:
+      user: {{ get_env(name="MAILER_USER", default="") }}
+      password: {{ get_env(name="MAILER_PASSWORD", default="") }}
+
+# OIDC Single Sign-On Configuration
+settings:
+  oidc:
+    provider_name: {{ get_env(name="OIDC_PROVIDER_NAME", default="oidc") }}
+    issuer_url: {{ get_env(name="OIDC_ISSUER_URL") }}
+    client_id: "{{ get_env(name='OIDC_CLIENT_ID') }}"
+    client_secret: {{ get_env(name="OIDC_CLIENT_SECRET") }}
+    project_id: "{{ get_env(name='OIDC_PROJECT_ID', default='') }}"
+    redirect_uri: {{ get_env(name="OIDC_REDIRECT_URI") }}
+    post_logout_redirect_uri: {{ get_env(name="OIDC_POST_LOGOUT_REDIRECT_URI") }}
+    scopes:
+      - openid
+      - email
+      - profile
+
+database:
+  uri: {{ get_env(name="DATABASE_URL", default="sqlite://fracture-cms.sqlite?mode=rwc") }}
+  enable_logging: false
+  connect_timeout: {{ get_env(name="DB_CONNECT_TIMEOUT", default="500") }}
+  idle_timeout: {{ get_env(name="DB_IDLE_TIMEOUT", default="500") }}
+  min_connections: {{ get_env(name="DB_MIN_CONNECTIONS", default="1") }}
+  max_connections: {{ get_env(name="DB_MAX_CONNECTIONS", default="5") }}
+  auto_migrate: true
+  dangerously_truncate: false
+  dangerously_recreate: false
+
+auth:
+  jwt:
+    secret: {{ get_env(name="JWT_SECRET") }}
+    expiration: 900 # 15 minutes
+    location:
+      - from: Bearer
+      - from: Cookie
+        name: jwt

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}New Note — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/projects">Projects</a>
+    <span class="separator">/</span>
+    <a href="/projects/{{ project.pid }}">{{ project.title }}</a>
+    <span class="separator">/</span>
+    <span>New Note</span>
+</nav>
+
+<div class="page-header">
+    <h1>New Note</h1>
+    <p class="page-subtitle">Add a note to {{ project.title }}</p>
+</div>
+
+<article class="card form-card">
+    <form action="/projects/{{ project.pid }}/notes" method="post">
+        <div data-field>
+            <label for="title">Title</label>
+            <input id="title" name="title" type="text" value="" placeholder="Enter note title" required />
+        </div>
+        <div data-field>
+            <label for="body">Body</label>
+            <textarea id="body" name="body" placeholder="Note content" rows="6"></textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Add Note</button>
+            <a href="/projects/{{ project.pid }}" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+{% endblock content %}

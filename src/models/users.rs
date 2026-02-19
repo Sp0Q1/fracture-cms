@@ -199,6 +199,18 @@ impl Model {
         .insert(db)
         .await?;
 
+        // Create personal organization for the new user
+        super::organizations::Model::create_personal_org(db, &user)
+            .await
+            .map_err(|e| ModelError::Any(e.into()))?;
+
+        // Auto-accept any pending invites for this email
+        let pending_invites =
+            super::org_invites::Model::find_pending_by_email(db, &info.email).await;
+        for invite in pending_invites {
+            let _ = super::org_invites::Model::accept_invite(db, invite, user.id).await;
+        }
+
         Ok(user)
     }
 

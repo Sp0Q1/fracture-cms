@@ -1,8 +1,9 @@
-pub use super::_entities::movies::{ActiveModel, Column, Entity, Model};
 use sea_orm::entity::prelude::*;
 use sea_orm::sea_query::Order;
 use sea_orm::QueryOrder;
-pub type Movies = Entity;
+
+pub use super::_entities::projects::{ActiveModel, Column, Entity, Model};
+pub type Projects = Entity;
 
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
@@ -21,37 +22,26 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 impl Model {
-    pub async fn find_by_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
+    /// Finds all projects belonging to an organization.
+    pub async fn find_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
         Entity::find()
-            .filter(Column::UserId.eq(user_id))
+            .filter(Column::OrgId.eq(org_id))
             .order_by(Column::Id, Order::Desc)
             .all(db)
             .await
             .unwrap_or_default()
     }
 
-    pub async fn find_by_id_and_user(
-        db: &DatabaseConnection,
-        id: i32,
-        user_id: i32,
-    ) -> Option<Self> {
-        Entity::find_by_id(id)
-            .filter(Column::UserId.eq(user_id))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
-    }
-
-    pub async fn find_by_pid_and_user(
+    /// Finds a project by pid, scoped to an organization.
+    pub async fn find_by_pid_and_org(
         db: &DatabaseConnection,
         pid: &str,
-        user_id: i32,
+        org_id: i32,
     ) -> Option<Self> {
         let uuid = Uuid::parse_str(pid).ok()?;
         Entity::find()
             .filter(Column::Pid.eq(uuid))
-            .filter(Column::UserId.eq(user_id))
+            .filter(Column::OrgId.eq(org_id))
             .one(db)
             .await
             .ok()

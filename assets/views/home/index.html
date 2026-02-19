@@ -10,18 +10,18 @@
     <div class="page-header">
         <div class="hstack">
             <div>
-                <h1>Welcome back, {{ user_name | escape }}</h1>
-                <p class="page-subtitle">Manage your movie collection</p>
+                <h1>Welcome back, {{ user_name }}</h1>
+                <p class="page-subtitle">{% if org_name %}{{ org_name }}{% else %}Select an organization{% endif %}</p>
             </div>
-            <a href="/movies/new" class="button">Add Movie</a>
+            <a href="/projects/new" class="button">New Project</a>
         </div>
     </div>
 
     <div class="row mb-4">
         <div class="col-6">
             <article class="card stat-card card-accent">
-                <div class="stat-number">{{ items | length }}</div>
-                <div class="stat-label">Total Movies</div>
+                <div class="stat-number">{{ project_count | default(value=0) }}</div>
+                <div class="stat-label">Projects</div>
             </article>
         </div>
         <div class="col-6">
@@ -32,33 +32,28 @@
         </div>
     </div>
 
-    {% if items %}
     <div class="row">
-        {% for item in items %}
-        <div class="col-4">
-            <article class="card movie-card" data-href="/movies/{{ item.pid }}">
-                <header>{{ item.title | default(value="Untitled") | escape }}</header>
+        <div class="col-6">
+            <article class="card card-accent">
+                <header>Projects</header>
+                <p>Manage your org-scoped projects and notes.</p>
+                <a href="/projects" class="button outline">View Projects</a>
             </article>
         </div>
-        {% endfor %}
+        <div class="col-6">
+            <article class="card card-accent">
+                <header>Organizations</header>
+                <p>Manage your organizations and team members.</p>
+                <a href="/orgs" class="button outline">View Organizations</a>
+            </article>
+        </div>
     </div>
-    {% else %}
-    <article class="card empty-state">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="2" width="20" height="20" rx="2"/>
-            <path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/>
-        </svg>
-        <h3>Nothing Here Yet</h3>
-        <p>You haven't added any movies. Start building your collection!</p>
-        <a href="/movies/new" class="button">Add Your First Movie</a>
-    </article>
-    {% endif %}
 
 {% else %}
 
     <section class="hero">
         <h1><span class="gradient-text">Secure Content Management,</span><br>Built for Enterprise</h1>
-        <p class="subtitle">Manage your media library with enterprise-grade security, OIDC single sign-on, and a modern developer experience.</p>
+        <p class="subtitle">Manage your projects with enterprise-grade security, OIDC single sign-on, and organization-based access control.</p>
         <div class="cta-group">
             <a href="/api/auth/oidc/authorize" class="button large">Get Started</a>
             <a href="#features" class="button outline large">Learn More</a>
@@ -74,7 +69,7 @@
                     </svg>
                 </div>
                 <header>Security First</header>
-                <p>OIDC-based authentication with Kanidm. No passwords stored, no sessions to leak.</p>
+                <p>OIDC-based single sign-on authentication. No passwords stored, no sessions to leak.</p>
             </article>
         </div>
         <div class="col-4">
@@ -84,8 +79,8 @@
                         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
                     </svg>
                 </div>
-                <header>Performance</header>
-                <p>Built in Rust with the Loco framework. Compiled, fast, and memory-safe by default.</p>
+                <header>Organizations & RBAC</header>
+                <p>Multi-org support with role-based access control. Owner, Admin, Member, and Viewer roles.</p>
             </article>
         </div>
         <div class="col-4">
@@ -109,7 +104,7 @@
             <span class="badge outline">Loco</span>
             <span class="badge outline">OIDC</span>
             <span class="badge outline">SQLite</span>
-            <span class="badge outline">Kanidm</span>
+            <span class="badge outline">SeaORM</span>
         </div>
     </div>
 

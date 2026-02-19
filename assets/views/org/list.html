@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Organizations — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<div class="page-header">
+    <div class="hstack">
+        <div>
+            <h1>Organizations <span class="badge secondary">{{ user_orgs | length }}</span></h1>
+            <p class="page-subtitle">Manage your organizations</p>
+        </div>
+        <a href="/orgs/new" class="button">New Organization</a>
+    </div>
+</div>
+
+{% if user_orgs %}
+    <table class="clickable-rows">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for org in user_orgs %}
+            <tr data-href="/orgs/switch/{{ org.pid }}">
+                <td>
+                    {{ org.name }}
+                    {% if org.pid == org_pid %}<span class="badge success">Active</span>{% endif %}
+                </td>
+                <td>{% if org.is_personal %}<span class="badge">Personal</span>{% else %}<span class="badge secondary">Team</span>{% endif %}</td>
+                <td>
+                    <a href="/orgs/switch/{{ org.pid }}" class="button outline small">Switch</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <article class="card empty-state">
+        <h3>No Organizations</h3>
+        <p>Create your first organization to get started.</p>
+        <a href="/orgs/new" class="button">New Organization</a>
+    </article>
+{% endif %}
+{% endblock content %}

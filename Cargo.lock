@@ -1521,6 +1521,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "slug",
  "time",
  "tokio",
  "tracing",

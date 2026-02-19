@@ -151,7 +151,17 @@ async fn callback(
         .same_site(SameSite::Lax)
         .build();
 
-    let mut response = Redirect::temporary("/movies").into_response();
+    // Set org_pid cookie to the user's first org
+    let orgs = crate::models::organizations::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let org_pid_cookie = orgs.first().map(|org| {
+        Cookie::build(("org_pid", org.pid.to_string()))
+            .path("/")
+            .http_only(true)
+            .same_site(SameSite::Lax)
+            .build()
+    });
+
+    let mut response = Redirect::temporary("/").into_response();
     let headers = response.headers_mut();
     headers.append(
         axum::http::header::SET_COOKIE,
@@ -167,6 +177,15 @@ async fn callback(
             .parse()
             .expect("cookie is valid ASCII"),
     );
+    if let Some(org_cookie) = org_pid_cookie {
+        headers.append(
+            axum::http::header::SET_COOKIE,
+            org_cookie
+                .to_string()
+                .parse()
+                .expect("cookie is valid ASCII"),
+        );
+    }
     Ok(response)
 }
 
