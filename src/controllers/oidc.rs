@@ -5,6 +5,7 @@ use openidconnect::{
     core::CoreAuthenticationFlow, AuthorizationCode, EndUserEmail, EndUserName, LocalizedClaim,
     Nonce, PkceCodeChallenge, Scope, TokenResponse,
 };
+use sea_orm::ActiveValue;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -30,6 +31,11 @@ struct ProvidersResponse {
 struct CallbackParams {
     code: String,
     state: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct BackchannelLogoutForm {
+    logout_token: String,
 }
 
 #[debug_handler]
@@ -254,6 +260,108 @@ async fn refresh(State(ctx): State<AppContext>, jar: CookieJar) -> Result<Respon
     Ok(response)
 }
 
+/// Fetch the JWKS from the identity provider and find the decoding key matching the JWT
+/// header's `kid`.
+async fn fetch_decoding_key(
+    jwks_uri: &str,
+    header: &jsonwebtoken::Header,
+) -> std::result::Result<jsonwebtoken::DecodingKey, loco_rs::Error> {
+    let http_client = reqwest::Client::new();
+    let resp = http_client
+        .get(jwks_uri)
+        .send()
+        .await
+        .map_err(|e| loco_rs::Error::Message(format!("Failed to fetch JWKS: {e}")))?;
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| loco_rs::Error::Message(format!("Failed to read JWKS response: {e}")))?;
+    let jwks: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&body)
+        .map_err(|e| loco_rs::Error::Message(format!("Failed to parse JWKS: {e}")))?;
+
+    let kid = header
+        .kid
+        .as_deref()
+        .ok_or_else(|| loco_rs::Error::Message("logout_token has no kid header".to_string()))?;
+
+    let jwk = jwks
+        .find(kid)
+        .ok_or_else(|| loco_rs::Error::Message(format!("No JWKS key found for kid: {kid}")))?;
+
+    jsonwebtoken::DecodingKey::from_jwk(jwk)
+        .map_err(|e| loco_rs::Error::Message(format!("Failed to build key from JWK: {e}")))
+}
+
+#[debug_handler]
+async fn backchannel_logout(
+    Extension(oidc): Extension<OidcContext>,
+    State(ctx): State<AppContext>,
+    axum::Form(form): axum::Form<BackchannelLogoutForm>,
+) -> Result<Response> {
+    let header = jsonwebtoken::decode_header(&form.logout_token)
+        .map_err(|e| loco_rs::Error::Message(format!("Invalid logout_token header: {e}")))?;
+
+    // Fetch the IdP's signing key and verify the JWT signature
+    let decoding_key = fetch_decoding_key(&oidc.jwks_uri, &header).await?;
+
+    let mut validation = jsonwebtoken::Validation::new(header.alg);
+    validation.set_issuer(&[&oidc.issuer_url]);
+    validation.set_audience(&[&oidc.client_id]);
+    // Zitadel may not include a `sub` in all cases, so don't require it
+    validation.set_required_spec_claims(&["iss", "aud", "iat", "jti", "events"]);
+
+    let token_data =
+        jsonwebtoken::decode::<serde_json::Value>(&form.logout_token, &decoding_key, &validation)
+            .map_err(|e| loco_rs::Error::Message(format!("logout_token validation failed: {e}")))?;
+
+    let claims = &token_data.claims;
+
+    // Verify the backchannel-logout event is present
+    let has_event = claims
+        .get("events")
+        .and_then(|v| v.as_object())
+        .is_some_and(|obj| obj.contains_key("http://schemas.openid.net/event/backchannel-logout"));
+    if !has_event {
+        return Ok((
+            axum::http::StatusCode::BAD_REQUEST,
+            "missing backchannel-logout event",
+        )
+            .into_response());
+    }
+
+    // Must not contain a nonce claim (per spec)
+    if claims.get("nonce").is_some() {
+        return Ok((
+            axum::http::StatusCode::BAD_REQUEST,
+            "logout_token must not contain nonce",
+        )
+            .into_response());
+    }
+
+    // Extract `sub` — if missing, we can't identify the user, but return 200 per spec
+    let Some(sub) = claims.get("sub").and_then(|v| v.as_str()) else {
+        return format::empty_json();
+    };
+
+    // Find user by OIDC subject + provider and invalidate their session
+    if let Some(user) = users::Entity::find()
+        .filter(
+            model::query::condition()
+                .eq(users::Column::OidcProvider, &oidc.provider_name)
+                .eq(users::Column::OidcSubject, sub)
+                .build(),
+        )
+        .one(&ctx.db)
+        .await?
+    {
+        let mut active: users::ActiveModel = user.into();
+        active.session_invalidated_at = ActiveValue::Set(Some(chrono::offset::Local::now().into()));
+        active.update(&ctx.db).await?;
+    }
+
+    format::empty_json()
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("/api/auth/oidc")
@@ -262,4 +370,5 @@ pub fn routes() -> Routes {
         .add("/providers", get(providers))
         .add("/logout", get(logout))
         .add("/refresh", get(refresh))
+        .add("/backchannel-logout", post(backchannel_logout))
 }

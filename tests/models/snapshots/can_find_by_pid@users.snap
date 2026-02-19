@@ -21,5 +21,6 @@ Ok(
         magic_link_expiration: None,
         oidc_provider: None,
         oidc_subject: None,
+        session_invalidated_at: None,
     },
 )

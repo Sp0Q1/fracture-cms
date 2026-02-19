@@ -26,6 +26,7 @@ pub struct Model {
     pub magic_link_expiration: Option<DateTimeWithTimeZone>,
     pub oidc_provider: Option<String>,
     pub oidc_subject: Option<String>,
+    pub session_invalidated_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

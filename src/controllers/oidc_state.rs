@@ -103,6 +103,9 @@ pub struct OidcContext {
     pub scopes: Vec<String>,
     pub end_session_url: Option<String>,
     pub post_logout_redirect_uri: String,
+    pub issuer_url: String,
+    pub client_id: String,
+    pub jwks_uri: String,
 }
 
 #[cfg(test)]

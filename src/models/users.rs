@@ -147,6 +147,12 @@ impl Model {
             .one(db)
             .await?
         {
+            if user.session_invalidated_at.is_some() {
+                let mut active: ActiveModel = user.into();
+                active.session_invalidated_at = ActiveValue::Set(None);
+                let updated = active.update(db).await?;
+                return Ok(updated);
+            }
             return Ok(user);
         }
 
@@ -168,6 +174,7 @@ impl Model {
             let mut active: ActiveModel = user.into();
             active.oidc_provider = ActiveValue::Set(Some(info.provider.clone()));
             active.oidc_subject = ActiveValue::Set(Some(info.subject.clone()));
+            active.session_invalidated_at = ActiveValue::Set(None);
             let updated = active.update(db).await?;
             return Ok(updated);
         }
