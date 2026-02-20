@@ -12,18 +12,7 @@ use crate::models::_entities::notes::{ActiveModel, Model};
 use crate::models::org_members::OrgRole;
 use crate::models::organizations as org_model;
 use crate::models::projects;
-use crate::{require_role, views};
-
-const LOGIN_REDIRECT: &str = "/api/auth/oidc/authorize";
-
-macro_rules! require_user {
-    ($user:expr) => {
-        match $user {
-            Some(u) => u,
-            None => return Ok(Redirect::temporary(LOGIN_REDIRECT).into_response()),
-        }
-    };
-}
+use crate::{require_role, require_user, views};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Params {

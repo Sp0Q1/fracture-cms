@@ -9,23 +9,13 @@ use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::middleware;
+use crate::controllers::middleware;
 use crate::mailers::invite::InviteMailer;
 use crate::models::_entities::{org_members, organizations, users as users_entity};
 use crate::models::org_members::OrgRole;
 use crate::models::{org_invites, organizations as org_model};
-use crate::{require_role, views};
-
-const LOGIN_REDIRECT: &str = "/api/auth/oidc/authorize";
-
-macro_rules! require_user {
-    ($user:expr) => {
-        match $user {
-            Some(u) => u,
-            None => return Ok(Redirect::temporary(LOGIN_REDIRECT).into_response()),
-        }
-    };
-}
+use crate::{require_role, require_user};
+use crate::views;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewOrgParams {

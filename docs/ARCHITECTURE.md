@@ -4,6 +4,32 @@
 
 Fracture CMS is a multi-tenant content management system built with Rust, Loco framework, SeaORM, and SQLite. It uses OIDC (OpenID Connect) for authentication and organization-based RBAC for authorization.
 
+## Library / App Split
+
+The project is a Cargo workspace with two main crates:
+
+**`fracture-core`** (library crate) — reusable infrastructure:
+- Controllers: `middleware`, `oidc`, `oidc_state`, `org`
+- Models + entities: `users`, `organizations`, `org_members`, `org_invites`
+- Initializers: `oidc`, `security_headers`
+- Views: `base_context()`, `org`
+- Mailers: `invite` (with embedded email templates)
+- Templates: `org/` HTML templates (embedded via `include_dir!`, overridable by the app)
+- Migrations: all core schema (users, orgs, members, invites)
+- Macros: `require_user!`, `require_role!`
+
+**App crate** (this project) — domain-specific code:
+- Controllers: `home`, `project`, `note`, `fallback`
+- Models + entities: `projects`, `notes`
+- Views: `home`, `project`, `note`
+- Initializer: `view_engine` (registers core templates + i18n)
+- Templates: `assets/views/` (app templates + overrides of core templates)
+- Migrations: `projects`, `notes`
+
+The app re-exports core modules (e.g., `pub use fracture_core::controllers::{middleware, oidc, org}`) so that everything is accessible under `crate::` paths. Core entities are re-exported through the app's `_entities/mod.rs`, ensuring a single type identity across the codebase.
+
+Core templates are embedded in the `fracture-core` binary. The app's `view_engine` initializer calls `fracture_core::register_templates(tera)`, which only adds templates when no filesystem version exists — placing a file at `assets/views/org/list.html` overrides the embedded version.
+
 ## Authentication Flow
 
 1. User clicks "Sign in" → redirected to OIDC provider
@@ -86,16 +112,18 @@ Emails are sent asynchronously via Loco's `MailerWorker` background queue. In de
 
 ## Email (Mailer)
 
-Mailers live in `src/mailers/` with Tera templates in subdirectories:
+The invite mailer lives in `fracture-core` with its templates embedded via `include_dir!`:
 
 ```
-src/mailers/
+fracture-core/src/mailers/
   invite.rs                    # InviteMailer struct
   invite/invite/
     subject.t                  # Email subject template
     html.t                     # HTML body template
     text.t                     # Plain text body template
 ```
+
+The app re-exports it via `pub use fracture_core::mailers::invite` in `src/mailers/mod.rs`. App-specific mailers are added alongside this re-export.
 
 Emails are enqueued as background jobs via `Mailer::mail_template()` and processed by `MailerWorker`. SMTP is configured in `config/*.yaml` under the `mailer.smtp` key.
 

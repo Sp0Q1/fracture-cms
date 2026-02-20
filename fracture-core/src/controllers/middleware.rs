@@ -73,3 +73,19 @@ macro_rules! require_role {
         }
     };
 }
+
+/// Macro to require an authenticated user, redirecting to OIDC login if not present.
+#[macro_export]
+macro_rules! require_user {
+    ($user:expr) => {
+        match $user {
+            Some(u) => u,
+            None => {
+                return Ok(
+                    axum::response::Redirect::temporary("/api/auth/oidc/authorize")
+                        .into_response(),
+                )
+            }
+        }
+    };
+}

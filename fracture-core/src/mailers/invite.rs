@@ -3,7 +3,7 @@ use loco_rs::mailer::{Args, Mailer, MailerOpts};
 use loco_rs::prelude::*;
 use serde_json::json;
 
-static INVITE_DIR: Dir<'_> = include_dir!("src/mailers/invite/invite");
+static INVITE_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/src/mailers/invite/invite");
 
 pub struct InviteMailer;
 
