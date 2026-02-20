@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 loco-rs = { workspace = true }
+fracture-core-migration = { path = "../fracture-core/migration" }
 
 
 [dependencies.sea-orm-migration]

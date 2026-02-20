@@ -58,6 +58,8 @@ Register in `src/models/mod.rs`.
 
 Create `src/controllers/<resource>.rs`:
 
+- Import RBAC macros: `use crate::{require_role, require_user};`
+- Import middleware: `use crate::controllers::middleware::{get_current_user, get_org_context_or_default, OrgRole};`
 - Use `require_user!` macro for authentication
 - Use `get_org_context_or_default()` for org resolution
 - Use `require_role!` macro for authorization
@@ -71,7 +73,7 @@ Register in `src/controllers/mod.rs` and `src/app.rs`.
 Create `src/views/<resource>.rs`:
 
 - Accept `user`, `org_ctx`, `user_orgs` params
-- Use `super::base_context()` for common template vars
+- Use `crate::views::base_context()` for common template vars (re-exported from fracture-core)
 - Add resource-specific data to context
 
 Register in `src/views/mod.rs`.

@@ -1,6 +1,8 @@
 # Fracture CMS
 
-A multi-tenant content management template built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework. Features organization-based RBAC, OIDC authentication, and org-scoped data isolation. Designed as a reusable template for downstream projects.
+A multi-tenant content management template built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework. Features organization-based RBAC, OIDC authentication, and org-scoped data isolation.
+
+The core infrastructure (auth, OIDC, orgs, RBAC, invites) lives in the `fracture-core` library crate. Downstream projects depend on it as a Cargo dependency and only write their own domain code — no forking, no merge conflicts on core updates.
 
 ## Quick Start
 
@@ -35,40 +37,57 @@ cargo loco start
 ## Project Structure
 
 ```
-src/
+fracture-core/                      # Library crate (auth, OIDC, orgs, RBAC, invites)
+  src/
+    controllers/
+      middleware.rs                  # JWT auth, OrgContext, require_user!/require_role! macros
+      oidc.rs                        # OIDC login, logout, back-channel logout
+      oidc_state.rs                  # OIDC state store (CSRF tokens, PKCE verifiers)
+      org.rs                         # Organization CRUD, members, invites, switching
+    models/
+      _entities/                     # Core SeaORM entities (users, orgs, members, invites)
+      users.rs                       # User lookup, OIDC account creation/linking
+      organizations.rs               # Org creation, personal orgs, slug lookup
+      org_members.rs                 # Membership, OrgRole enum, role hierarchy
+      org_invites.rs                 # Email invitations, auto-accept on signup
+    initializers/
+      oidc.rs                        # OIDC discovery, client setup, JWKS URI
+      security_headers.rs            # CSP, X-Frame-Options, etc.
+    views/
+      org.rs                         # Org view helpers (list, settings, members)
+    mailers/
+      invite.rs                      # Invitation email (SMTP via background worker)
+    lib.rs                           # Module exports + register_templates()
+  templates/org/                     # Embedded HTML templates (overridable by app)
+  migration/src/                     # Core database migrations
+
+src/                                 # App (domain-specific code only)
   controllers/
-    middleware.rs       # JWT auth + OrgContext + RBAC macros
-    org.rs              # Organization CRUD, members, invites, switching
-    project.rs          # Project CRUD (org-scoped)
-    note.rs             # Note CRUD (project-scoped, org-scoped)
-    oidc.rs             # OIDC login, logout, back-channel logout
-    oidc_state.rs       # OIDC state store (CSRF tokens, PKCE verifiers)
-  initializers/
-    oidc.rs             # OIDC discovery, client setup, JWKS URI extraction
-    view_engine.rs      # Tera templates + Fluent i18n
-    security_headers.rs # CSP, X-Frame-Options, etc.
+    home.rs                          # Dashboard
+    project.rs                       # Project CRUD (org-scoped)
+    note.rs                          # Note CRUD (project-scoped)
+    fallback.rs                      # 404 handler
   models/
-    _entities/          # SeaORM entity definitions (hand-edited)
-    organizations.rs    # Org creation, personal orgs, slug lookup
-    org_members.rs      # Membership, OrgRole enum, role hierarchy
-    org_invites.rs      # Email invitations, auto-accept on signup
-    projects.rs         # Org-scoped project queries
-    notes.rs            # Project-scoped note queries
-    users.rs            # User lookup, OIDC account creation/linking
-  mailers/
-    invite.rs           # Invitation email (SMTP via background worker)
-  views/                # View helpers (Rust → template context)
-migration/src/          # Database migrations (SQLite)
+    _entities/                       # App entities + re-exports of core entities
+    projects.rs                      # Org-scoped project queries
+    notes.rs                         # Project-scoped note queries
+  views/                             # View helpers (Rust → template context)
+  initializers/
+    view_engine.rs                   # Tera templates + Fluent i18n + core template registration
+  mailers/                           # Re-exports core mailers + app-specific mailers
+  app.rs                             # Route registration, hooks
+
+migration/src/                       # App-specific migrations (projects, notes)
 assets/
-  views/                # Tera HTML templates
-  static/               # CSS, JS, images
-  i18n/                 # Fluent locale files (en-US, de-DE)
-config/                 # Loco YAML config per environment
-docs/                   # Architecture, template guide, resource recipes
+  views/                             # App Tera templates (can override core templates)
+  static/                            # CSS, JS, images
+  i18n/                              # Fluent locale files (en-US, de-DE)
+config/                              # Loco YAML config per environment
+docs/                                # Architecture, template guide, resource recipes
 dev/
-  setup.sh              # Provisions Zitadel + writes .env
-  ci.sh                 # Runs all CI checks locally in containers
-  Dockerfile.ci         # CI container image (Rust + SQLite + clippy + rustfmt)
+  setup.sh                           # Provisions identity provider + writes .env
+  ci.sh                              # Runs all CI checks locally in containers
+  Dockerfile.ci                      # CI container image (Rust + SQLite + clippy + rustfmt)
 ```
 
 ## Architecture
@@ -185,13 +204,13 @@ The app delegates all authentication to an OIDC provider:
 | Admin | Yes | Yes | Yes | Yes |
 | Owner | Yes | Yes | Yes | Yes |
 
-## Using as a Template
+## Creating a New Project
 
-See [docs/TEMPLATE_GUIDE.md](docs/TEMPLATE_GUIDE.md) for forking and customization instructions.
+See [docs/TEMPLATE_GUIDE.md](docs/TEMPLATE_GUIDE.md) for how to create a new project using `fracture-core` as a library dependency.
 
 See [docs/ADDING_RESOURCES.md](docs/ADDING_RESOURCES.md) for a step-by-step recipe for adding new org-scoped resources.
 
-See [docs/UPSTREAM_UPDATES.md](docs/UPSTREAM_UPDATES.md) for pulling upstream changes.
+See [docs/UPSTREAM_UPDATES.md](docs/UPSTREAM_UPDATES.md) for updating `fracture-core` in your project.
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment instructions.
 

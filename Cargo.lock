@@ -1509,26 +1509,53 @@ dependencies = [
  "axum-extra",
  "chrono",
  "fluent-templates",
- "include_dir",
+ "fracture-core",
  "insta",
- "jsonwebtoken",
  "loco-rs",
  "migration",
- "openidconnect",
- "reqwest",
  "rstest",
  "sea-orm",
  "serde",
  "serde_json",
  "serial_test",
- "slug",
- "time",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "unic-langid",
  "uuid",
+]
+
+[[package]]
+name = "fracture-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "fracture-core-migration",
+ "include_dir",
+ "jsonwebtoken",
+ "loco-rs",
+ "openidconnect",
+ "reqwest",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "slug",
+ "tera",
+ "time",
+ "tracing",
+ "uuid",
  "validator",
+]
+
+[[package]]
+name = "fracture-core-migration"
+version = "0.1.0"
+dependencies = [
+ "loco-rs",
+ "sea-orm-migration",
 ]
 
 [[package]]
@@ -2187,6 +2214,7 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "923d117408f1e49d914f1a379a309cffe4f18c05cf4e3d12e613a15fc81bd0dd"
 dependencies = [
+ "glob",
  "include_dir_macros",
 ]
 
@@ -2650,6 +2678,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 name = "migration"
 version = "0.1.0"
 dependencies = [
+ "fracture-core-migration",
  "loco-rs",
  "sea-orm-migration",
 ]

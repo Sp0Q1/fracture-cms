@@ -182,8 +182,11 @@ healthcheck:
 ## 8. Updating
 
 ```bash
-# Pull latest code
+# Pull latest app code
 git pull
+
+# Update fracture-core to latest version
+cargo update -p fracture-core -p fracture-core-migration
 
 # Rebuild
 podman build -f Containerfile.prod -t fracture-cms:latest .

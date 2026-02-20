@@ -32,10 +32,16 @@ impl Initializer for ViewEngineInitializer {
 
             engines::TeraView::build()?.post_process(move |tera| {
                 tera.register_function("t", FluentLoader::new(arc.clone()));
+                fracture_core::register_templates(tera)
+                    .map_err(|e| loco_rs::Error::string(&e.to_string()))?;
                 Ok(())
             })?
         } else {
-            engines::TeraView::build()?
+            engines::TeraView::build()?.post_process(|tera| {
+                fracture_core::register_templates(tera)
+                    .map_err(|e| loco_rs::Error::string(&e.to_string()))?;
+                Ok(())
+            })?
         };
 
         Ok(router.layer(Extension(ViewEngine::from(tera_engine))))

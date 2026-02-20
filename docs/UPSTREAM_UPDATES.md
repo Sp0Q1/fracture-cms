@@ -1,49 +1,70 @@
-# Pulling Upstream Updates
+# Updating fracture-core
 
-## Setup (one-time)
+Since `fracture-core` is a Cargo dependency, updating to the latest version is straightforward — no merge conflicts on core infrastructure code.
 
-```bash
-git remote add upstream <fracture-cms-repo-url>
-```
-
-## Pulling Updates
+## Updating
 
 ```bash
-git fetch upstream
-git merge upstream/main
+cargo update -p fracture-core
+cargo update -p fracture-core-migration
 ```
 
-## Expected Merge Conflicts
+This pulls the latest version from the git repository. Then rebuild:
 
-When merging upstream changes, you'll likely see conflicts in these files:
+```bash
+cargo build
+```
 
-### Always conflicting (your domain-specific files)
-- `src/app.rs` — Route registration, truncate order
-- `src/controllers/mod.rs` — Module declarations
-- `src/models/mod.rs` — Module declarations
-- `src/views/mod.rs` — Module declarations
-- `assets/views/base.html` — Nav links
-- `README.md` — Project description
+If there are breaking API changes, the compiler will tell you exactly what needs updating.
 
-### Sometimes conflicting (shared + customized)
-- `assets/static/app.css` — If you changed colors or added styles near the same lines
-- `assets/static/app.js` — If you added data-attribute handlers near the same lines
-- `assets/views/home/index.html` — If upstream changed the dashboard layout
-- `Cargo.toml` — If both sides added dependencies
+## What Can Change
 
-### Rarely conflicting (template core)
-- `src/controllers/middleware.rs`
-- `src/controllers/oidc.rs`
-- `src/models/organizations.rs`
-- `src/models/org_members.rs`
-- `src/models/org_invites.rs`
-- `src/mailers/invite.rs` — Invite email mailer
-- `migration/src/lib.rs` — Only if both sides added migrations
+### Non-breaking (transparent)
 
-## Resolution Strategy
+These changes are pulled in automatically with no code changes needed:
 
-1. For `mod.rs` files: combine both sets of module declarations
-2. For `app.rs`: keep your routes + upstream's routes, maintain truncate order (children before parents)
-3. For `base.html`: keep your nav links, take upstream's structural changes
-4. For `app.css`: keep your custom styles, take upstream's new component styles
-5. For model/controller core: prefer upstream unless you intentionally modified the behavior
+- Bug fixes in OIDC flow, org management, RBAC logic
+- New security headers or CSP improvements
+- Updated embedded templates (unless you've overridden them)
+- Internal refactors that don't change the public API
+
+### Potentially breaking
+
+These may require code changes in your app:
+
+- New required parameters on controller functions
+- Changed model method signatures (e.g., `find_or_create_from_oidc`)
+- New fields on entities (requires migration coordination)
+- Renamed or removed public types/functions
+
+### Migration changes
+
+If `fracture-core` adds new migrations, they are automatically picked up — your `migration/src/lib.rs` chains `fracture_core_migration::Migrator::migrations()` first, then appends your app-specific migrations.
+
+New core migrations will run automatically on the next app startup (if `auto_migrate: true`) or when you run migrations manually.
+
+## Pinning a Version
+
+To pin to a specific commit instead of always pulling latest:
+
+```toml
+[dependencies]
+fracture-core = { git = "https://your-repo/fracture-core.git", rev = "abc1234" }
+```
+
+Or use a tag:
+
+```toml
+[dependencies]
+fracture-core = { git = "https://your-repo/fracture-core.git", tag = "v0.2.0" }
+```
+
+## Checking What Changed
+
+```bash
+# See what version you currently have
+cargo metadata --format-version 1 | jq '.packages[] | select(.name == "fracture-core") | .source'
+
+# After updating, check for compile errors
+cargo check
+```
