@@ -1,4 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
 use sea_orm::entity::prelude::*;
 use sea_orm::{QueryOrder, TransactionTrait};
 
@@ -25,6 +24,10 @@ impl ActiveModelBehavior for ActiveModel {
 
 impl Model {
     /// Creates a personal organization for a user and adds them as owner.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database transaction fails.
     pub async fn create_personal_org(
         db: &DatabaseConnection,
         user: &super::_entities::users::Model,

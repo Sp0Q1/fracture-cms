@@ -1,8 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::missing_panics_doc)]
-#![allow(clippy::unnecessary_struct_initialization)]
-#![allow(clippy::unused_async)]
-#![allow(clippy::doc_markdown)]
 use axum::response::Redirect;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use axum_extra::extract::{CookieJar, Form};
@@ -39,6 +34,10 @@ pub struct RoleParams {
 }
 
 /// GET /orgs/ — list user's organizations
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn list(
     ViewEngine(v): ViewEngine<TeraView>,
@@ -53,6 +52,10 @@ pub async fn list(
 }
 
 /// GET /orgs/new — new org form
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn new(
     ViewEngine(v): ViewEngine<TeraView>,
@@ -67,6 +70,10 @@ pub async fn new(
 }
 
 /// POST /orgs/ — create organization
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn create(
     State(ctx): State<AppContext>,
@@ -92,6 +99,10 @@ pub async fn create(
 }
 
 /// GET /orgs/:pid/settings — org settings page
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn settings(
     Path(pid): Path<String>,
@@ -119,6 +130,10 @@ pub async fn settings(
 }
 
 /// POST /orgs/:pid/settings — update org settings
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn update_settings(
     Path(pid): Path<String>,
@@ -150,6 +165,10 @@ pub async fn update_settings(
 }
 
 /// GET /orgs/:pid/members — members list
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn members(
     Path(pid): Path<String>,
@@ -203,6 +222,10 @@ pub async fn members(
 }
 
 /// POST /orgs/:pid/members/invite — invite a member
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn invite(
     Path(pid): Path<String>,
@@ -246,7 +269,11 @@ pub async fn invite(
     Ok(Redirect::to(&format!("/orgs/{pid}/members")).into_response())
 }
 
-/// POST /orgs/:pid/members/:user_pid/role — update member role
+/// POST `/orgs/:pid/members/:user_pid/role` — update member role
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn update_role(
     Path((pid, user_pid)): Path<(String, String)>,
@@ -282,7 +309,11 @@ pub async fn update_role(
     Ok(Redirect::to(&format!("/orgs/{pid}/members")).into_response())
 }
 
-/// POST /orgs/:pid/members/:user_pid/remove — remove member
+/// POST `/orgs/:pid/members/:user_pid/remove` — remove member
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn remove_member(
     Path((pid, user_pid)): Path<(String, String)>,
@@ -319,6 +350,14 @@ pub async fn remove_member(
 }
 
 /// GET /orgs/switch/:pid — switch active org
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
+///
+/// # Panics
+///
+/// Panics if the cookie value is not valid ASCII.
 #[debug_handler]
 pub async fn switch(
     Path(pid): Path<String>,
@@ -351,6 +390,10 @@ pub async fn switch(
 }
 
 /// GET /invites/:token/accept — accept an invite
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn accept_invite(
     Path(token): Path<String>,

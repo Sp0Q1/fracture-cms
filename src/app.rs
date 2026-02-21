@@ -14,11 +14,9 @@ use loco_rs::{
 use migration::Migrator;
 use std::path::Path;
 
-#[allow(unused_imports)]
 use crate::{
     controllers, initializers,
     models::_entities::{notes, org_invites, org_members, organizations, projects, users},
-    tasks,
     workers::downloader::DownloadWorker,
 };
 
@@ -49,7 +47,7 @@ impl Hooks for App {
 
     async fn initializers(_ctx: &AppContext) -> Result<Vec<Box<dyn Initializer>>> {
         Ok(vec![
-            Box::new(initializers::view_engine::ViewEngineInitializer),
+            Box::new(initializers::view_engine::TemplateInitializer),
             Box::new(initializers::oidc::OidcInitializer),
             Box::new(initializers::security_headers::SecurityHeadersInitializer),
         ])
@@ -73,8 +71,7 @@ impl Hooks for App {
         Ok(())
     }
 
-    #[allow(unused_variables)]
-    fn register_tasks(tasks: &mut Tasks) {
+    fn register_tasks(_tasks: &mut Tasks) {
         // tasks-inject (do not remove)
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {

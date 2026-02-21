@@ -3,6 +3,11 @@ use loco_rs::prelude::*;
 use crate::controllers::middleware::OrgContext;
 use crate::models::_entities::{notes, organizations, projects, users};
 
+/// Render the project list page.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn list(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -15,6 +20,11 @@ pub fn list(
     format::render().view(v, "project/list.html", data!(ctx))
 }
 
+/// Render the project detail page.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn show(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -29,6 +39,11 @@ pub fn show(
     format::render().view(v, "project/show.html", data!(ctx))
 }
 
+/// Render the new-project form.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn create(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -39,6 +54,11 @@ pub fn create(
     format::render().view(v, "project/create.html", data!(ctx))
 }
 
+/// Render the edit-project form.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn edit(
     v: &impl ViewRenderer,
     user: &users::Model,

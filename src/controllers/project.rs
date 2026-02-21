@@ -1,6 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::unnecessary_struct_initialization)]
-#![allow(clippy::unused_async)]
 use axum::response::Redirect;
 use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
@@ -25,7 +22,11 @@ impl Params {
     }
 }
 
-/// GET /projects/ — list org projects
+/// `GET /projects/` -- list org projects.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn list(
     ViewEngine(v): ViewEngine<TeraView>,
@@ -43,7 +44,11 @@ pub async fn list(
     views::project::list(&v, &user, &org_ctx, &user_orgs, &items)
 }
 
-/// GET /projects/new — new project form
+/// `GET /projects/new` -- new project form.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn new(
     ViewEngine(v): ViewEngine<TeraView>,
@@ -60,7 +65,11 @@ pub async fn new(
     views::project::create(&v, &user, &org_ctx, &user_orgs)
 }
 
-/// POST /projects/ — create project
+/// `POST /projects/` -- create project.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn add(
     State(ctx): State<AppContext>,
@@ -74,16 +83,20 @@ pub async fn add(
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Member);
 
-    let mut item = ActiveModel {
-        ..Default::default()
-    };
+    // SeaORM generates multiple default() impls for ActiveModel
+    #[allow(clippy::default_trait_access)]
+    let mut item: ActiveModel = Default::default();
     params.update(&mut item);
     item.org_id = Set(org_ctx.org.id);
     item.insert(&ctx.db).await?;
     Ok(Redirect::to("/projects").into_response())
 }
 
-/// GET /projects/:pid — show project
+/// `GET /projects/:pid` -- show project.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn show(
     Path(pid): Path<String>,
@@ -107,7 +120,11 @@ pub async fn show(
     views::project::show(&v, &user, &org_ctx, &user_orgs, &item, &notes)
 }
 
-/// GET /projects/:pid/edit — edit project form
+/// `GET /projects/:pid/edit` -- edit project form.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn edit(
     Path(pid): Path<String>,
@@ -128,7 +145,11 @@ pub async fn edit(
     views::project::edit(&v, &user, &org_ctx, &user_orgs, &item)
 }
 
-/// POST /projects/:pid — update project
+/// `POST /projects/:pid` -- update project.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn update(
     Path(pid): Path<String>,
@@ -151,7 +172,11 @@ pub async fn update(
     Ok(Redirect::to("/projects").into_response())
 }
 
-/// DELETE /projects/:pid — delete project
+/// `DELETE /projects/:pid` -- delete project.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn remove(
     Path(pid): Path<String>,

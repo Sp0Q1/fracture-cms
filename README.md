@@ -1,32 +1,64 @@
 # Fracture CMS
 
-A multi-tenant content management template built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework. Features organization-based RBAC, OIDC authentication, and org-scoped data isolation.
+A multi-tenant web application starter built with [Rust](https://www.rust-lang.org/) on the [Loco](https://loco.rs) framework. Provides OIDC authentication, organization management with role-based access control, email invites, and org-scoped data isolation out of the box. Ships with projects and notes as example resources to show the patterns.
 
-The core infrastructure (auth, OIDC, orgs, RBAC, invites) lives in the `fracture-core` library crate. Downstream projects depend on it as a Cargo dependency and only write their own domain code — no forking, no merge conflicts on core updates.
+The core infrastructure lives in the `fracture-core` library crate. Downstream projects depend on it as a Cargo dependency and only write their own domain code — no forking, no merge conflicts on core updates.
+
+## What You Get
+
+- **OIDC single sign-on** — Delegates authentication to any OpenID Connect provider (Zitadel, Keycloak, Auth0, etc.). No passwords stored in your database. Uses PKCE authorization code flow.
+- **Organizations** — Each user gets a personal org on first login. Users can create team orgs and invite members by email.
+- **Role-based access control** — Four roles (Owner > Admin > Member > Viewer) enforced at the controller level via `require_role!` macro. All database queries scoped by `org_id`.
+- **Email invites** — Admins invite users by email. Invites expire after 7 days. If the invitee doesn't have an account yet, the invite is auto-accepted when they sign in with a matching email.
+- **Session management** — JWT stored in HTTP-only cookies. The frontend refreshes the token every 12 minutes; on failure, the user sees a "session expired" message with a re-login link.
+- **Security headers** — Content-Security-Policy (`default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'`), plus X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and X-Permitted-Cross-Domain-Policies.
+- **Back-channel logout** — The IdP can POST a signed `logout_token` to invalidate a user's session server-side. The app verifies the token signature via JWKS before acting on it.
+- **Template overrides** — Core org templates (list, new, settings, members, invite accept) are embedded in the `fracture-core` binary. Place a same-named file in your `assets/views/` directory to override any of them.
+- **i18n** — Fluent-based internationalization with locale files in `assets/i18n/`.
 
 ## Quick Start
 
 ### Prerequisites
 
-- [Rust](https://rustup.rs/) (for local development)
-- [Podman](https://podman.io/) and `podman-compose` (for the full stack)
+- [Podman](https://podman.io/) and `podman-compose`
+- [Rust](https://rustup.rs/) (only needed for local `cargo` development outside containers)
 
-### Full stack (recommended)
+### 1. Clone and set up
 
 ```sh
-./dev/setup.sh            # Provisions Zitadel, creates OIDC app, writes .env
+git clone <repo-url> my-project
+cd my-project
+./dev/setup.sh            # Starts Zitadel, creates OIDC app, creates test user, writes .env
+```
+
+### 2. Start the app
+
+```sh
 podman compose up -d mailcrab app
 ```
 
+### 3. Open the app
+
 | Service | URL | Purpose |
 |---------|-----|---------|
-| App | http://localhost:5150 | Fracture CMS |
-| Zitadel | http://localhost:8080 | Identity provider (OIDC) |
-| MailCrab | http://localhost:1080 | Email testing |
+| App | http://localhost:5150 | Your application |
+| Zitadel | http://localhost:8080 | Identity provider admin console |
+| MailCrab | http://localhost:1080 | Catches all outbound email for testing |
 
-A test user is created automatically. Credentials are printed at the end of `setup.sh`.
+A test user is created automatically by `setup.sh`. Credentials are printed at the end of the script.
 
-### Local development (app only)
+### 4. Sign in and explore
+
+1. Open http://localhost:5150 and click **Get Started**
+2. Sign in with the test user credentials
+3. You land on the dashboard — a personal org was created for you automatically
+4. Go to **Organizations** to create a team org
+5. Invite a colleague (or yourself with a different email) from the **Members** page
+6. Check http://localhost:1080 to see the invitation email
+7. Create a project, add some notes — all scoped to the active org
+8. Switch between orgs using the dropdown in the nav bar
+
+### Local development (without containers)
 
 ```sh
 cp .env.example .env
@@ -34,10 +66,44 @@ cp .env.example .env
 cargo loco start
 ```
 
+This requires a running OIDC provider and SMTP server configured in `.env`.
+
+## How It Works
+
+### Authentication
+
+The app never handles passwords. All authentication is delegated to an OIDC provider:
+
+1. User clicks "Sign in" and is redirected to the IdP with a PKCE challenge
+2. After authenticating, the IdP redirects back with an authorization code
+3. The app exchanges the code for an ID token, verifies the signature via JWKS, and checks audience claims
+4. A JWT session cookie is set (HTTP-only, SameSite=Lax)
+5. On first login, a user record and personal org are created. Pending invites matching the email are auto-accepted.
+
+### Organizations & Roles
+
+Every piece of data belongs to an organization. The active org is tracked via an `org_pid` cookie.
+
+| Role | View | Create/Edit/Delete | Invite Members | Org Settings |
+|------|------|-------------------|----------------|--------------|
+| Viewer | Yes | No | No | No |
+| Member | Yes | Yes | No | No |
+| Admin | Yes | Yes | Yes | Yes |
+| Owner | Yes | Yes | Yes | Yes |
+
+Roles are enforced in every controller via `require_role!(org_ctx, OrgRole::Member)`. All database queries are scoped by `org_id` — there is no code path that returns data across orgs.
+
+### Invite Flow
+
+1. Admin enters an email and role on the members page
+2. An invite record is created (expires in 7 days) and an email is sent via SMTP
+3. The accept link is also shown on the page so it can be copied directly
+4. Existing users click the link to join. New users are auto-added when they first sign in with a matching email.
+
 ## Project Structure
 
 ```
-fracture-core/                      # Library crate (auth, OIDC, orgs, RBAC, invites)
+fracture-core/                      # Library crate (reusable across projects)
   src/
     controllers/
       middleware.rs                  # JWT auth, OrgContext, require_user!/require_role! macros
@@ -61,17 +127,17 @@ fracture-core/                      # Library crate (auth, OIDC, orgs, RBAC, inv
   templates/org/                     # Embedded HTML templates (overridable by app)
   migration/src/                     # Core database migrations
 
-src/                                 # App (domain-specific code only)
+src/                                 # App (your domain-specific code)
   controllers/
     home.rs                          # Dashboard
-    project.rs                       # Project CRUD (org-scoped)
-    note.rs                          # Note CRUD (project-scoped)
+    project.rs                       # Project CRUD (org-scoped) — example resource
+    note.rs                          # Note CRUD (project-scoped) — example resource
     fallback.rs                      # 404 handler
   models/
     _entities/                       # App entities + re-exports of core entities
     projects.rs                      # Org-scoped project queries
     notes.rs                         # Project-scoped note queries
-  views/                             # View helpers (Rust → template context)
+  views/                             # View helpers (Rust -> template context)
   initializers/
     view_engine.rs                   # Tera templates + Fluent i18n + core template registration
   mailers/                           # Re-exports core mailers + app-specific mailers
@@ -85,39 +151,10 @@ assets/
 config/                              # Loco YAML config per environment
 docs/                                # Architecture, template guide, resource recipes
 dev/
-  setup.sh                           # Provisions identity provider + writes .env
+  setup.sh                           # Provisions Zitadel + writes .env
   ci.sh                              # Runs all CI checks locally in containers
   Dockerfile.ci                      # CI container image (Rust + SQLite + clippy + rustfmt)
 ```
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full details.
-
-### Organizations & RBAC
-
-- **Personal org**: Auto-created on first OIDC login. User is owner.
-- **Team orgs**: Created manually. Members invited via email.
-- **Four roles**: Owner > Admin > Member > Viewer
-- **Org context**: Resolved from `org_pid` cookie on every request
-- **Row-level isolation**: All queries scoped by `org_id`
-
-### Authentication
-
-The app delegates all authentication to an OIDC provider:
-
-- **Login**: PKCE authorization code flow with audience verification
-- **Sessions**: Short-lived JWT cookies, silently refreshed by the frontend
-- **Logout**: Clears cookies and redirects to IdP's end-session endpoint
-- **Back-channel logout**: IdP POSTs signed `logout_token`, app verifies and invalidates session
-- **Account creation**: First OIDC login creates account + personal org. Pending invites auto-accepted.
-
-### Security
-
-- HTTP-only, SameSite=Lax cookies
-- Content-Security-Policy: `default-src 'none'; script-src 'self'; style-src 'self'`
-- X-Content-Type-Options, X-Frame-Options, Referrer-Policy headers
-- OIDC audience verification + JWKS signature verification
 
 ## Routes
 
@@ -125,11 +162,11 @@ The app delegates all authentication to an OIDC provider:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/auth/oidc/authorize` | Start login flow |
-| GET | `/api/auth/oidc/callback` | OIDC callback |
-| GET | `/api/auth/oidc/logout` | Logout |
-| GET | `/api/auth/oidc/refresh` | Refresh JWT |
-| POST | `/api/auth/oidc/backchannel-logout` | Back-channel logout |
+| GET | `/api/auth/oidc/authorize` | Start OIDC login flow |
+| GET | `/api/auth/oidc/callback` | OIDC callback (exchanges code for token) |
+| GET | `/api/auth/oidc/logout` | Clear session and redirect to IdP logout |
+| GET | `/api/auth/oidc/refresh` | Refresh JWT cookie |
+| POST | `/api/auth/oidc/backchannel-logout` | IdP-initiated session invalidation |
 
 ### Organizations
 
@@ -147,7 +184,7 @@ The app delegates all authentication to an OIDC provider:
 | GET | `/orgs/switch/{pid}` | (member) |
 | GET | `/invites/{token}/accept` | (any authed) |
 
-### Projects (org-scoped)
+### Projects (org-scoped example)
 
 | Method | Path | Min Role |
 |--------|------|----------|
@@ -158,7 +195,7 @@ The app delegates all authentication to an OIDC provider:
 | GET/POST | `/projects/{pid}/edit` | Member |
 | DELETE | `/projects/{pid}` | Member |
 
-### Notes (project-scoped)
+### Notes (project-scoped example)
 
 | Method | Path | Min Role |
 |--------|------|----------|
@@ -168,47 +205,11 @@ The app delegates all authentication to an OIDC provider:
 | GET/POST | `/projects/{pid}/notes/{note_pid}/edit` | Member |
 | DELETE | `/projects/{pid}/notes/{note_pid}` | Member |
 
-## User Flows
-
-### First-Time Sign In
-1. User clicks "Sign in" → redirected to OIDC provider
-2. After authenticating, the callback creates a user account
-3. A **personal organization** is auto-created (user is owner)
-4. Any **pending invites** matching the user's email are auto-accepted
-5. User lands on the dashboard scoped to their personal org
-
-### Organization Management
-- **Create org**: Any user can create team organizations from `/orgs/new`
-- **Switch org**: Click the org badge in the nav bar to switch between orgs
-- **Org settings**: Admins+ can rename orgs at `/orgs/{pid}/settings`
-- **Members**: View members at `/orgs/{pid}/members`, admins+ can invite/remove/change roles
-
-### Invite Flow
-1. Admin invites a user by email at `/orgs/{pid}/members`
-2. An invite record is created (expires in 7 days) and an **invitation email** is sent via SMTP
-3. The invite accept link is also shown on the members page so it can be copied and shared directly
-4. If the user already has an account, they accept at `/invites/{token}/accept`
-5. If the user doesn't have an account yet, the invite is **auto-accepted** when they sign in via OIDC with the matching email
-
-### Project & Note CRUD
-- Members+ can create, edit, and delete projects and notes
-- Viewers can only view projects and notes
-- All data is scoped to the active organization — switching orgs shows different projects
-- Notes are nested under projects: `/projects/{pid}/notes`
-
-### Role Hierarchy
-| Role | View | Create/Edit/Delete | Invite Members | Org Settings |
-|------|------|-------------------|----------------|--------------|
-| Viewer | Yes | No | No | No |
-| Member | Yes | Yes | No | No |
-| Admin | Yes | Yes | Yes | Yes |
-| Owner | Yes | Yes | Yes | Yes |
-
-## Creating a New Project
+## Building on This
 
 See [docs/TEMPLATE_GUIDE.md](docs/TEMPLATE_GUIDE.md) for how to create a new project using `fracture-core` as a library dependency.
 
-See [docs/ADDING_RESOURCES.md](docs/ADDING_RESOURCES.md) for a step-by-step recipe for adding new org-scoped resources.
+See [docs/ADDING_RESOURCES.md](docs/ADDING_RESOURCES.md) for a step-by-step recipe for adding new org-scoped resources (replace projects/notes with your domain).
 
 See [docs/UPSTREAM_UPDATES.md](docs/UPSTREAM_UPDATES.md) for updating `fracture-core` in your project.
 
@@ -216,7 +217,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment instructi
 
 ## CI
 
-GitHub Actions runs 4 checks: **rustfmt**, **clippy**, **semgrep**, and **tests**.
+GitHub Actions runs 4 checks: **rustfmt**, **clippy** (with pedantic lints), **semgrep**, and **tests**.
 
 To run the same checks locally:
 
@@ -228,10 +229,11 @@ To run the same checks locally:
 
 | | |
 |---|---|
-| Framework | [Loco](https://loco.rs) (Axum) |
-| Database | SQLite / [SeaORM](https://www.sea-ql.org/SeaORM/) |
+| Language | [Rust](https://www.rust-lang.org/) |
+| Framework | [Loco](https://loco.rs) (built on [Axum](https://github.com/tokio-rs/axum)) |
+| Database | SQLite via [SeaORM](https://www.sea-ql.org/SeaORM/) (PostgreSQL also supported) |
 | Templates | [Tera](https://keats.github.io/tera/) + [Fluent](https://projectfluent.org/) i18n |
-| Auth | OpenID Connect ([openidconnect-rs](https://github.com/ramosbugs/openidconnect-rs)) |
-| CSS | [oat.ink](https://oat.ink) (semantic, zero-dependency) |
-| IdP | Any OIDC provider (Zitadel, Keycloak, Auth0, etc.) |
-| Runtime | [Podman](https://podman.io/) |
+| Auth | OpenID Connect via [openidconnect-rs](https://github.com/ramosbugs/openidconnect-rs) |
+| CSS | [oat.ink](https://oat.ink) (semantic HTML styling, no build step) |
+| IdP | Any OIDC provider (Zitadel ships in the dev stack; Keycloak, Auth0, etc. also work) |
+| Containers | [Podman](https://podman.io/) |

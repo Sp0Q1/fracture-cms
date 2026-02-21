@@ -1,7 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::unnecessary_struct_initialization)]
-#![allow(clippy::unused_async)]
-#![allow(clippy::doc_markdown)]
 use axum::response::Redirect;
 use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
@@ -27,7 +23,7 @@ impl Params {
     }
 }
 
-/// Helper: resolve project from pid, scoped to current org
+/// Helper: resolve project from `pid`, scoped to current org.
 async fn resolve_project(
     db: &DatabaseConnection,
     project_pid: &str,
@@ -38,7 +34,11 @@ async fn resolve_project(
         .ok_or_else(|| Error::NotFound)
 }
 
-/// GET /projects/:project_pid/notes/new — new note form
+/// `GET /projects/:project_pid/notes/new` -- new note form.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn new(
     Path(project_pid): Path<String>,
@@ -57,7 +57,11 @@ pub async fn new(
     views::note::create(&v, &user, &org_ctx, &user_orgs, &project)
 }
 
-/// POST /projects/:project_pid/notes/ — create note
+/// `POST /projects/:project_pid/notes/` -- create note.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn add(
     Path(project_pid): Path<String>,
@@ -73,9 +77,9 @@ pub async fn add(
     require_role!(org_ctx, OrgRole::Member);
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
 
-    let mut item = ActiveModel {
-        ..Default::default()
-    };
+    // SeaORM generates multiple default() impls for ActiveModel
+    #[allow(clippy::default_trait_access)]
+    let mut item: ActiveModel = Default::default();
     params.update(&mut item);
     item.project_id = Set(project.id);
     item.org_id = Set(org_ctx.org.id);
@@ -83,7 +87,11 @@ pub async fn add(
     Ok(Redirect::to(&format!("/projects/{project_pid}")).into_response())
 }
 
-/// GET /projects/:project_pid/notes/:pid — show note
+/// `GET /projects/:project_pid/notes/:pid` -- show note.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn show(
     Path((project_pid, pid)): Path<(String, String)>,
@@ -105,7 +113,11 @@ pub async fn show(
     views::note::show(&v, &user, &org_ctx, &user_orgs, &project, &item)
 }
 
-/// GET /projects/:project_pid/notes/:pid/edit — edit note form
+/// `GET /projects/:project_pid/notes/:pid/edit` -- edit note form.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn edit(
     Path((project_pid, pid)): Path<(String, String)>,
@@ -127,7 +139,11 @@ pub async fn edit(
     views::note::edit(&v, &user, &org_ctx, &user_orgs, &project, &item)
 }
 
-/// POST /projects/:project_pid/notes/:pid — update note
+/// `POST /projects/:project_pid/notes/:pid` -- update note.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn update(
     Path((project_pid, pid)): Path<(String, String)>,
@@ -151,7 +167,11 @@ pub async fn update(
     Ok(Redirect::to(&format!("/projects/{project_pid}")).into_response())
 }
 
-/// DELETE /projects/:project_pid/notes/:pid — delete note
+/// `DELETE /projects/:project_pid/notes/:pid` -- delete note.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
 pub async fn remove(
     Path((project_pid, pid)): Path<(String, String)>,
