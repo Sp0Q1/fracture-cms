@@ -82,8 +82,7 @@ macro_rules! require_user {
             Some(u) => u,
             None => {
                 return Ok(
-                    axum::response::Redirect::temporary("/api/auth/oidc/authorize")
-                        .into_response(),
+                    axum::response::Redirect::temporary("/api/auth/oidc/authorize").into_response(),
                 )
             }
         }
