@@ -1,4 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
 use sea_orm::entity::prelude::*;
 
 pub use super::_entities::org_invites::{ActiveModel, Column, Entity, Model};
@@ -23,6 +22,10 @@ impl ActiveModelBehavior for ActiveModel {
 
 impl Model {
     /// Creates a new invite with a 7-day expiry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     pub async fn create_invite(
         db: &DatabaseConnection,
         org_id: i32,
@@ -79,6 +82,10 @@ impl Model {
     }
 
     /// Accepts an invite: creates the membership and marks the invite as accepted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     pub async fn accept_invite(
         db: &DatabaseConnection,
         invite: Self,

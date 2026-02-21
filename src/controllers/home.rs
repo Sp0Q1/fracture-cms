@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::unused_async)]
 use axum_extra::extract::CookieJar;
 use loco_rs::prelude::*;
 
@@ -7,6 +5,11 @@ use super::middleware;
 use crate::models::{organizations as org_model, projects};
 use crate::views;
 
+/// Render the home page (authenticated or guest).
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or template rendering fails.
 #[debug_handler]
 pub async fn index(
     ViewEngine(v): ViewEngine<TeraView>,

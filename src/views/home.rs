@@ -4,6 +4,10 @@ use crate::controllers::middleware::OrgContext;
 use crate::models::_entities::{organizations, users};
 
 /// Render the home page for an authenticated user.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn index(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -17,6 +21,10 @@ pub fn index(
 }
 
 /// Render the home page for a guest (unauthenticated) user.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn index_guest(v: &impl ViewRenderer) -> Result<Response> {
     format::render().view(v, "home/index.html", data!({}))
 }

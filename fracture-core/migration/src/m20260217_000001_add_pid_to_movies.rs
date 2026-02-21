@@ -1,4 +1,4 @@
-use sea_orm_migration::prelude::*;
+use super::*;
 use sea_orm_migration::sea_orm::prelude::Uuid;
 
 #[derive(DeriveMigrationName)]

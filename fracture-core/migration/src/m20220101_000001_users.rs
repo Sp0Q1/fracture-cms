@@ -1,5 +1,5 @@
+use super::*;
 use loco_rs::schema::*;
-use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;

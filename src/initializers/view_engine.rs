@@ -10,11 +10,10 @@ use tracing::info;
 
 const I18N_DIR: &str = "assets/i18n";
 const I18N_SHARED: &str = "assets/i18n-shared.ftl";
-#[allow(clippy::module_name_repetitions)]
-pub struct ViewEngineInitializer;
+pub struct TemplateInitializer;
 
 #[async_trait]
-impl Initializer for ViewEngineInitializer {
+impl Initializer for TemplateInitializer {
     fn name(&self) -> String {
         "view-engine".to_string()
     }

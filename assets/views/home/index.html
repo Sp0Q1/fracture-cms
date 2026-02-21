@@ -52,8 +52,8 @@
 {% else %}
 
     <section class="hero">
-        <h1><span class="gradient-text">Secure Content Management,</span><br>Built for Enterprise</h1>
-        <p class="subtitle">Manage your projects with enterprise-grade security, OIDC single sign-on, and organization-based access control.</p>
+        <h1><span class="gradient-text">Multi-Tenant SaaS Starter</span><br>Built with Rust</h1>
+        <p class="subtitle">OIDC single sign-on, organizations with role-based access control, email invites, and org-scoped data isolation. Add your domain logic and ship.</p>
         <div class="cta-group">
             <a href="/api/auth/oidc/authorize" class="button large">Get Started</a>
             <a href="#features" class="button outline large">Learn More</a>
@@ -68,8 +68,8 @@
                         <path d="M12 2L3 7v6c0 5.25 3.75 10.14 9 11.43C17.25 23.14 21 18.25 21 13V7l-9-5z"/>
                     </svg>
                 </div>
-                <header>Security First</header>
-                <p>OIDC-based single sign-on authentication. No passwords stored, no sessions to leak.</p>
+                <header>OIDC Authentication</header>
+                <p>Delegates all authentication to your identity provider. No passwords stored in the database. PKCE flow with signed token verification.</p>
             </article>
         </div>
         <div class="col-4">
@@ -80,7 +80,7 @@
                     </svg>
                 </div>
                 <header>Organizations & RBAC</header>
-                <p>Multi-org support with role-based access control. Owner, Admin, Member, and Viewer roles.</p>
+                <p>Personal and team orgs with four roles: Owner, Admin, Member, Viewer. All data queries scoped by org. Email invites with auto-accept.</p>
             </article>
         </div>
         <div class="col-4">
@@ -91,8 +91,8 @@
                         <polyline points="8 6 2 12 8 18"/>
                     </svg>
                 </div>
-                <header>Developer Experience</header>
-                <p>Clean architecture, simple templates, and a SQLite backend. Easy to extend and deploy.</p>
+                <header>Library Architecture</header>
+                <p>Core infrastructure ships as a Cargo library crate. Depend on it, add your resources, get updates via cargo update.</p>
             </article>
         </div>
     </div>
@@ -102,6 +102,7 @@
         <div class="trust-badges">
             <span class="badge outline">Rust</span>
             <span class="badge outline">Loco</span>
+            <span class="badge outline">Axum</span>
             <span class="badge outline">OIDC</span>
             <span class="badge outline">SQLite</span>
             <span class="badge outline">SeaORM</span>

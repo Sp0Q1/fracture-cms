@@ -3,6 +3,11 @@ use loco_rs::prelude::*;
 use crate::controllers::middleware::OrgContext;
 use crate::models::_entities::{org_invites, org_members, organizations, users};
 
+/// Renders the organization list page.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn list(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -13,6 +18,11 @@ pub fn list(
     format::render().view(v, "org/list.html", data!(ctx))
 }
 
+/// Renders the new organization form.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn new(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -23,6 +33,11 @@ pub fn new(
     format::render().view(v, "org/new.html", data!(ctx))
 }
 
+/// Renders the organization settings page.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn settings(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -47,6 +62,11 @@ pub struct MembersViewData<'a> {
     pub app_url: &'a str,
 }
 
+/// Renders the organization members page.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn members(
     v: &impl ViewRenderer,
     user: &users::Model,

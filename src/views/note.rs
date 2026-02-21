@@ -3,6 +3,11 @@ use loco_rs::prelude::*;
 use crate::controllers::middleware::OrgContext;
 use crate::models::_entities::{notes, organizations, projects, users};
 
+/// Render the new-note form.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn create(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -15,6 +20,11 @@ pub fn create(
     format::render().view(v, "note/create.html", data!(ctx))
 }
 
+/// Render the note detail page.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn show(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -29,6 +39,11 @@ pub fn show(
     format::render().view(v, "note/show.html", data!(ctx))
 }
 
+/// Render the edit-note form.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
 pub fn edit(
     v: &impl ViewRenderer,
     user: &users::Model,

@@ -1,4 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
 use std::fmt;
 
 use sea_orm::entity::prelude::*;
@@ -75,6 +74,10 @@ impl Model {
     }
 
     /// Adds a member to an organization.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     pub async fn add_member(
         db: &DatabaseConnection,
         org_id: i32,
@@ -92,6 +95,10 @@ impl Model {
     }
 
     /// Updates the role of a membership.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     pub async fn update_role(
         db: &DatabaseConnection,
         membership: Self,
@@ -103,7 +110,11 @@ impl Model {
     }
 
     /// Removes a member from an organization.
-    /// Returns an error if the member is the last owner.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the member is the last owner or the database
+    /// operation fails.
     pub async fn remove_member(db: &DatabaseConnection, membership: Self) -> Result<(), DbErr> {
         let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
         if role == OrgRole::Owner {
