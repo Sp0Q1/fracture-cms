@@ -14,8 +14,8 @@ use crate::mailers::invite::InviteMailer;
 use crate::models::_entities::{org_members, organizations, users as users_entity};
 use crate::models::org_members::OrgRole;
 use crate::models::{org_invites, organizations as org_model};
-use crate::{require_role, require_user};
 use crate::views;
+use crate::{require_role, require_user};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewOrgParams {
@@ -193,10 +193,12 @@ pub async fn members(
         &user,
         &org_ctx,
         &user_orgs,
-        &org,
-        &member_users,
-        &pending_invites,
-        &app_url,
+        &views::org::MembersViewData {
+            org: &org,
+            member_users: &member_users,
+            pending_invites: &pending_invites,
+            app_url: &app_url,
+        },
     )
 }
 
