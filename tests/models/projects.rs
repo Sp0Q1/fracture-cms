@@ -129,3 +129,44 @@ async fn test_project_sets_pid_on_insert() {
     let project = create_project(db, "PID Test", org.id).await;
     assert!(!project.pid.is_nil());
 }
+
+#[tokio::test]
+#[serial]
+async fn test_project_requires_valid_org_id() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    // Creating a project with a nonexistent org_id should fail due to FK constraint
+    let result = ActiveModel {
+        title: Set("Orphan Project".to_string()),
+        org_id: Set(99999),
+        ..Default::default()
+    }
+    .insert(db)
+    .await;
+
+    assert!(
+        result.is_err(),
+        "Creating a project with a nonexistent org should fail"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_find_by_pid_returns_none_for_invalid_uuid() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user = create_test_user(db, "badpid").await;
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let org = &orgs[0];
+
+    // Invalid UUID string
+    let result = Model::find_by_pid_and_org(db, "not-a-valid-uuid", org.id).await;
+    assert!(result.is_none(), "Invalid UUID should return None");
+
+    // Valid UUID but nonexistent
+    let result =
+        Model::find_by_pid_and_org(db, "00000000-0000-0000-0000-000000000000", org.id).await;
+    assert!(result.is_none(), "Nonexistent UUID should return None");
+}

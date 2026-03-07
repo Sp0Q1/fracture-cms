@@ -1,7 +1,9 @@
 [package]
 name = "fracture-core-migration"
+description = "Database migrations for the fracture-core library (users, orgs, members, invites)"
 version = "0.1.0"
 edition = "2021"
+license = "AGPL-3.0-or-later"
 publish = false
 
 [lib]
@@ -12,7 +14,7 @@ path = "src/lib.rs"
 loco-rs = { workspace = true }
 
 [dependencies.sea-orm-migration]
-version = "1.1.0"
+version = "1.1"
 features = [
   "runtime-tokio-rustls",
 ]

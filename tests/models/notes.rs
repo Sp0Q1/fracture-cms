@@ -147,3 +147,55 @@ async fn test_notes_cross_org_isolation() {
     let alice_notes = NoteModel::find_by_project_and_org(db, bob_project.id, alice_org.id).await;
     assert!(alice_notes.is_empty());
 }
+
+#[tokio::test]
+#[serial]
+async fn test_notes_cross_project_isolation_within_same_org() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user = create_test_user(db, "note-crossproj").await;
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let org = &orgs[0];
+
+    let project_a = create_project(db, "Project A", org.id).await;
+    let project_b = create_project(db, "Project B", org.id).await;
+
+    create_note(db, "Note in A", project_a.id, org.id).await;
+    create_note(db, "Note in B", project_b.id, org.id).await;
+
+    // Each project should only see its own notes
+    let notes_a = NoteModel::find_by_project_and_org(db, project_a.id, org.id).await;
+    assert_eq!(notes_a.len(), 1);
+    assert_eq!(notes_a[0].title, "Note in A");
+
+    let notes_b = NoteModel::find_by_project_and_org(db, project_b.id, org.id).await;
+    assert_eq!(notes_b.len(), 1);
+    assert_eq!(notes_b[0].title, "Note in B");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_note_requires_valid_project_id() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user = create_test_user(db, "note-badproj").await;
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let org = &orgs[0];
+
+    // Create a note with a nonexistent project_id — should fail due to FK constraint
+    let result = NoteActiveModel {
+        title: Set("Orphan Note".to_string()),
+        project_id: Set(99999),
+        org_id: Set(org.id),
+        ..Default::default()
+    }
+    .insert(db)
+    .await;
+
+    assert!(
+        result.is_err(),
+        "Creating a note with a nonexistent project should fail"
+    );
+}

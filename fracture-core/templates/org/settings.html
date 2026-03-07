@@ -5,12 +5,12 @@
 {% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
-<nav class="breadcrumb">
+<nav class="breadcrumb" aria-label="Breadcrumb">
     <a href="/orgs">Organizations</a>
-    <span class="separator">/</span>
+    <span class="separator" aria-hidden="true">/</span>
     <span>{{ org.name }}</span>
-    <span class="separator">/</span>
-    <span>Settings</span>
+    <span class="separator" aria-hidden="true">/</span>
+    <span aria-current="page">Settings</span>
 </nav>
 
 <div class="page-header">

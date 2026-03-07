@@ -5,12 +5,12 @@
 {% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
-<nav class="breadcrumb">
+<nav class="breadcrumb" aria-label="Breadcrumb">
     <a href="/projects">Projects</a>
-    <span class="separator">/</span>
+    <span class="separator" aria-hidden="true">/</span>
     <a href="/projects/{{ project.pid }}">{{ project.title }}</a>
-    <span class="separator">/</span>
-    <span>New Note</span>
+    <span class="separator" aria-hidden="true">/</span>
+    <span aria-current="page">New Note</span>
 </nav>
 
 <div class="page-header">

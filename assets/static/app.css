@@ -3,6 +3,25 @@
    Accent colors: #62cb98 (green) + #5a60ce (indigo)
    ========================================================================== */
 
+/* --- Skip Link (Accessibility) --- */
+.skip-link {
+    position: absolute;
+    top: -100%;
+    left: 1rem;
+    z-index: 9999;
+    padding: 0.5rem 1rem;
+    background: #62cb98;
+    color: #0b0d13;
+    font-weight: 600;
+    border-radius: 0 0 6px 6px;
+    text-decoration: none;
+    transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
 /* --- OAT Variable Overrides --- */
 :root[data-theme="dark"] {
     --primary: #62cb98;

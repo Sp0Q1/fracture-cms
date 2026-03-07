@@ -173,3 +173,150 @@ async fn test_auto_accept_on_oidc_signup() {
     );
     assert_eq!(membership.unwrap().role, "member");
 }
+
+#[tokio::test]
+#[serial]
+async fn test_expired_invite_cannot_be_accepted() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let owner = create_test_user(db, "expowner").await;
+    let invitee = create_test_user(db, "expinvitee").await;
+
+    let orgs = organizations::Model::find_orgs_for_user(db, owner.id).await;
+    let org = &orgs[0];
+
+    let invite =
+        org_invites::Model::create_invite(db, org.id, &invitee.email, OrgRole::Member, owner.id)
+            .await
+            .unwrap();
+
+    // Manually set expires_at to the past to simulate an expired invite
+    let expired_time = chrono::Utc::now() - chrono::Duration::days(1);
+    let mut active: org_invites::ActiveModel = invite.into();
+    active.expires_at = sea_orm::ActiveValue::Set(expired_time.into());
+    let expired_invite = sea_orm::ActiveModelTrait::update(active, db).await.unwrap();
+
+    let result = org_invites::Model::accept_invite(db, expired_invite, invitee.id).await;
+    assert!(result.is_err(), "Should not accept an expired invite");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_find_pending_by_org() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let owner = create_test_user(db, "orgpendowner").await;
+    let orgs = organizations::Model::find_orgs_for_user(db, owner.id).await;
+    let org = &orgs[0];
+
+    org_invites::Model::create_invite(
+        db,
+        org.id,
+        "orgpend1@example.com",
+        OrgRole::Member,
+        owner.id,
+    )
+    .await
+    .unwrap();
+    org_invites::Model::create_invite(
+        db,
+        org.id,
+        "orgpend2@example.com",
+        OrgRole::Viewer,
+        owner.id,
+    )
+    .await
+    .unwrap();
+
+    let pending = org_invites::Model::find_pending_by_org(db, org.id).await;
+    assert_eq!(pending.len(), 2);
+
+    // A different org should have no pending invites
+    let other_user = create_test_user(db, "orgpendother").await;
+    let other_orgs = organizations::Model::find_orgs_for_user(db, other_user.id).await;
+    let other_pending = org_invites::Model::find_pending_by_org(db, other_orgs[0].id).await;
+    assert!(other_pending.is_empty());
+}
+
+#[tokio::test]
+#[serial]
+async fn test_expired_invites_excluded_from_pending() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let owner = create_test_user(db, "expfiltowner").await;
+    let orgs = organizations::Model::find_orgs_for_user(db, owner.id).await;
+    let org = &orgs[0];
+
+    let invite = org_invites::Model::create_invite(
+        db,
+        org.id,
+        "expfilt@example.com",
+        OrgRole::Member,
+        owner.id,
+    )
+    .await
+    .unwrap();
+
+    // Expire the invite
+    let expired_time = chrono::Utc::now() - chrono::Duration::days(1);
+    let mut active: org_invites::ActiveModel = invite.into();
+    active.expires_at = sea_orm::ActiveValue::Set(expired_time.into());
+    sea_orm::ActiveModelTrait::update(active, db).await.unwrap();
+
+    // Should not appear in pending queries
+    let pending_by_email =
+        org_invites::Model::find_pending_by_email(db, "expfilt@example.com").await;
+    assert!(
+        pending_by_email.is_empty(),
+        "Expired invites should not appear in pending-by-email"
+    );
+
+    let pending_by_org = org_invites::Model::find_pending_by_org(db, org.id).await;
+    assert!(
+        pending_by_org.is_empty(),
+        "Expired invites should not appear in pending-by-org"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_accept_invite_idempotent_for_existing_member() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let owner = create_test_user(db, "idemowner").await;
+    let member = create_test_user(db, "idemmember").await;
+
+    let orgs = organizations::Model::find_orgs_for_user(db, owner.id).await;
+    let org = &orgs[0];
+
+    // Add member first
+    org_members::Model::add_member(db, org.id, member.id, OrgRole::Viewer)
+        .await
+        .unwrap();
+
+    // Create invite for the already-existing member
+    let invite =
+        org_invites::Model::create_invite(db, org.id, &member.email, OrgRole::Admin, owner.id)
+            .await
+            .unwrap();
+
+    // Accept should succeed without duplicating the membership
+    org_invites::Model::accept_invite(db, invite, member.id)
+        .await
+        .unwrap();
+
+    // Should still have exactly one membership (not duplicated)
+    let members = org_members::Model::find_members(db, org.id).await;
+    let member_entries: Vec<_> = members.iter().filter(|m| m.user_id == member.id).collect();
+    assert_eq!(
+        member_entries.len(),
+        1,
+        "Should not create duplicate membership"
+    );
+    // The existing role should be unchanged (viewer, not upgraded to admin)
+    assert_eq!(member_entries[0].role, "viewer");
+}

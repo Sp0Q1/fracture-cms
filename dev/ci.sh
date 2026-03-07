@@ -25,6 +25,17 @@ fi
 # Named volume for cargo registry cache (speeds up repeat runs)
 podman volume exists "$CARGO_CACHE" 2>/dev/null || podman volume create "$CARGO_CACHE" > /dev/null
 
+# Ensure Cargo.lock is up-to-date before read-only CI checks.
+# Mounts only Cargo.toml files writable to regenerate the lockfile.
+echo "Updating Cargo.lock..."
+podman run --rm \
+    -v "$SRC:/src" \
+    -v "$CARGO_CACHE:/usr/local/cargo/registry" \
+    -e CARGO_TARGET_DIR=/tmp/target \
+    -w /src \
+    "$RUST_IMAGE" \
+    cargo generate-lockfile --quiet
+
 passed=0
 failed=0
 failures=""
