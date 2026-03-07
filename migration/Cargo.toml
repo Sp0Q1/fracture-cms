@@ -1,7 +1,9 @@
 [package]
 name = "migration"
+description = "Database migrations for Fracture CMS"
 version = "0.1.0"
 edition = "2021"
+license = "AGPL-3.0-or-later"
 publish = false
 
 [lib]
@@ -14,7 +16,7 @@ fracture-core-migration = { path = "../fracture-core/migration" }
 
 
 [dependencies.sea-orm-migration]
-version = "1.1.0"
+version = "1.1"
 features = [
   # Enable at least one `ASYNC_RUNTIME` and `DATABASE_DRIVER` feature if you want to run migration via CLI.
   # View the list of supported features at https://www.sea-ql.org/SeaORM/docs/install-and-config/database-and-async-runtime.

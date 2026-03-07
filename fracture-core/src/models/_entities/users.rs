@@ -13,18 +13,24 @@ pub struct Model {
     pub pid: Uuid,
     #[sea_orm(unique)]
     pub email: String,
+    #[serde(skip_serializing)]
     pub password: String,
     #[sea_orm(unique)]
+    #[serde(skip_serializing)]
     pub api_key: String,
     pub name: String,
+    #[serde(skip_serializing)]
     pub reset_token: Option<String>,
     pub reset_sent_at: Option<DateTimeWithTimeZone>,
+    #[serde(skip_serializing)]
     pub email_verification_token: Option<String>,
     pub email_verification_sent_at: Option<DateTimeWithTimeZone>,
     pub email_verified_at: Option<DateTimeWithTimeZone>,
+    #[serde(skip_serializing)]
     pub magic_link_token: Option<String>,
     pub magic_link_expiration: Option<DateTimeWithTimeZone>,
     pub oidc_provider: Option<String>,
+    #[serde(skip_serializing)]
     pub oidc_subject: Option<String>,
     pub session_invalidated_at: Option<DateTimeWithTimeZone>,
 }

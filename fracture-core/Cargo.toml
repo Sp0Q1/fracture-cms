@@ -1,7 +1,9 @@
 [package]
 name = "fracture-core"
+description = "Core library for Fracture CMS: OIDC auth, org management, RBAC, and multi-tenant infrastructure"
 version = "0.1.0"
 edition = "2021"
+license = "AGPL-3.0-or-later"
 publish = false
 
 [dependencies]
@@ -12,11 +14,12 @@ axum-extra = { version = "0.10", features = ["form", "cookie"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 chrono = { version = "0.4" }
-uuid = { version = "1.6", features = ["v4"] }
+uuid = { version = "1.21", features = ["v4"] }
 async-trait = { version = "0.1" }
 openidconnect = { version = "4.0" }
 jsonwebtoken = { version = "9" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots"] }
+form_urlencoded = { version = "1" }
 slug = { version = "0.1" }
 include_dir = { version = "0.7", features = ["glob"] }
 tera = { version = "1" }

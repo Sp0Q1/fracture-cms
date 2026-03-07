@@ -214,3 +214,65 @@ async fn oidc_creates_personal_org_for_new_user() {
     assert!(membership.is_some());
     assert_eq!(membership.unwrap().role, "owner");
 }
+
+#[tokio::test]
+#[serial]
+async fn oidc_clears_session_invalidation_on_relogin() {
+    let boot = boot_test::<App>()
+        .await
+        .expect("Failed to boot test application");
+
+    let info = OidcUserInfo {
+        provider: "test".to_string(),
+        subject: "test-session-inv".to_string(),
+        email: "session-inv@example.com".to_string(),
+        name: Some("Session User".to_string()),
+    };
+
+    // Create user
+    let user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
+        .await
+        .expect("Failed to create user");
+    assert!(user.session_invalidated_at.is_none());
+
+    // Simulate session invalidation (as backchannel logout would do)
+    let mut active: users::ActiveModel = user.into();
+    active.session_invalidated_at = ActiveValue::Set(Some(chrono::offset::Local::now().into()));
+    let invalidated = active
+        .update(&boot.app_context.db)
+        .await
+        .expect("Failed to invalidate session");
+    assert!(invalidated.session_invalidated_at.is_some());
+
+    // Re-login via OIDC should clear the invalidation
+    let relogin_user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
+        .await
+        .expect("Failed to re-login via OIDC");
+    assert!(
+        relogin_user.session_invalidated_at.is_none(),
+        "Session invalidation should be cleared on OIDC re-login"
+    );
+    assert_eq!(relogin_user.id, invalidated.id);
+}
+
+#[tokio::test]
+#[serial]
+async fn find_by_email_returns_error_for_nonexistent() {
+    let boot = boot_test::<App>()
+        .await
+        .expect("Failed to boot test application");
+
+    let result = Model::find_by_email(&boot.app_context.db, "nobody@nowhere.com").await;
+    assert!(result.is_err(), "Should error for nonexistent email");
+}
+
+#[tokio::test]
+#[serial]
+async fn find_by_pid_returns_error_for_invalid_uuid() {
+    let boot = boot_test::<App>()
+        .await
+        .expect("Failed to boot test application");
+
+    let result = Model::find_by_pid(&boot.app_context.db, "not-a-uuid").await;
+    assert!(result.is_err(), "Should error for invalid UUID format");
+}

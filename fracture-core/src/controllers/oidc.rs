@@ -142,6 +142,7 @@ async fn callback(
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(true)
         .build();
 
     // Store the raw ID token for use as id_token_hint during logout.
@@ -149,6 +150,7 @@ async fn callback(
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(true)
         .build();
 
     // Set org_pid cookie to the user's first org
@@ -158,6 +160,7 @@ async fn callback(
             .path("/")
             .http_only(true)
             .same_site(SameSite::Lax)
+            .secure(true)
             .build()
     });
 
@@ -206,12 +209,14 @@ async fn logout(Extension(oidc): Extension<OidcContext>, jar: CookieJar) -> Resu
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(true)
         .max_age(time::Duration::ZERO)
         .build();
     let clear_id_token = Cookie::build(("id_token", ""))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(true)
         .max_age(time::Duration::ZERO)
         .build();
 
@@ -219,21 +224,24 @@ async fn logout(Extension(oidc): Extension<OidcContext>, jar: CookieJar) -> Resu
     // terminated there as well.  Falls back to "/" if the IdP didn't advertise
     // an end_session_endpoint.
     let redirect_url = if let Some(end_session) = &oidc.end_session_url {
-        let mut url = end_session.clone();
+        let mut params: Vec<(&str, String)> = Vec::new();
         if let Some(hint) = jar.get("id_token") {
-            url.push_str("?id_token_hint=");
-            url.push_str(hint.value());
+            params.push(("id_token_hint", hint.value().to_string()));
         }
         if !oidc.post_logout_redirect_uri.is_empty() {
-            url.push(if jar.get("id_token").is_some() {
-                '&'
-            } else {
-                '?'
-            });
-            url.push_str("post_logout_redirect_uri=");
-            url.push_str(&oidc.post_logout_redirect_uri);
+            params.push((
+                "post_logout_redirect_uri",
+                oidc.post_logout_redirect_uri.clone(),
+            ));
         }
-        url
+        if params.is_empty() {
+            end_session.clone()
+        } else {
+            let query = form_urlencoded::Serializer::new(String::new())
+                .extend_pairs(params)
+                .finish();
+            format!("{end_session}?{query}")
+        }
     } else {
         "/".to_string()
     };
@@ -270,6 +278,7 @@ async fn refresh(State(ctx): State<AppContext>, jar: CookieJar) -> Result<Respon
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(true)
         .build();
     let mut response = format::empty_json()?.into_response();
     response.headers_mut().insert(

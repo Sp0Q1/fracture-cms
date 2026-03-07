@@ -98,12 +98,26 @@ impl Model {
     ///
     /// # Errors
     ///
-    /// Returns an error if the database operation fails.
+    /// Returns an error if demoting the last owner or if the database
+    /// operation fails.
     pub async fn update_role(
         db: &DatabaseConnection,
         membership: Self,
         new_role: OrgRole,
     ) -> Result<Self, DbErr> {
+        let current_role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
+        if current_role == OrgRole::Owner && new_role != OrgRole::Owner {
+            let owner_count = Entity::find()
+                .filter(Column::OrgId.eq(membership.org_id))
+                .filter(Column::Role.eq("owner"))
+                .count(db)
+                .await?;
+            if owner_count <= 1 {
+                return Err(DbErr::Custom(
+                    "Cannot demote the last owner of an organization".to_string(),
+                ));
+            }
+        }
         let mut active: ActiveModel = membership.into();
         active.role = sea_orm::ActiveValue::Set(new_role.to_string());
         active.update(db).await

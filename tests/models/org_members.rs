@@ -173,3 +173,82 @@ async fn test_find_members() {
     let members = org_members::Model::find_members(db, org.id).await;
     assert_eq!(members.len(), 2);
 }
+
+#[tokio::test]
+#[serial]
+async fn test_cannot_demote_last_owner() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user = create_test_user(db, "demoteowner").await;
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let org = &orgs[0];
+
+    let membership = org_members::Model::find_membership(db, org.id, user.id)
+        .await
+        .unwrap();
+    assert_eq!(membership.role, "owner");
+
+    // Demoting the only owner to admin should be rejected to prevent
+    // an org from having zero owners.
+    let result = org_members::Model::update_role(db, membership, OrgRole::Admin).await;
+    assert!(
+        result.is_err(),
+        "update_role should prevent demoting the last owner"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_add_duplicate_member_fails() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user1 = create_test_user(db, "dup1").await;
+    let user2 = create_test_user(db, "dup2").await;
+
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id).await;
+    let org = &orgs[0];
+
+    // First add succeeds
+    org_members::Model::add_member(db, org.id, user2.id, OrgRole::Member)
+        .await
+        .unwrap();
+
+    // Second add of the same user should fail (DB unique constraint)
+    let result = org_members::Model::add_member(db, org.id, user2.id, OrgRole::Admin).await;
+    assert!(
+        result.is_err(),
+        "Adding a duplicate member should fail at the DB level"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_remove_non_owner_member() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user1 = create_test_user(db, "rmnotown1").await;
+    let user2 = create_test_user(db, "rmnotown2").await;
+
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id).await;
+    let org = &orgs[0];
+
+    org_members::Model::add_member(db, org.id, user2.id, OrgRole::Member)
+        .await
+        .unwrap();
+
+    let membership = org_members::Model::find_membership(db, org.id, user2.id)
+        .await
+        .unwrap();
+    let result = org_members::Model::remove_member(db, membership).await;
+    assert!(
+        result.is_ok(),
+        "Should be able to remove a non-owner member"
+    );
+
+    // Verify membership is gone
+    let gone = org_members::Model::find_membership(db, org.id, user2.id).await;
+    assert!(gone.is_none());
+}

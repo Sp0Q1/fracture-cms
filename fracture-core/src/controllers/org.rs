@@ -274,6 +274,10 @@ pub async fn invite(
 /// # Errors
 ///
 /// Returns an error if the database query fails or the user is not authenticated.
+///
+/// # Panics
+///
+/// Panics if the HTTP response builder fails, which should not occur with valid status codes.
 #[debug_handler]
 pub async fn update_role(
     Path((pid, user_pid)): Path<(String, String)>,
@@ -304,6 +308,20 @@ pub async fn update_role(
         .await
         .ok_or_else(|| Error::NotFound)?;
     let new_role = OrgRole::from_str_role(&params.role).unwrap_or(OrgRole::Member);
+    let target_current_role =
+        OrgRole::from_str_role(&target_membership.role).unwrap_or(OrgRole::Viewer);
+
+    // Only Owners can grant/revoke the Owner role or modify other Owners
+    if (new_role == OrgRole::Owner || target_current_role == OrgRole::Owner)
+        && !org_ctx.role.at_least(OrgRole::Owner)
+    {
+        return Ok(axum::response::Response::builder()
+            .status(axum::http::StatusCode::FORBIDDEN)
+            .body(axum::body::Body::from("Forbidden"))
+            .unwrap()
+            .into_response());
+    }
+
     org_members::Model::update_role(&ctx.db, target_membership, new_role).await?;
 
     Ok(Redirect::to(&format!("/orgs/{pid}/members")).into_response())
@@ -379,6 +397,7 @@ pub async fn switch(
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(true)
         .build();
 
     let mut response = Redirect::to("/").into_response();
@@ -394,6 +413,10 @@ pub async fn switch(
 /// # Errors
 ///
 /// Returns an error if the database query fails or the user is not authenticated.
+///
+/// # Panics
+///
+/// Panics if the HTTP response builder fails, which should not occur with valid status codes.
 #[debug_handler]
 pub async fn accept_invite(
     Path(token): Path<String>,
@@ -406,6 +429,15 @@ pub async fn accept_invite(
     let invite = org_invites::Model::find_by_pid(&ctx.db, &token)
         .await
         .ok_or_else(|| Error::NotFound)?;
+
+    // Verify the authenticated user's email matches the invite recipient
+    if user.email != invite.email {
+        return Ok(axum::response::Response::builder()
+            .status(axum::http::StatusCode::FORBIDDEN)
+            .body(axum::body::Body::from("Forbidden"))
+            .unwrap()
+            .into_response());
+    }
 
     org_invites::Model::accept_invite(&ctx.db, invite, user.id)
         .await

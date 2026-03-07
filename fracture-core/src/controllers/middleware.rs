@@ -4,6 +4,8 @@ use loco_rs::{auth::jwt, prelude::*};
 use crate::models::_entities::{org_members, organizations, users};
 use crate::models::org_members::OrgRole;
 
+/// Extracts and validates the current user from the JWT cookie.
+/// Returns `None` if the cookie is missing, the JWT is invalid, or the session has been invalidated.
 pub async fn get_current_user(jar: &CookieJar, ctx: &AppContext) -> Option<users::Model> {
     let token = jar.get("jwt")?.value().to_string();
     let jwt_config = ctx.config.get_jwt_config().ok()?;

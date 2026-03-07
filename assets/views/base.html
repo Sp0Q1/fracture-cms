@@ -14,7 +14,8 @@
 </head>
 
 <body{% if user_name %} data-authenticated{% endif %}>
-    <nav data-topnav>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <nav data-topnav aria-label="Main navigation">
         <span>
             <a href="/" class="brand">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 26" fill="none" stroke="#62cb98" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -65,19 +66,18 @@
                 <a href="/orgs" role="menuitem">Organizations</a>
                 <a href="/api/auth/oidc/logout" role="menuitem">Sign out</a>
                 {% else %}
-                <a href="/api/auth/oidc/authorize" role="menuitem">Sign in</a>
-                <a href="/api/auth/oidc/authorize" role="menuitem">Create account</a>
+                <a href="/api/auth/oidc/authorize" role="menuitem">Sign in / Create account</a>
                 {% endif %}
             </div>
         </ot-dropdown>
     </nav>
-    <main class="container">
+    <main id="main-content" class="container">
         {% block page_title_block %}
         {% endblock page_title_block %}
         {% block content %}
         {% endblock content %}
     </main>
-    <footer class="site-footer">
+    <footer class="site-footer" role="contentinfo">
         <div class="footer-grid">
             <div class="footer-brand">
                 <strong class="gradient-text">Fracture CMS</strong>

@@ -42,6 +42,12 @@ async fn set_security_headers(
         axum::http::header::HeaderName::from_static("x-permitted-cross-domain-policies"),
         "none".parse().expect("valid header value"),
     );
+    headers.insert(
+        axum::http::header::STRICT_TRANSPORT_SECURITY,
+        "max-age=63072000; includeSubDomains"
+            .parse()
+            .expect("valid header value"),
+    );
     response
 }
 
