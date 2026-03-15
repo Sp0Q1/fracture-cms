@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "fracture-core", "fracture-core/migration", "migration"]
+members = [".", "fracture-core", "fracture-core/migration", "migration", "fracture-ctl"]
 
 [package]
 name = "fracture-cms"
