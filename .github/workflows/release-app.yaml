@@ -1,0 +1,70 @@
+# Reusable workflow: build and push a container image on release.
+#
+# Downstream projects call this with:
+#
+#   name: Release
+#   on:
+#     push:
+#       tags: ['v*']
+#   jobs:
+#     release:
+#       uses: Sp0Q1/fracture-cms/.github/workflows/release-app.yaml@main
+#       with:
+#         image_name: ghcr.io/${{ github.repository }}
+#       secrets: inherit
+
+name: Release App Image
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        description: 'Full image name (e.g. ghcr.io/sp0q1/fracture-pt)'
+        required: true
+        type: string
+      containerfile:
+        description: 'Path to Containerfile'
+        required: false
+        type: string
+        default: 'Containerfile.prod'
+      platforms:
+        description: 'Comma-separated platforms to build'
+        required: false
+        type: string
+        default: 'linux/amd64'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ inputs.containerfile }}
+          push: true
+          tags: |
+            ${{ inputs.image_name }}:${{ steps.version.outputs.version }}
+            ${{ inputs.image_name }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}

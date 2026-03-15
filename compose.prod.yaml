@@ -1,7 +1,7 @@
 # Fracture CMS — Production compose
 #
 # Minimal setup (SQLite, no IdP):
-#   echo "JWT_SECRET=$(openssl rand -base64 32)" > .env.prod
+#   fracture-ctl init --prod > .env.prod && chmod 600 .env.prod
 #   podman compose -f compose.prod.yaml up -d app
 #
 # With PostgreSQL:
@@ -32,6 +32,8 @@ services:
       retries: 5
 
   app:
+    image: ${APP_IMAGE:-ghcr.io/sp0q1/fracture-cms:latest}
+    # To build locally instead of pulling: podman compose -f compose.prod.yaml build app
     build:
       context: .
       dockerfile: Containerfile.prod
