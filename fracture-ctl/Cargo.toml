@@ -1,0 +1,16 @@
+[package]
+name = "fracture-ctl"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+description = "CLI tool for fracture-core projects — config generation, CI, dev environment"
+
+[[bin]]
+name = "fracture-ctl"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+rand = "0.9"
+base64 = "0.22"
