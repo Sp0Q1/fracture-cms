@@ -48,7 +48,7 @@ mailer:
   # SMTP mailer configuration.
   smtp:
     # Enable/Disable smtp mailer.
-    enable: true
+    enable: {{ get_env(name="MAILER_ENABLED", default="false") }}
     # SMTP server host. e.x localhost, smtp.gmail.com
     host: {{ get_env(name="MAILER_HOST", default="localhost") }}
     # SMTP server port
@@ -69,12 +69,14 @@ mailer:
 #        ... other fields
 
 # OIDC Single Sign-On Configuration
+# The app boots without OIDC when client_id/client_secret are empty or the
+# IdP is unreachable.  Set the OIDC_* env vars to enable authentication.
 settings:
   oidc:
     provider_name: zitadel
     issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="http://localhost:8080") }}
-    client_id: "{{ get_env(name='OIDC_CLIENT_ID') }}"
-    client_secret: {{ get_env(name="OIDC_CLIENT_SECRET") }}
+    client_id: "{{ get_env(name='OIDC_CLIENT_ID', default='') }}"
+    client_secret: "{{ get_env(name='OIDC_CLIENT_SECRET', default='') }}"
     project_id: "{{ get_env(name='OIDC_PROJECT_ID', default='') }}"
     redirect_uri: {{ get_env(name="OIDC_REDIRECT_URI", default="http://localhost:5150/api/auth/oidc/callback") }}
     post_logout_redirect_uri: {{ get_env(name="OIDC_POST_LOGOUT_REDIRECT_URI", default="http://localhost:5150") }}

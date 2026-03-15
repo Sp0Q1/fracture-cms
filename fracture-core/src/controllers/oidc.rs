@@ -1,4 +1,4 @@
-use axum::{response::Redirect, Extension};
+use axum::{body::Body, response::Redirect, Extension};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use loco_rs::prelude::*;
 use openidconnect::{
@@ -16,6 +16,18 @@ use crate::{
     },
     models::{_entities::users, users::OidcUserInfo},
 };
+
+fn oidc_unavailable_response() -> Response {
+    Response::builder()
+        .status(503)
+        .header("content-type", "text/html")
+        .body(Body::from(
+            "<h1>Authentication Not Available</h1>\
+             <p>No identity provider has been configured. Contact the administrator.</p>",
+        ))
+        .unwrap()
+        .into_response()
+}
 
 #[derive(Debug, Serialize)]
 struct ProviderInfo {
@@ -39,7 +51,10 @@ struct BackchannelLogoutForm {
 }
 
 #[debug_handler]
-async fn authorize(Extension(oidc): Extension<OidcContext>) -> Result<Response> {
+async fn authorize(oidc: Option<Extension<OidcContext>>) -> Result<Response> {
+    let Some(Extension(oidc)) = oidc else {
+        return Ok(oidc_unavailable_response());
+    };
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     let nonce = Nonce::new_random();
     let nonce_clone = nonce.clone();
@@ -72,11 +87,15 @@ async fn authorize(Extension(oidc): Extension<OidcContext>) -> Result<Response> 
 }
 
 #[debug_handler]
+#[allow(clippy::too_many_lines)]
 async fn callback(
-    Extension(oidc): Extension<OidcContext>,
+    oidc: Option<Extension<OidcContext>>,
     State(ctx): State<AppContext>,
     Query(params): Query<CallbackParams>,
 ) -> Result<Response> {
+    let Some(Extension(oidc)) = oidc else {
+        return Ok(oidc_unavailable_response());
+    };
     let pending = oidc
         .state_store
         .take(&params.state)
@@ -204,7 +223,10 @@ async fn providers(oidc: Option<Extension<OidcContext>>) -> Result<Response> {
 }
 
 #[debug_handler]
-async fn logout(Extension(oidc): Extension<OidcContext>, jar: CookieJar) -> Result<Response> {
+async fn logout(oidc: Option<Extension<OidcContext>>, jar: CookieJar) -> Result<Response> {
+    let Some(Extension(oidc)) = oidc else {
+        return Ok(Redirect::temporary("/").into_response());
+    };
     let clear_jwt = Cookie::build(("jwt", ""))
         .path("/")
         .http_only(true)
@@ -322,10 +344,17 @@ async fn fetch_decoding_key(
 
 #[debug_handler]
 async fn backchannel_logout(
-    Extension(oidc): Extension<OidcContext>,
+    oidc: Option<Extension<OidcContext>>,
     State(ctx): State<AppContext>,
     axum::Form(form): axum::Form<BackchannelLogoutForm>,
 ) -> Result<Response> {
+    let Some(Extension(oidc)) = oidc else {
+        return Ok((
+            axum::http::StatusCode::NOT_IMPLEMENTED,
+            "OIDC not configured",
+        )
+            .into_response());
+    };
     let header = jsonwebtoken::decode_header(&form.logout_token)
         .map_err(|e| loco_rs::Error::Message(format!("Invalid logout_token header: {e}")))?;
 
