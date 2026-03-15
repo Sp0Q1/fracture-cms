@@ -2,10 +2,14 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use clap::{Parser, Subcommand};
 use rand::Rng;
 use std::fs;
+use std::io::Read;
 use std::process::Command;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const REPO: &str = "Sp0Q1/fracture-cms";
+
 #[derive(Parser)]
-#[command(name = "fracture-ctl", about = "Fracture CMS project management")]
+#[command(name = "fracture-ctl", version = VERSION, about = "Fracture CMS project management")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -35,12 +39,153 @@ enum Commands {
         #[arg(long)]
         setup: bool,
     },
+    /// Update fracture-ctl to the latest version
+    Update,
 }
 
 fn generate_secret(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     rand::rng().fill(&mut buf[..]);
     BASE64.encode(&buf)
+}
+
+fn check_for_update() {
+    // Quick non-blocking check — don't slow down normal commands
+    let url = format!(
+        "https://api.github.com/repos/{REPO}/releases?per_page=5"
+    );
+    let output = Command::new("curl")
+        .args(["-sf", "--max-time", "2", &url])
+        .output();
+
+    if let Ok(output) = output {
+        if output.status.success() {
+            let body = String::from_utf8_lossy(&output.stdout);
+            // Find latest ctl-v* tag
+            for line in body.lines() {
+                if let Some(start) = line.find("\"ctl-v") {
+                    let rest = &line[start + 1..];
+                    if let Some(end) = rest.find('"') {
+                        let tag = &rest[..end];
+                        let latest = tag.strip_prefix("ctl-v").unwrap_or(tag);
+                        if latest != VERSION {
+                            eprintln!(
+                                "Update available: {VERSION} → {latest}. Run: fracture-ctl update"
+                            );
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn cmd_update() {
+    eprintln!("Current version: {VERSION}");
+    eprintln!("Checking for updates...");
+
+    let url = format!(
+        "https://api.github.com/repos/{REPO}/releases?per_page=5"
+    );
+    let output = Command::new("curl")
+        .args(["-sf", &url])
+        .output()
+        .expect("failed to reach GitHub API");
+
+    if !output.status.success() {
+        eprintln!("Error: could not reach GitHub API");
+        std::process::exit(1);
+    }
+
+    let body = String::from_utf8_lossy(&output.stdout);
+    let mut latest_tag = String::new();
+    for line in body.lines() {
+        if let Some(start) = line.find("\"ctl-v") {
+            let rest = &line[start + 1..];
+            if let Some(end) = rest.find('"') {
+                latest_tag = rest[..end].to_string();
+                break;
+            }
+        }
+    }
+
+    if latest_tag.is_empty() {
+        eprintln!("Error: no releases found");
+        std::process::exit(1);
+    }
+
+    let latest_version = latest_tag.strip_prefix("ctl-v").unwrap_or(&latest_tag);
+    if latest_version == VERSION {
+        eprintln!("Already up to date ({VERSION})");
+        return;
+    }
+
+    eprintln!("Updating to {latest_version}...");
+
+    // Detect platform
+    let arch = if cfg!(target_arch = "x86_64") {
+        "amd64"
+    } else if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        eprintln!("Error: unsupported architecture");
+        std::process::exit(1);
+    };
+
+    let os = if cfg!(target_os = "linux") {
+        "linux"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        eprintln!("Error: unsupported OS");
+        std::process::exit(1);
+    };
+
+    let asset = format!("fracture-ctl-{os}-{arch}.tar.gz");
+    let download_url = format!(
+        "https://github.com/{REPO}/releases/download/{latest_tag}/{asset}"
+    );
+
+    // Download to temp file
+    let tmp = "/tmp/fracture-ctl-update.tar.gz";
+    let status = Command::new("curl")
+        .args(["-sfL", "-o", tmp, &download_url])
+        .status()
+        .expect("failed to download");
+
+    if !status.success() {
+        eprintln!("Error: download failed from {download_url}");
+        std::process::exit(1);
+    }
+
+    // Find current binary path
+    let current_exe = std::env::current_exe().expect("cannot determine executable path");
+
+    // Extract to a temp location first
+    let tmp_bin = "/tmp/fracture-ctl-new";
+    let status = Command::new("tar")
+        .args(["xzf", tmp, "-C", "/tmp", "--transform", "s/fracture-ctl/fracture-ctl-new/"])
+        .status();
+
+    // Fallback if --transform isn't supported (macOS)
+    if status.is_err() || !status.unwrap().success() {
+        let _ = Command::new("tar").args(["xzf", tmp, "-C", "/tmp"]).status();
+        let _ = fs::rename("/tmp/fracture-ctl", tmp_bin);
+    }
+
+    // Replace current binary
+    if let Err(e) = fs::copy(tmp_bin, &current_exe) {
+        eprintln!("Error: could not replace binary at {}: {e}", current_exe.display());
+        eprintln!("Try: sudo cp {tmp_bin} {}", current_exe.display());
+        std::process::exit(1);
+    }
+
+    // Cleanup
+    let _ = fs::remove_file(tmp);
+    let _ = fs::remove_file(tmp_bin);
+
+    eprintln!("Updated to {latest_version}");
 }
 
 fn cmd_init(image: Option<String>, dev: bool) {
@@ -162,7 +307,7 @@ volumes:
     eprintln!();
     eprintln!("Next:");
     eprintln!("  vim .env.prod                                # configure OIDC, SMTP, etc.");
-    eprintln!("  podman compose -f compose.prod.yaml up -d app");
+    eprintln!("  fracture-ctl up");
 }
 
 fn cmd_up() {
@@ -244,11 +389,18 @@ fn cmd_dev(setup: bool) {
 
 fn main() {
     let cli = Cli::parse();
+
+    // Check for updates on non-update commands (non-blocking, 2s timeout)
+    if !matches!(cli.command, Commands::Update) {
+        check_for_update();
+    }
+
     match cli.command {
         Commands::Init { image, dev } => cmd_init(image, dev),
         Commands::Up => cmd_up(),
         Commands::Down => cmd_down(),
         Commands::Ci => cmd_ci(),
         Commands::Dev { setup } => cmd_dev(setup),
+        Commands::Update => cmd_update(),
     }
 }
