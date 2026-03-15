@@ -13,22 +13,15 @@ Other platforms: `fracture-ctl-linux-arm64`, `fracture-ctl-macos-amd64`, `fractu
 
 ## Quick Start
 
-```bash
-# 1. Generate config with secure secrets
-fracture-ctl init --prod > .env.prod && chmod 600 .env.prod
-
-# 2. Start (pulls pre-built image from GitHub Container Registry)
-podman compose -f compose.prod.yaml up -d app
-```
-
-This pulls the latest release image — no local build needed. To build from source instead:
+No git clone needed. Just `fracture-ctl` and `podman`:
 
 ```bash
-podman compose -f compose.prod.yaml build app
-podman compose -f compose.prod.yaml up -d app
+mkdir my-app && cd my-app
+fracture-ctl init --image ghcr.io/your-org/your-app:latest
+fracture-ctl up
 ```
 
-The app boots and serves pages immediately. OIDC and SMTP are optional — configure them when ready.
+This generates `.env.prod` and `compose.prod.yaml`, then pulls and starts the pre-built image. The app boots immediately. OIDC and SMTP are optional — edit `.env.prod` and restart when ready.
 
 ## Configuration
 
