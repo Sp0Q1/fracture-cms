@@ -21,22 +21,24 @@ COPY . .
 RUN cargo build --release
 
 # ── Stage 3: Minimal runtime image ─────────────────────────────────
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-0 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/bash appuser
+RUN useradd --create-home --shell /bin/bash --uid 1000 appuser
 WORKDIR /app
 
-# Copy binary
-COPY --from=builder /app/target/release/fracture_cms-cli ./fracture_cms-cli
+# Copy binary and entrypoint
+COPY --from=builder /app/target/release/fracture_cms-cli ./target/release/fracture_cms-cli
+COPY dev/entrypoint-prod.sh ./entrypoint-prod.sh
+RUN chmod +x ./entrypoint-prod.sh
 
 # Copy runtime assets
 COPY config/ ./config/
 COPY assets/ ./assets/
 
-# Data directory for SQLite
+# Data directory (may be mounted as volume)
 RUN mkdir -p /app/data && chown appuser:appuser /app/data
 VOLUME /app/data
 
@@ -44,6 +46,5 @@ USER appuser
 EXPOSE 5150
 
 ENV LOCO_ENV=production
-ENV DATABASE_URL=sqlite:///app/data/fracture-cms.sqlite?mode=rwc
 
-CMD ["./fracture_cms-cli", "start"]
+ENTRYPOINT ["./entrypoint-prod.sh"]
