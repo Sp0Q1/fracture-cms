@@ -114,7 +114,6 @@ services:
   app:
     image: ${{APP_IMAGE:-{image_name}}}
     restart: unless-stopped
-    userns_mode: keep-id
     ports:
       - "127.0.0.1:${{APP_PORT:-5150}}:5150"
     volumes:
