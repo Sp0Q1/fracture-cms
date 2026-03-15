@@ -17,7 +17,13 @@ Other platforms: `fracture-ctl-linux-arm64`, `fracture-ctl-macos-amd64`, `fractu
 # 1. Generate config with secure secrets
 fracture-ctl init --prod > .env.prod && chmod 600 .env.prod
 
-# 2. Build and start (SQLite by default)
+# 2. Start (pulls pre-built image from GitHub Container Registry)
+podman compose -f compose.prod.yaml up -d app
+```
+
+This pulls the latest release image — no local build needed. To build from source instead:
+
+```bash
 podman compose -f compose.prod.yaml build app
 podman compose -f compose.prod.yaml up -d app
 ```

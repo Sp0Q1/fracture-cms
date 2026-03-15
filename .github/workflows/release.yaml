@@ -1,0 +1,11 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    uses: ./.github/workflows/release-app.yaml
+    with:
+      image_name: ghcr.io/${{ github.repository }}
+    secrets: inherit
