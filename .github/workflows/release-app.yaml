@@ -51,9 +51,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Extract version and lowercase image name
+        id: meta
+        env:
+          RAW_IMAGE: ${{ inputs.image_name }}
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "image=$(echo "$RAW_IMAGE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -62,9 +66,9 @@ jobs:
           file: ${{ inputs.containerfile }}
           push: true
           tags: |
-            ${{ inputs.image_name }}:${{ steps.version.outputs.version }}
-            ${{ inputs.image_name }}:latest
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
