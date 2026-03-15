@@ -21,8 +21,8 @@ async fn providers_returns_empty_when_oidc_not_configured() {
 async fn authorize_fails_when_oidc_not_configured() {
     request::<App, _, _>(|request, _ctx| async move {
         let response = request.get("/api/auth/oidc/authorize").await;
-        // Without the OidcContext Extension, axum returns 500
-        assert_eq!(response.status_code(), 500);
+        // Without the OidcContext Extension, returns 503 (service unavailable)
+        assert_eq!(response.status_code(), 503);
     })
     .await;
 }
@@ -34,8 +34,8 @@ async fn callback_fails_when_oidc_not_configured() {
         let response = request
             .get("/api/auth/oidc/callback?code=test&state=test")
             .await;
-        // Without the OidcContext Extension, axum returns 500
-        assert_eq!(response.status_code(), 500);
+        // Without the OidcContext Extension, returns 503 (service unavailable)
+        assert_eq!(response.status_code(), 503);
     })
     .await;
 }
@@ -44,12 +44,14 @@ async fn callback_fails_when_oidc_not_configured() {
 #[serial]
 async fn callback_rejects_missing_query_params() {
     request::<App, _, _>(|request, _ctx| async move {
-        // No query params at all
+        // No query params at all — without OIDC configured, returns 503;
+        // with OIDC configured, would return 400/422.
         let response = request.get("/api/auth/oidc/callback").await;
         assert!(
             response.status_code() == 400
                 || response.status_code() == 422
-                || response.status_code() == 500,
+                || response.status_code() == 500
+                || response.status_code() == 503,
             "Expected error status for missing query params, got {}",
             response.status_code()
         );
@@ -59,7 +61,8 @@ async fn callback_rejects_missing_query_params() {
         assert!(
             response.status_code() == 400
                 || response.status_code() == 422
-                || response.status_code() == 500,
+                || response.status_code() == 500
+                || response.status_code() == 503,
             "Expected error status for missing state param, got {}",
             response.status_code()
         );
@@ -69,7 +72,8 @@ async fn callback_rejects_missing_query_params() {
         assert!(
             response.status_code() == 400
                 || response.status_code() == 422
-                || response.status_code() == 500,
+                || response.status_code() == 500
+                || response.status_code() == 503,
             "Expected error status for missing code param, got {}",
             response.status_code()
         );
