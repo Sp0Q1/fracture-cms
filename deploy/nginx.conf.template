@@ -1,116 +1,53 @@
-# ── Nginx Reverse Proxy for Fracture CMS ──────────────────────────
+# Fracture CMS — nginx reverse proxy
 #
-# Replace APP_DOMAIN and AUTH_DOMAIN with your actual domains.
-# Example:
-#   sed 's/APP_DOMAIN/example.com/g; s/AUTH_DOMAIN/auth.example.com/g' \
-#       deploy/nginx.conf.template > /etc/nginx/sites-available/fracture-cms
-#
-# TLS: Use certbot to obtain certificates, then uncomment HSTS.
-#   certbot --nginx -d APP_DOMAIN -d AUTH_DOMAIN
+# Replace APP_DOMAIN with your domain, then:
+#   sudo cp deploy/nginx.conf.template /etc/nginx/sites-available/fracture
+#   sudo sed -i 's/APP_DOMAIN/example.com/g' /etc/nginx/sites-available/fracture
+#   sudo ln -sf /etc/nginx/sites-available/fracture /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo certbot --nginx -d example.com
 
-# ── HTTP → HTTPS redirect ────────────────────────────────────────
 server {
     listen 80;
     listen [::]:80;
-    server_name APP_DOMAIN AUTH_DOMAIN;
+    server_name APP_DOMAIN;
     return 301 https://$host$request_uri;
 }
 
-# ── App Server ────────────────────────────────────────────────────
 server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name APP_DOMAIN;
 
-    # TLS — managed by certbot
     ssl_certificate     /etc/letsencrypt/live/APP_DOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/APP_DOMAIN/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
 
-    # HSTS — uncomment AFTER verifying TLS works correctly
-    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
-
-    # ── Security headers ──────────────────────────────────────────
+    # Security headers (app sets CSP itself)
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    # Uncomment after verifying TLS works:
+    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
 
-    # ── Scanner blocking ──────────────────────────────────────────
-    location ~* ^/(wp-admin|wp-login|wp-content|wp-includes|xmlrpc\.php|phpmyadmin|myadmin|pma) {
-        return 444;
-    }
-    location ~ /\. {
-        deny all;
-        return 444;
+    location / {
+        proxy_pass http://127.0.0.1:5150;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
     }
 
-    # ── Static assets with caching ────────────────────────────────
     location /static/ {
-        proxy_pass http://127.0.0.1:5150;
-        expires 7d;
+        proxy_pass http://127.0.0.1:5150/static/;
+        proxy_set_header Host $host;
+        expires 30d;
         add_header Cache-Control "public, immutable";
-        # Re-add security headers (add_header in location blocks overrides server-level)
-        add_header X-Frame-Options "DENY" always;
-        add_header X-Content-Type-Options "nosniff" always;
     }
 
-    # ── App proxy ─────────────────────────────────────────────────
-    # NOTE: No Upgrade/Connection headers — prevents H2C smuggling.
-    location / {
-        proxy_pass http://127.0.0.1:5150;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-# ── Zitadel Auth Server ──────────────────────────────────────────
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    server_name AUTH_DOMAIN;
-
-    # TLS — managed by certbot
-    ssl_certificate     /etc/letsencrypt/live/AUTH_DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/AUTH_DOMAIN/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-
-    # HSTS — uncomment AFTER verifying TLS works correctly
-    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
-
-    # ── Security headers ──────────────────────────────────────────
-    add_header X-Frame-Options "DENY" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-    # ── Scanner blocking ──────────────────────────────────────────
-    location ~* ^/(wp-admin|wp-login|wp-content|wp-includes|xmlrpc\.php|phpmyadmin|myadmin|pma) {
-        return 444;
-    }
-    location ~ /\. {
-        deny all;
-        return 444;
-    }
-
-    # ── Zitadel proxy ─────────────────────────────────────────────
-    # NOTE: No Upgrade/Connection headers — prevents H2C smuggling.
-    # gRPC buffer settings for Zitadel API calls
-    location / {
-        proxy_pass http://127.0.0.1:8081;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # gRPC / large API responses
-        proxy_buffer_size 128k;
-        proxy_buffers 4 256k;
-        proxy_busy_buffers_size 256k;
-        client_max_body_size 10m;
-    }
+    location ~ /\. { deny all; }
+    location ~ /(wp-admin|wp-login|xmlrpc|phpmyadmin) { return 444; }
 }

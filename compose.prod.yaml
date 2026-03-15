@@ -1,121 +1,66 @@
-# ── Production Compose ─────────────────────────────────────────────
+# Fracture CMS — Production compose
 #
-# Setup flow:
-#   1. ./dev/gen-env.sh example.com auth.example.com > .env.prod
-#   2. podman compose -f compose.prod.yaml up -d zitadel-db zitadel
-#   3. ./dev/setup-oidc.sh          # bootstrap OIDC project + app
-#   4. podman compose -f compose.prod.yaml up -d
+# Minimal setup (SQLite, no IdP):
+#   echo "JWT_SECRET=$(openssl rand -base64 32)" > .env.prod
+#   podman compose -f compose.prod.yaml up -d app
 #
-# All ports bind to 127.0.0.1 — put nginx/caddy in front for TLS.
-# See deploy/nginx.conf.template for a ready-made reverse proxy config.
+# With PostgreSQL:
+#   Add to .env.prod:  APP_DB_PASSWORD=<random>
+#   podman compose -f compose.prod.yaml up -d
+#
+# With OIDC (any provider — Zitadel, Keycloak, Auth0, etc.):
+#   Add to .env.prod:  OIDC_ISSUER_URL, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET
+#   podman compose -f compose.prod.yaml restart app
+#
+# All ports bind to 127.0.0.1 — put a reverse proxy in front for TLS.
 
 services:
-  # ── App Database ──────────────────────────────────────────────────
-  app-db:
+  # PostgreSQL (optional — omit and use SQLite by setting DATABASE_URL)
+  db:
     image: docker.io/library/postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: fracture
-      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
-      POSTGRES_DB: fracture_cms
+      POSTGRES_USER: ${APP_DB_USER:-fracture}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+      POSTGRES_DB: ${APP_DB_NAME:-fracture}
     volumes:
-      - app_db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fracture -d fracture_cms"]
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-fracture}"]
       interval: 5s
       timeout: 3s
       retries: 5
 
-  # ── Zitadel Database (separate for isolation) ────────────────────
-  zitadel-db:
-    image: docker.io/library/postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_PASSWORD: ${ZITADEL_DB_POSTGRES_PASSWORD:?ZITADEL_DB_POSTGRES_PASSWORD is required}
-      POSTGRES_DB: zitadel
-    volumes:
-      - zitadel_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d zitadel"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  # ── Zitadel Identity Provider ────────────────────────────────────
-  zitadel:
-    image: ghcr.io/zitadel/zitadel:latest
-    restart: unless-stopped
-    command: start-from-init --masterkey "${ZITADEL_MASTERKEY:?ZITADEL_MASTERKEY is required}" --tlsMode external
-    environment:
-      ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
-      ZITADEL_DATABASE_POSTGRES_PORT: 5432
-      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${ZITADEL_DB_ZITADEL_PASSWORD:?ZITADEL_DB_ZITADEL_PASSWORD is required}
-      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
-      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
-      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${ZITADEL_DB_POSTGRES_PASSWORD:?ZITADEL_DB_POSTGRES_PASSWORD is required}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
-      ZITADEL_EXTERNALSECURE: "true"
-      ZITADEL_EXTERNALPORT: 443
-      ZITADEL_EXTERNALDOMAIN: ${AUTH_DOMAIN:?AUTH_DOMAIN is required}
-      ZITADEL_TLS_ENABLED: "false"
-      # Machine user with PAT for API provisioning (used by setup-oidc.sh)
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: zitadel-admin-sa
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: Admin
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "2030-01-01T00:00:00Z"
-      ZITADEL_FIRSTINSTANCE_LOGINPOLICY_ALLOWREGISTER: "true"
-      # SMTP
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_SMTP_HOST: "${SMTP_HOST:-}:${SMTP_PORT:-587}"
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_SMTP_USER: ${SMTP_USER:-}
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_TLS: "true"
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_FROM: "noreply@${AUTH_DOMAIN}"
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_FROMNAME: "Fracture CMS"
-    depends_on:
-      zitadel-db:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:${ZITADEL_PORT:-8081}:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "/app/zitadel ready"]
-      interval: 10s
-      timeout: 5s
-      start_period: 30s
-      retries: 5
-
-  # ── Application ──────────────────────────────────────────────────
   app:
     build:
       context: .
       dockerfile: Containerfile.prod
     restart: unless-stopped
     userns_mode: keep-id
-    depends_on:
-      app-db:
-        condition: service_healthy
-      zitadel:
-        condition: service_healthy
     ports:
       - "127.0.0.1:${APP_PORT:-5150}:5150"
     volumes:
       - app_data:/app/data
+    env_file:
+      - .env.prod
     environment:
       LOCO_ENV: production
-      DATABASE_URL: "postgres://fracture:${APP_DB_PASSWORD:?}@app-db:5432/fracture_cms"
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      OIDC_ISSUER_URL: "https://${AUTH_DOMAIN:?AUTH_DOMAIN is required}"
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?OIDC_CLIENT_ID is required}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?OIDC_CLIENT_SECRET is required}
-      OIDC_REDIRECT_URI: "https://${APP_DOMAIN:?APP_DOMAIN is required}/api/auth/oidc/callback"
+      SERVER_BINDING: 0.0.0.0
+      # Default: SQLite. Set DATABASE_URL in .env.prod to use Postgres instead.
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///app/data/fracture.sqlite?mode=rwc}
+      # OIDC — optional. App boots without it; login returns 503.
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_PROJECT_ID: ${OIDC_PROJECT_ID:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      OIDC_POST_LOGOUT_REDIRECT_URI: ${OIDC_POST_LOGOUT_REDIRECT_URI:-}
+      # SMTP — optional. Invite emails fail silently if not configured.
       MAILER_HOST: ${MAILER_HOST:-}
       MAILER_PORT: ${MAILER_PORT:-587}
       MAILER_USER: ${MAILER_USER:-}
       MAILER_PASSWORD: ${MAILER_PASSWORD:-}
-    env_file:
-      - .env.prod
 
 volumes:
-  app_db_data:
-  zitadel_db_data:
+  db_data:
   app_data:
