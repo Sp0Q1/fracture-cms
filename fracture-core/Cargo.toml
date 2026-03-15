@@ -10,7 +10,7 @@ publish = false
 loco-rs = { workspace = true }
 sea-orm = { workspace = true }
 axum = { version = "0.8" }
-axum-extra = { version = "0.10", features = ["form", "cookie"] }
+axum-extra = { version = "0.12", features = ["form", "cookie"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 chrono = { version = "0.4" }
