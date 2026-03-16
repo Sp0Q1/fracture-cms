@@ -536,7 +536,19 @@ table.clickable-rows tbody tr:hover {
 }
 
 /* --- Responsive --- */
+/* --- Mobile navigation --- */
+.mobile-menu-toggle { display:none; background:none; border:none; color:var(--foreground); cursor:pointer; padding:.25rem; margin-left:auto }
+
 @media (max-width: 768px) {
+    .mobile-menu-toggle { display:inline-flex; align-items:center }
+    nav[data-topnav] { flex-wrap:wrap }
+    nav[data-topnav] > span:not(:first-child),
+    nav[data-topnav] > ot-dropdown:not(.nav-end) { display:none; width:100%; padding:.5rem 0 }
+    nav[data-topnav] > .nav-end { display:none; width:100%; padding:.5rem 0 }
+    nav[data-topnav].nav-open > span:not(:first-child),
+    nav[data-topnav].nav-open > ot-dropdown:not(.nav-end) { display:flex; flex-direction:column }
+    nav[data-topnav].nav-open > .nav-end { display:flex; justify-content:flex-start }
+
     .hero h1 {
         font-size: 2rem;
     }
