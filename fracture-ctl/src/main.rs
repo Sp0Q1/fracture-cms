@@ -309,12 +309,27 @@ volumes:
         if !std::path::Path::new("assets").exists() {
             eprintln!("Cloning assets from {repo_url}...");
             let status = Command::new("git")
-                .args(["clone", "--depth", "1", "--filter=blob:none", "--sparse", &repo_url, ".repo-tmp"])
+                .args([
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--filter=blob:none",
+                    "--sparse",
+                    &repo_url,
+                    ".repo-tmp",
+                ])
                 .status()
                 .expect("failed to run git clone");
             if status.success() {
                 let _ = Command::new("git")
-                    .args(["-C", ".repo-tmp", "sparse-checkout", "set", "assets", "config"])
+                    .args([
+                        "-C",
+                        ".repo-tmp",
+                        "sparse-checkout",
+                        "set",
+                        "assets",
+                        "config",
+                    ])
                     .status();
                 let _ = fs::rename(".repo-tmp/assets", "assets");
                 let _ = fs::rename(".repo-tmp/config", "config");
