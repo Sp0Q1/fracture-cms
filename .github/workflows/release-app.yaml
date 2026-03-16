@@ -7,7 +7,10 @@
 #     push:
 #       tags: ['v*']
 #   jobs:
+#     ci:
+#       uses: ./.github/workflows/ci.yaml   # or your CI workflow
 #     release:
+#       needs: ci
 #       uses: Sp0Q1/fracture-cms/.github/workflows/release-app.yaml@main
 #       with:
 #         image_name: ghcr.io/${{ github.repository }}

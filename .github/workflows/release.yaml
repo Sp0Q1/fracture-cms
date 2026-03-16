@@ -4,7 +4,11 @@ on:
     tags: ['v*']
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yaml
+
   release:
+    needs: ci
     uses: ./.github/workflows/release-app.yaml
     with:
       image_name: ghcr.io/${{ github.repository }}
