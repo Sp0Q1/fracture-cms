@@ -51,9 +51,7 @@ fn generate_secret(bytes: usize) -> String {
 
 fn check_for_update() {
     // Quick non-blocking check — don't slow down normal commands
-    let url = format!(
-        "https://api.github.com/repos/{REPO}/releases?per_page=5"
-    );
+    let url = format!("https://api.github.com/repos/{REPO}/releases?per_page=5");
     let output = Command::new("curl")
         .args(["-sf", "--max-time", "2", &url])
         .output();
@@ -85,9 +83,7 @@ fn cmd_update() {
     eprintln!("Current version: {VERSION}");
     eprintln!("Checking for updates...");
 
-    let url = format!(
-        "https://api.github.com/repos/{REPO}/releases?per_page=5"
-    );
+    let url = format!("https://api.github.com/repos/{REPO}/releases?per_page=5");
     let output = Command::new("curl")
         .args(["-sf", &url])
         .output()
@@ -143,9 +139,7 @@ fn cmd_update() {
     };
 
     let asset = format!("fracture-ctl-{os}-{arch}.tar.gz");
-    let download_url = format!(
-        "https://github.com/{REPO}/releases/download/{latest_tag}/{asset}"
-    );
+    let download_url = format!("https://github.com/{REPO}/releases/download/{latest_tag}/{asset}");
 
     // Download to temp file
     let tmp = "/tmp/fracture-ctl-update.tar.gz";
@@ -165,18 +159,30 @@ fn cmd_update() {
     // Extract to a temp location first
     let tmp_bin = "/tmp/fracture-ctl-new";
     let status = Command::new("tar")
-        .args(["xzf", tmp, "-C", "/tmp", "--transform", "s/fracture-ctl/fracture-ctl-new/"])
+        .args([
+            "xzf",
+            tmp,
+            "-C",
+            "/tmp",
+            "--transform",
+            "s/fracture-ctl/fracture-ctl-new/",
+        ])
         .status();
 
     // Fallback if --transform isn't supported (macOS)
     if status.is_err() || !status.unwrap().success() {
-        let _ = Command::new("tar").args(["xzf", tmp, "-C", "/tmp"]).status();
+        let _ = Command::new("tar")
+            .args(["xzf", tmp, "-C", "/tmp"])
+            .status();
         let _ = fs::rename("/tmp/fracture-ctl", tmp_bin);
     }
 
     // Replace current binary
     if let Err(e) = fs::copy(tmp_bin, &current_exe) {
-        eprintln!("Error: could not replace binary at {}: {e}", current_exe.display());
+        eprintln!(
+            "Error: could not replace binary at {}: {e}",
+            current_exe.display()
+        );
         eprintln!("Try: sudo cp {tmp_bin} {}", current_exe.display());
         std::process::exit(1);
     }
