@@ -52,7 +52,7 @@ settings:
       - profile
 
 database:
-  uri: {{ get_env(name="DATABASE_URL", default="sqlite://fracture-cms.sqlite?mode=rwc") }}
+  uri: {{ get_env(name="DATABASE_URL", default="sqlite:///app/data/fracture-cms.sqlite?mode=rwc") }}
   enable_logging: false
   connect_timeout: {{ get_env(name="DB_CONNECT_TIMEOUT", default="500") }}
   idle_timeout: {{ get_env(name="DB_IDLE_TIMEOUT", default="500") }}
