@@ -58,14 +58,20 @@ jobs:
           echo "image=$(echo "$RAW_IMAGE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
+        env:
+          CONTAINERFILE: ${{ inputs.containerfile }}
+          IMAGE: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
         run: |
           docker build \
-            -f ${{ inputs.containerfile }} \
-            -t ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }} \
-            -t ${{ steps.meta.outputs.image }}:latest \
-            --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }} \
-            --label org.opencontainers.image.version=${{ steps.meta.outputs.version }} \
-            --label org.opencontainers.image.revision=${{ github.sha }} \
+            -f "$CONTAINERFILE" \
+            -t "$IMAGE:$VERSION" \
+            -t "$IMAGE:latest" \
+            --label "org.opencontainers.image.source=$SOURCE_URL" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --label "org.opencontainers.image.revision=$REVISION" \
             .
-          docker push ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
-          docker push ${{ steps.meta.outputs.image }}:latest
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"
