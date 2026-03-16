@@ -68,6 +68,16 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    // Mobile menu toggle
+    var menuToggle = document.getElementById("mobile-menu-toggle");
+    if (menuToggle) {
+        menuToggle.addEventListener("click", function () {
+            var expanded = this.getAttribute("aria-expanded") === "true";
+            this.setAttribute("aria-expanded", expanded ? "false" : "true");
+            this.closest("nav").classList.toggle("nav-open");
+        });
+    }
+
     // Session refresh: only runs when body has data-authenticated
     if (document.body.hasAttribute("data-authenticated")) {
         setInterval(function () {
