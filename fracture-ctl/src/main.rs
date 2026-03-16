@@ -1,6 +1,5 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use clap::{Parser, Subcommand};
-use rand::Rng;
 use std::fs;
 use std::io::Read;
 use std::process::Command;
@@ -45,7 +44,7 @@ enum Commands {
 
 fn generate_secret(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
-    rand::rng().fill(&mut buf[..]);
+    rand::fill(&mut buf[..]);
     BASE64.encode(&buf)
 }
 
