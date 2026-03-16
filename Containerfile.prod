@@ -1,44 +1,43 @@
 # Fracture CMS — Production multi-stage build
 #
-# Build:  podman build -f Containerfile.prod -t fracture-cms:latest .
-# Run:    podman run --env-file .env.prod -p 5150:5150 -v ./data:/app/data fracture-cms:latest
+# Downstream projects copy this and change APP_BIN to their binary name.
 
-# ── Stage 1: Plan dependencies ─────────────────────────────────────
+ARG APP_BIN=fracture_cms-cli
+
+# -- Stage 1: Plan dependencies --
 FROM rust:latest AS chef
 RUN cargo install cargo-chef
 RUN apt-get update && apt-get install -y libsqlite3-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 FROM chef AS planner
-COPY . .
+COPY . /app
 RUN cargo chef prepare --recipe-path recipe.json
 
-# ── Stage 2: Build release binary ──────────────────────────────────
+# -- Stage 2: Build release binary --
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
-COPY . .
+COPY . /app
 RUN cargo build --release
 
-# ── Stage 3: Minimal runtime image ─────────────────────────────────
+# -- Stage 3: Minimal runtime image --
 FROM debian:trixie-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-0 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/bash --uid 1000 appuser
+RUN useradd --uid 1000 --create-home --shell /bin/bash appuser
 WORKDIR /app
 
-# Copy binary and entrypoint
-COPY --from=builder /app/target/release/fracture_cms-cli ./target/release/fracture_cms-cli
-COPY dev/entrypoint-prod.sh ./entrypoint-prod.sh
-RUN chmod +x ./entrypoint-prod.sh
+ARG APP_BIN=fracture_cms-cli
+COPY --from=builder /app/target/release/${APP_BIN} ./app-cli
 
-# Copy runtime assets
+# Config and assets as fallback (overridden by volume mount in production)
 COPY config/ ./config/
 COPY assets/ ./assets/
 
-# Data directory (may be mounted as volume)
+# Data directory for SQLite
 RUN mkdir -p /app/data && chown appuser:appuser /app/data
 VOLUME /app/data
 
@@ -47,4 +46,4 @@ EXPOSE 5150
 
 ENV LOCO_ENV=production
 
-ENTRYPOINT ["./entrypoint-prod.sh"]
+CMD ["./app-cli", "start"]

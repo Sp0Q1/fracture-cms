@@ -3,6 +3,10 @@ on:
   push:
     tags: ['v*']
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   ci:
     uses: ./.github/workflows/ci.yaml
