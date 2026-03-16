@@ -309,8 +309,22 @@ fn cmd_up() {
         eprintln!("Error: compose.prod.yaml not found. Run: fracture-ctl init --image <image>");
         std::process::exit(1);
     }
+    // Pull latest image before starting
+    eprintln!("Pulling latest image...");
+    let _ = Command::new("podman")
+        .args(["compose", "-f", "compose.prod.yaml", "pull", "app"])
+        .status();
+    // Force recreate to use the new image
     let status = Command::new("podman")
-        .args(["compose", "-f", "compose.prod.yaml", "up", "-d", "app"])
+        .args([
+            "compose",
+            "-f",
+            "compose.prod.yaml",
+            "up",
+            "-d",
+            "--force-recreate",
+            "app",
+        ])
         .status()
         .expect("failed to run podman compose");
     std::process::exit(status.code().unwrap_or(1));
