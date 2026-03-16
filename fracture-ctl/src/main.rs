@@ -22,6 +22,10 @@ enum Commands {
         #[arg(long)]
         image: Option<String>,
 
+        /// Git repo to clone for assets and config (e.g. https://github.com/Sp0Q1/fracture-pt.git)
+        #[arg(long)]
+        repo: Option<String>,
+
         /// Generate development config instead of production
         #[arg(long)]
         dev: bool,
@@ -193,7 +197,7 @@ fn cmd_update() {
     eprintln!("Updated to {latest_version}");
 }
 
-fn cmd_init(image: Option<String>, dev: bool) {
+fn cmd_init(image: Option<String>, repo: Option<String>, dev: bool) {
     if dev {
         let jwt_secret = generate_secret(32);
         println!(
@@ -271,6 +275,8 @@ services:
       - "127.0.0.1:${{APP_PORT:-5150}}:5150"
     volumes:
       - app_data:/app/data
+      - ./assets:/app/assets:ro
+      - ./config:/app/config:ro
     env_file:
       - .env.prod
     environment:
@@ -298,9 +304,39 @@ volumes:
 
     fs::write("compose.prod.yaml", &compose_content).expect("failed to write compose.prod.yaml");
 
+    // Clone repo for assets and config if --repo provided
+    if let Some(repo_url) = repo {
+        if !std::path::Path::new("assets").exists() {
+            eprintln!("Cloning assets from {repo_url}...");
+            let status = Command::new("git")
+                .args(["clone", "--depth", "1", "--filter=blob:none", "--sparse", &repo_url, ".repo-tmp"])
+                .status()
+                .expect("failed to run git clone");
+            if status.success() {
+                let _ = Command::new("git")
+                    .args(["-C", ".repo-tmp", "sparse-checkout", "set", "assets", "config"])
+                    .status();
+                let _ = fs::rename(".repo-tmp/assets", "assets");
+                let _ = fs::rename(".repo-tmp/config", "config");
+                let _ = fs::remove_dir_all(".repo-tmp");
+                eprintln!("  assets/ and config/ ready.");
+            } else {
+                eprintln!("Warning: git clone failed. Create assets/ and config/ manually.");
+            }
+        } else {
+            eprintln!("  assets/ already exists, skipping clone.");
+        }
+    }
+
     eprintln!("Created:");
     eprintln!("  .env.prod          (chmod 600)");
     eprintln!("  compose.prod.yaml");
+    if !std::path::Path::new("assets").exists() {
+        eprintln!();
+        eprintln!("  Assets not found. Either:");
+        eprintln!("    fracture-ctl init --image <image> --repo <git-url>");
+        eprintln!("    git clone <repo> && cp -r <repo>/assets <repo>/config .");
+    }
     eprintln!();
     eprintln!("Next:");
     eprintln!("  vim .env.prod                                # configure OIDC, SMTP, etc.");
@@ -312,6 +348,19 @@ fn cmd_up() {
         eprintln!("Error: compose.prod.yaml not found. Run: fracture-ctl init --image <image>");
         std::process::exit(1);
     }
+    // Check for aardvark-dns
+    if Command::new("which")
+        .arg("aardvark-dns")
+        .stdout(std::process::Stdio::null())
+        .status()
+        .map(|s| !s.success())
+        .unwrap_or(true)
+    {
+        eprintln!("WARNING: aardvark-dns is not installed. Containers will not be able to");
+        eprintln!("  resolve external hostnames. Install it with: sudo apt install aardvark-dns");
+        eprintln!();
+    }
+
     // Pull latest image before starting
     eprintln!("Pulling latest image...");
     let _ = Command::new("podman")
@@ -407,7 +456,7 @@ fn main() {
     }
 
     match cli.command {
-        Commands::Init { image, dev } => cmd_init(image, dev),
+        Commands::Init { image, repo, dev } => cmd_init(image, repo, dev),
         Commands::Up => cmd_up(),
         Commands::Down => cmd_down(),
         Commands::Ci => cmd_ci(),
