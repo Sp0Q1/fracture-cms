@@ -274,17 +274,6 @@ services:
     environment:
       LOCO_ENV: production
       SERVER_BINDING: 0.0.0.0
-      DATABASE_URL: ${{DATABASE_URL:-sqlite:///app/data/app.sqlite?mode=rwc}}
-      OIDC_ISSUER_URL: ${{OIDC_ISSUER_URL:-}}
-      OIDC_CLIENT_ID: ${{OIDC_CLIENT_ID:-}}
-      OIDC_CLIENT_SECRET: ${{OIDC_CLIENT_SECRET:-}}
-      OIDC_PROJECT_ID: ${{OIDC_PROJECT_ID:-}}
-      OIDC_REDIRECT_URI: ${{OIDC_REDIRECT_URI:-}}
-      OIDC_POST_LOGOUT_REDIRECT_URI: ${{OIDC_POST_LOGOUT_REDIRECT_URI:-}}
-      MAILER_HOST: ${{MAILER_HOST:-}}
-      MAILER_PORT: ${{MAILER_PORT:-587}}
-      MAILER_USER: ${{MAILER_USER:-}}
-      MAILER_PASSWORD: ${{MAILER_PASSWORD:-}}
 
 volumes:
   db_data:
