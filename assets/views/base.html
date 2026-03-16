@@ -4,12 +4,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Fracture CMS — Secure content management built with Rust, featuring OIDC single sign-on.">
+  <meta name="description" content="{% block meta_description %}{% endblock meta_description %}">
   <title>{% block title %}{% endblock title %}</title>
+  {% block canonical %}{% endblock canonical %}
+  {% block og_tags %}{% endblock og_tags %}
+  {% block structured_data %}{% endblock structured_data %}
   <link rel="stylesheet" href="/static/oat.min.css" integrity="sha384-Q7tDn81qF6GoBv+Rdj5l6JFr2qaiXG01Z5dT8jRpp5lE+6IZx8as9X/Igi7ISdBP" crossorigin="anonymous">
+  {% block stylesheets %}
   <link rel="stylesheet" href="/static/app.css">
+  {% endblock stylesheets %}
   {% block head %}
-
   {% endblock head %}
 </head>
 
@@ -18,10 +22,12 @@
     <nav data-topnav aria-label="Main navigation">
         <span>
             <a href="/" class="brand">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 26" fill="none" stroke="#62cb98" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                {% block brand_icon %}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="brand-shield">
                     <path d="M12 2L3 7v6c0 5.25 3.75 10.14 9 11.43C17.25 23.14 21 18.25 21 13V7l-9-5z"/>
                 </svg>
-                <strong class="gradient-text">Fracture CMS</strong>
+                {% endblock brand_icon %}
+                <strong class="gradient-text">{% block brand_name %}Fracture CMS{% endblock brand_name %}</strong>
             </a>
         </span>
         <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle menu" aria-expanded="false">
@@ -46,27 +52,34 @@
                 <a href="/orgs" role="menuitem">Manage Organizations</a>
             </div>
         </ot-dropdown>
+        {% block nav_authenticated %}
+        {% endblock nav_authenticated %}
+        {% else %}
+        {% block nav_guest %}
+        {% endblock nav_guest %}
         {% endif %}
-        <span><a href="/projects">Projects</a></span>
         <ot-dropdown class="nav-end">
             {% if user_name %}
             <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">
                 <span class="user-avatar">{{ user_name | truncate(length=1, end="") | upper }}</span>
             </button>
             {% else %}
+            {% block nav_auth_buttons %}
             <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">
                 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="8" r="4"/>
                     <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
                 </svg>
             </button>
+            {% endblock nav_auth_buttons %}
             {% endif %}
             <div id="account-menu" popover>
                 {% if user_name %}
                 <span role="menuitem">{{ user_name }}</span>
                 <hr>
-                <a href="/projects" role="menuitem">Projects</a>
+                {% block account_menu_items %}
                 <a href="/orgs" role="menuitem">Organizations</a>
+                {% endblock account_menu_items %}
                 <a href="/api/auth/oidc/logout" role="menuitem">Sign out</a>
                 {% else %}
                 <a href="/api/auth/oidc/authorize" role="menuitem">Sign in / Create account</a>
@@ -74,43 +87,30 @@
             </div>
         </ot-dropdown>
     </nav>
-    <main id="main-content" class="container">
-        {% block page_title_block %}
-        {% endblock page_title_block %}
+    <main id="main-content">
         {% block content %}
         {% endblock content %}
     </main>
     <footer class="site-footer" role="contentinfo">
+        {% block footer %}
         <div class="footer-grid">
             <div class="footer-brand">
-                <strong class="gradient-text">Fracture CMS</strong>
-                <p>Secure content management built with Rust and enterprise-grade authentication.</p>
+                <strong class="gradient-text">{% block footer_brand %}Fracture CMS{% endblock footer_brand %}</strong>
+                <p>{% block footer_tagline %}Secure content management built with Rust.{% endblock footer_tagline %}</p>
             </div>
-            <div class="footer-col">
-                <h4>Navigation</h4>
-                <ul>
-                    <li><a href="/">Home</a></li>
-                    <li><a href="/projects">Projects</a></li>
-                    <li><a href="/orgs">Organizations</a></li>
-                </ul>
-            </div>
-            <div class="footer-col">
-                <h4>Built With</h4>
-                <ul>
-                    <li>Rust + Loco</li>
-                    <li>OIDC SSO</li>
-                    <li>SQLite</li>
-                </ul>
-            </div>
+            {% block footer_columns %}
+            {% endblock footer_columns %}
         </div>
         <div class="footer-bottom">
-            Fracture CMS — Built with Loco in Rust
+            {% block footer_bottom %}{% endblock footer_bottom %}
         </div>
+        {% endblock footer %}
     </footer>
   <script src="/static/oat.min.js" integrity="sha384-/Trl5iuXWQS6d7T9TWGsfbC7cIDm88CDZc+BdI3LCdclFglQVOz7AmU+M7R5IQE/" crossorigin="anonymous"></script>
-  <script src="/static/app.js?v=3"></script>
+  {% block scripts %}
+  <script src="/static/app.js"></script>
+  {% endblock scripts %}
   {% block js %}
-
   {% endblock js %}
 </body>
 
