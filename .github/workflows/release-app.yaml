@@ -68,6 +68,8 @@ jobs:
           context: .
           file: ${{ inputs.containerfile }}
           no-cache: true
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
           push: true
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
