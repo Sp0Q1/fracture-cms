@@ -67,6 +67,7 @@ jobs:
         with:
           context: .
           file: ${{ inputs.containerfile }}
+          no-cache: true
           push: true
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
