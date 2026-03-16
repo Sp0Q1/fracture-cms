@@ -14,15 +14,20 @@ use crate::controllers::oidc_state::{OidcContext, OidcStateStore};
 
 #[derive(Debug, Deserialize)]
 struct OidcConfig {
-    provider_name: String,
-    issuer_url: String,
-    client_id: String,
-    client_secret: String,
-    redirect_uri: String,
     #[serde(default)]
-    project_id: String,
+    provider_name: Option<String>,
     #[serde(default)]
-    post_logout_redirect_uri: String,
+    issuer_url: Option<String>,
+    #[serde(default)]
+    client_id: Option<String>,
+    #[serde(default)]
+    client_secret: Option<String>,
+    #[serde(default)]
+    redirect_uri: Option<String>,
+    #[serde(default)]
+    project_id: Option<String>,
+    #[serde(default)]
+    post_logout_redirect_uri: Option<String>,
     #[serde(default = "default_scopes")]
     scopes: Vec<String>,
 }
@@ -54,25 +59,32 @@ async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
         return Ok(router);
     };
 
-    if config.client_id.is_empty() || config.issuer_url.is_empty() {
+    let client_id = config.client_id.unwrap_or_default();
+    let issuer_url = config.issuer_url.unwrap_or_default();
+    let client_secret = config.client_secret.unwrap_or_default();
+    let redirect_uri = config.redirect_uri.unwrap_or_default();
+    let provider_name = config.provider_name.unwrap_or_default();
+    let post_logout_redirect_uri = config.post_logout_redirect_uri.unwrap_or_default();
+
+    if client_id.is_empty() || issuer_url.is_empty() {
         tracing::warn!(
             "OIDC not configured — client_id or issuer_url is empty. Authentication disabled."
         );
         return Ok(router);
     }
 
-    if config.client_secret.is_empty() {
+    if client_secret.is_empty() {
         tracing::warn!("OIDC not configured — client_secret is empty. Authentication disabled.");
         return Ok(router);
     }
 
     tracing::info!(
-        provider = %config.provider_name,
-        issuer = %config.issuer_url,
+        provider = %provider_name,
+        issuer = %issuer_url,
         "Initializing OIDC provider"
     );
 
-    let issuer_url = IssuerUrl::new(config.issuer_url.clone())
+    let issuer_url_parsed = IssuerUrl::new(issuer_url.clone())
         .map_err(|e| loco_rs::Error::Message(format!("Invalid issuer URL: {e}")))?;
 
     let http_client = reqwest::Client::builder()
@@ -83,7 +95,7 @@ async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
     // discover_async fetches the discovery document AND pre-caches JWKS
     // keys (needed for ID token signature verification in the callback).
     let provider_metadata =
-        match CoreProviderMetadata::discover_async(issuer_url, &http_client).await {
+        match CoreProviderMetadata::discover_async(issuer_url_parsed, &http_client).await {
             Ok(m) => m,
             Err(e) => {
                 tracing::warn!(
@@ -98,7 +110,7 @@ async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
     // doesn't expose it.  The IdP is guaranteed reachable at this point.
     let discovery_url = format!(
         "{}/.well-known/openid-configuration",
-        config.issuer_url.trim_end_matches('/')
+        issuer_url.trim_end_matches('/')
     );
     let (end_session_url, jwks_uri) = if let Ok(resp) = http_client.get(&discovery_url).send().await
     {
@@ -132,27 +144,27 @@ async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
         "OIDC end_session_endpoint discovery"
     );
 
-    let client_id_str = config.client_id.clone();
-    let issuer_url_str = config.issuer_url.clone();
+    let client_id_str = client_id.clone();
+    let issuer_url_str = issuer_url.clone();
 
     let client = CoreClient::from_provider_metadata(
         provider_metadata,
-        ClientId::new(config.client_id),
-        Some(ClientSecret::new(config.client_secret)),
+        ClientId::new(client_id),
+        Some(ClientSecret::new(client_secret)),
     )
     .set_redirect_uri(
-        RedirectUrl::new(config.redirect_uri)
+        RedirectUrl::new(redirect_uri)
             .map_err(|e| loco_rs::Error::Message(format!("Invalid redirect URI: {e}")))?,
     );
 
     let oidc_ctx = OidcContext {
         client,
         state_store: OidcStateStore::new(),
-        provider_name: config.provider_name,
-        project_id: config.project_id,
+        provider_name,
+        project_id: config.project_id.unwrap_or_default(),
         scopes: config.scopes,
         end_session_url,
-        post_logout_redirect_uri: config.post_logout_redirect_uri,
+        post_logout_redirect_uri,
         issuer_url: issuer_url_str,
         client_id: client_id_str,
         jwks_uri,
