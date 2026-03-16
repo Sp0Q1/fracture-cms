@@ -264,6 +264,9 @@ services:
   app:
     image: ${{APP_IMAGE:-{image_name}}}
     restart: unless-stopped
+    dns:
+      - 9.9.9.9
+      - 149.112.112.112
     ports:
       - "127.0.0.1:${{APP_PORT:-5150}}:5150"
     volumes:
