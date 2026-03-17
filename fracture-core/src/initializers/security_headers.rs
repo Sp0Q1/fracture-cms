@@ -48,6 +48,12 @@ async fn set_security_headers(
             .parse()
             .expect("valid header value"),
     );
+    headers.insert(
+        axum::http::header::HeaderName::from_static("permissions-policy"),
+        "camera=(), microphone=(), geolocation=()"
+            .parse()
+            .expect("valid header value"),
+    );
     response
 }
 
