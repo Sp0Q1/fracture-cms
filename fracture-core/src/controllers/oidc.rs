@@ -128,7 +128,10 @@ async fn callback(
             // Zitadel includes the project ID in the aud claim alongside the client ID.
             let ok = aud.as_str() == expected_project_id;
             if !ok {
-                eprintln!("[OIDC] Audience rejected: got={} expected={expected_project_id:?}", aud.as_str());
+                eprintln!(
+                    "[OIDC] Audience rejected: got={} expected={expected_project_id:?}",
+                    aud.as_str()
+                );
             }
             ok
         });
