@@ -45,17 +45,17 @@ pub struct OidcInitializer;
 #[allow(clippy::too_many_lines)]
 async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
     let Some(settings) = ctx.config.settings.as_ref() else {
-        tracing::warn!("OIDC not configured — no settings section. Authentication disabled.");
+        eprintln!("[OIDC] No settings section. Authentication disabled.");
         return Ok(router);
     };
 
     let Some(oidc_value) = settings.get("oidc") else {
-        tracing::warn!("OIDC not configured — no oidc settings. Authentication disabled.");
+        eprintln!("[OIDC] No oidc settings found. Authentication disabled.");
         return Ok(router);
     };
 
     let Ok(config) = serde_json::from_value::<OidcConfig>(oidc_value.clone()) else {
-        tracing::warn!("OIDC not configured — failed to parse config. Authentication disabled.");
+        eprintln!("[OIDC] Failed to parse config. Authentication disabled.");
         return Ok(router);
     };
 
@@ -67,22 +67,16 @@ async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
     let post_logout_redirect_uri = config.post_logout_redirect_uri.unwrap_or_default();
 
     if client_id.is_empty() || issuer_url.is_empty() {
-        tracing::warn!(
-            "OIDC not configured — client_id or issuer_url is empty. Authentication disabled."
-        );
+        eprintln!("[OIDC] client_id or issuer_url is empty. Authentication disabled.");
         return Ok(router);
     }
 
     if client_secret.is_empty() {
-        tracing::warn!("OIDC not configured — client_secret is empty. Authentication disabled.");
+        eprintln!("[OIDC] client_secret is empty. Authentication disabled.");
         return Ok(router);
     }
 
-    tracing::info!(
-        provider = %provider_name,
-        issuer = %issuer_url,
-        "Initializing OIDC provider"
-    );
+    eprintln!("[OIDC] Initializing provider={provider_name} issuer={issuer_url}");
 
     let issuer_url_parsed = IssuerUrl::new(issuer_url.clone())
         .map_err(|e| loco_rs::Error::Message(format!("Invalid issuer URL: {e}")))?;
@@ -98,9 +92,7 @@ async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
         match CoreProviderMetadata::discover_async(issuer_url_parsed, &http_client).await {
             Ok(m) => m,
             Err(e) => {
-                tracing::warn!(
-                    "OIDC discovery failed (IdP unreachable?): {e}. Authentication disabled."
-                );
+                eprintln!("[OIDC] Discovery failed: {e}. Authentication disabled.");
                 return Ok(router);
             }
         };
@@ -184,7 +176,7 @@ impl Initializer for OidcInitializer {
         match setup_oidc(ctx, router.clone()).await {
             Ok(router) => Ok(router),
             Err(e) => {
-                tracing::warn!("OIDC initialization failed: {e}. Authentication disabled.");
+                eprintln!("[OIDC] Initialization failed: {e}. Authentication disabled.");
                 Ok(router)
             }
         }
