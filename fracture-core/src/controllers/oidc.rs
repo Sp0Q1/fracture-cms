@@ -120,13 +120,17 @@ async fn callback(
         .ok_or_else(|| loco_rs::Error::Message("No ID token in response".to_string()))?;
 
     let expected_project_id = oidc.project_id.clone();
+    eprintln!("[OIDC] Audience verifier: project_id={expected_project_id:?}");
     let verifier = oidc
         .client
         .id_token_verifier()
         .set_other_audience_verifier_fn(move |aud| {
             // Zitadel includes the project ID in the aud claim alongside the client ID.
-            // Only accept our own project ID as an additional audience.
-            aud.as_str() == expected_project_id
+            let ok = aud.as_str() == expected_project_id;
+            if !ok {
+                eprintln!("[OIDC] Audience rejected: got={} expected={expected_project_id:?}", aud.as_str());
+            }
+            ok
         });
     let claims = id_token
         .claims(&verifier, &pending.nonce)
