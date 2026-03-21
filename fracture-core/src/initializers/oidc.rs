@@ -76,7 +76,7 @@ async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
         return Ok(router);
     }
 
-    eprintln!("[OIDC] Initializing provider={provider_name} issuer={issuer_url}");
+    tracing::info!(provider = %provider_name, issuer = %issuer_url, "OIDC provider initializing");
 
     let issuer_url_parsed = IssuerUrl::new(issuer_url.clone())
         .map_err(|e| loco_rs::Error::Message(format!("Invalid issuer URL: {e}")))?;
