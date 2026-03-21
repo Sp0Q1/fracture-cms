@@ -83,7 +83,18 @@ pub async fn create(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
 
-    let slug = slug::slugify(&params.name);
+    let base_slug = slug::slugify(&params.name);
+    let mut slug = base_slug.clone();
+    let mut suffix = 1u32;
+    while organizations::Entity::find()
+        .filter(organizations::Column::Slug.eq(&slug))
+        .one(&ctx.db)
+        .await?
+        .is_some()
+    {
+        suffix += 1;
+        slug = format!("{base_slug}-{suffix}");
+    }
     let org = organizations::ActiveModel {
         name: sea_orm::ActiveValue::Set(params.name),
         slug: sea_orm::ActiveValue::Set(slug),
