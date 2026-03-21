@@ -120,7 +120,6 @@ async fn callback(
         .ok_or_else(|| loco_rs::Error::Message("No ID token in response".to_string()))?;
 
     let expected_project_id = oidc.project_id.clone();
-    eprintln!("[OIDC] Audience verifier: project_id={expected_project_id:?}");
     let verifier = oidc
         .client
         .id_token_verifier()
