@@ -93,16 +93,17 @@ impl Model {
             .await
         {
             Ok(ids) => {
-                tracing::debug!(user_id, count = ids.len(), "org_members lookup");
+                tracing::info!(user_id, ?ids, "find_orgs_for_user: org_member ids");
                 ids
             }
             Err(e) => {
-                tracing::error!(user_id, error = %e, "failed to query org_members");
+                tracing::error!(user_id, error = %e, "find_orgs_for_user: org_members query failed");
                 return vec![];
             }
         };
 
         if org_ids.is_empty() {
+            tracing::info!(user_id, "find_orgs_for_user: no memberships found");
             return vec![];
         }
 
@@ -112,9 +113,12 @@ impl Model {
             .all(db)
             .await
         {
-            Ok(orgs) => orgs,
+            Ok(orgs) => {
+                tracing::info!(user_id, count = orgs.len(), "find_orgs_for_user: result");
+                orgs
+            }
             Err(e) => {
-                tracing::error!(user_id, error = %e, "failed to query organizations");
+                tracing::error!(user_id, error = %e, "find_orgs_for_user: org query failed");
                 vec![]
             }
         }
