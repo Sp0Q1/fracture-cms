@@ -80,12 +80,10 @@ impl Model {
 
     /// Finds all organizations a user belongs to.
     ///
-    /// Uses a two-step query (subquery for org IDs, then fetch orgs) to avoid
-    /// a `SeaORM` + `SQLite` join bug where UUID columns lose type metadata and
-    /// fail to decode (expected 16 bytes binary, got 36 bytes text).
+    /// Uses `into_json()` because `SeaORM` cannot decode UUID text columns
+    /// (36 bytes) in `SQLite` via the typed `.all()` — it expects 16-byte
+    /// binary blobs. `into_json()` handles both formats.
     pub async fn find_orgs_for_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
-        eprintln!("[ORG] find_orgs_for_user called for user_id={user_id}");
-
         let org_ids: Vec<i32> = match org_members::Entity::find()
             .filter(org_members::Column::UserId.eq(user_id))
             .select_only()
@@ -94,36 +92,52 @@ impl Model {
             .all(db)
             .await
         {
-            Ok(ids) => {
-                eprintln!("[ORG] user_id={user_id} org_ids={ids:?}");
-                ids
-            }
-            Err(e) => {
-                eprintln!("[ORG] org_members query FAILED for user_id={user_id}: {e}");
-                return vec![];
-            }
+            Ok(ids) => ids,
+            Err(_) => return vec![],
         };
 
         if org_ids.is_empty() {
-            eprintln!("[ORG] no memberships for user_id={user_id}");
             return vec![];
         }
 
-        match Entity::find()
+        let json_rows: Vec<serde_json::Value> = match Entity::find()
             .filter(Column::Id.is_in(org_ids))
             .order_by_asc(Column::Name)
+            .into_json()
             .all(db)
             .await
         {
-            Ok(orgs) => {
-                eprintln!("[ORG] found {} orgs for user_id={user_id}", orgs.len());
-                orgs
-            }
-            Err(e) => {
-                eprintln!("[ORG] org query FAILED for user_id={user_id}: {e}");
-                vec![]
-            }
-        }
+            Ok(rows) => rows,
+            Err(_) => return vec![],
+        };
+
+        json_rows
+            .into_iter()
+            .filter_map(|row| {
+                let created_str = row.get("created_at")?.as_str()?;
+                let updated_str = row.get("updated_at")?.as_str()?;
+                // SQLite returns bare datetime; append UTC offset for parsing
+                let created_at = chrono::DateTime::parse_from_str(
+                    &format!("{created_str} +00:00"),
+                    "%Y-%m-%d %H:%M:%S %z",
+                )
+                .ok()?;
+                let updated_at = chrono::DateTime::parse_from_str(
+                    &format!("{updated_str} +00:00"),
+                    "%Y-%m-%d %H:%M:%S %z",
+                )
+                .ok()?;
+                Some(Model {
+                    id: row.get("id")?.as_i64()? as i32,
+                    pid: Uuid::parse_str(row.get("pid")?.as_str()?).ok()?,
+                    name: row.get("name")?.as_str()?.to_string(),
+                    slug: row.get("slug")?.as_str()?.to_string(),
+                    is_personal: row.get("is_personal")?.as_bool()?,
+                    created_at: created_at.into(),
+                    updated_at: updated_at.into(),
+                })
+            })
+            .collect()
     }
 }
 
