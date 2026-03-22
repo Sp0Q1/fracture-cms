@@ -92,7 +92,10 @@ impl Model {
             .all(db)
             .await
         {
-            Ok(ids) => ids,
+            Ok(ids) => {
+                tracing::debug!(user_id, count = ids.len(), "org_members lookup");
+                ids
+            }
             Err(e) => {
                 tracing::error!(user_id, error = %e, "failed to query org_members");
                 return vec![];
@@ -103,12 +106,18 @@ impl Model {
             return vec![];
         }
 
-        Entity::find()
+        match Entity::find()
             .filter(Column::Id.is_in(org_ids))
             .order_by_asc(Column::Name)
             .all(db)
             .await
-            .unwrap_or_default()
+        {
+            Ok(orgs) => orgs,
+            Err(e) => {
+                tracing::error!(user_id, error = %e, "failed to query organizations");
+                vec![]
+            }
+        }
     }
 }
 
