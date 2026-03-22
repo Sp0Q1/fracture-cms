@@ -84,6 +84,8 @@ impl Model {
     /// a `SeaORM` + `SQLite` join bug where UUID columns lose type metadata and
     /// fail to decode (expected 16 bytes binary, got 36 bytes text).
     pub async fn find_orgs_for_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
+        eprintln!("[ORG] find_orgs_for_user called for user_id={user_id}");
+
         let org_ids: Vec<i32> = match org_members::Entity::find()
             .filter(org_members::Column::UserId.eq(user_id))
             .select_only()
@@ -93,17 +95,17 @@ impl Model {
             .await
         {
             Ok(ids) => {
-                tracing::info!(user_id, ?ids, "find_orgs_for_user: org_member ids");
+                eprintln!("[ORG] user_id={user_id} org_ids={ids:?}");
                 ids
             }
             Err(e) => {
-                tracing::error!(user_id, error = %e, "find_orgs_for_user: org_members query failed");
+                eprintln!("[ORG] org_members query FAILED for user_id={user_id}: {e}");
                 return vec![];
             }
         };
 
         if org_ids.is_empty() {
-            tracing::info!(user_id, "find_orgs_for_user: no memberships found");
+            eprintln!("[ORG] no memberships for user_id={user_id}");
             return vec![];
         }
 
@@ -114,11 +116,11 @@ impl Model {
             .await
         {
             Ok(orgs) => {
-                tracing::info!(user_id, count = orgs.len(), "find_orgs_for_user: result");
+                eprintln!("[ORG] found {} orgs for user_id={user_id}", orgs.len());
                 orgs
             }
             Err(e) => {
-                tracing::error!(user_id, error = %e, "find_orgs_for_user: org query failed");
+                eprintln!("[ORG] org query FAILED for user_id={user_id}: {e}");
                 vec![]
             }
         }
