@@ -30,8 +30,10 @@
 }
 
 /* --- Layout --- */
-main.container {
-    padding-top: calc(var(--topnav-height) + 2rem);
+/* Fixed nav offset — OatCSS handles this natively inside
+   [data-sidebar-layout], but we use a plain body>main layout. */
+body:has(nav[data-topnav]) > main {
+    margin-block-start: var(--topnav-height);
 }
 
 /* --- Nav --- */
