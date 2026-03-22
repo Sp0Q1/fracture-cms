@@ -59,23 +59,49 @@ impl Model {
 
     /// Finds an organization by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
-        Entity::find()
-            .filter(Column::Pid.eq(uuid))
+        Uuid::parse_str(pid).ok()?;
+        // Use into_json() to avoid SeaORM UUID text decode issues on SQLite
+        let row = Entity::find()
+            .filter(Column::Pid.eq(pid))
+            .into_json()
             .one(db)
             .await
             .ok()
-            .flatten()
+            .flatten()?;
+        Self::from_json_row(&row)
     }
 
     /// Finds an organization by slug.
     pub async fn find_by_slug(db: &DatabaseConnection, slug: &str) -> Option<Self> {
-        Entity::find()
+        let row = Entity::find()
             .filter(Column::Slug.eq(slug))
+            .into_json()
             .one(db)
             .await
             .ok()
-            .flatten()
+            .flatten()?;
+        Self::from_json_row(&row)
+    }
+
+    /// Converts a JSON row to a Model, handling SQLite UUID text format.
+    fn from_json_row(row: &serde_json::Value) -> Option<Self> {
+        let created_str = row.get("created_at")?.as_str()?;
+        let updated_str = row.get("updated_at")?.as_str()?;
+        let created_at =
+            chrono::DateTime::parse_from_str(&format!("{created_str} +00:00"), "%Y-%m-%d %H:%M:%S %z")
+                .ok()?;
+        let updated_at =
+            chrono::DateTime::parse_from_str(&format!("{updated_str} +00:00"), "%Y-%m-%d %H:%M:%S %z")
+                .ok()?;
+        Some(Self {
+            id: row.get("id")?.as_i64()? as i32,
+            pid: Uuid::parse_str(row.get("pid")?.as_str()?).ok()?,
+            name: row.get("name")?.as_str()?.to_string(),
+            slug: row.get("slug")?.as_str()?.to_string(),
+            is_personal: row.get("is_personal")?.as_bool()?,
+            created_at: created_at.into(),
+            updated_at: updated_at.into(),
+        })
     }
 
     /// Finds all organizations a user belongs to.
@@ -113,30 +139,7 @@ impl Model {
 
         json_rows
             .into_iter()
-            .filter_map(|row| {
-                let created_str = row.get("created_at")?.as_str()?;
-                let updated_str = row.get("updated_at")?.as_str()?;
-                // SQLite returns bare datetime; append UTC offset for parsing
-                let created_at = chrono::DateTime::parse_from_str(
-                    &format!("{created_str} +00:00"),
-                    "%Y-%m-%d %H:%M:%S %z",
-                )
-                .ok()?;
-                let updated_at = chrono::DateTime::parse_from_str(
-                    &format!("{updated_str} +00:00"),
-                    "%Y-%m-%d %H:%M:%S %z",
-                )
-                .ok()?;
-                Some(Model {
-                    id: row.get("id")?.as_i64()? as i32,
-                    pid: Uuid::parse_str(row.get("pid")?.as_str()?).ok()?,
-                    name: row.get("name")?.as_str()?.to_string(),
-                    slug: row.get("slug")?.as_str()?.to_string(),
-                    is_personal: row.get("is_personal")?.as_bool()?,
-                    created_at: created_at.into(),
-                    updated_at: updated_at.into(),
-                })
-            })
+            .filter_map(|row| Self::from_json_row(&row))
             .collect()
     }
 }
