@@ -81,7 +81,7 @@ impl Model {
     /// Finds all organizations a user belongs to.
     ///
     /// Uses a two-step query (subquery for org IDs, then fetch orgs) to avoid
-    /// a SeaORM + SQLite join bug where UUID columns lose type metadata and
+    /// a `SeaORM` + `SQLite` join bug where UUID columns lose type metadata and
     /// fail to decode (expected 16 bytes binary, got 36 bytes text).
     pub async fn find_orgs_for_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
         let org_ids: Vec<i32> = match org_members::Entity::find()
