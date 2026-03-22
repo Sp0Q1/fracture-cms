@@ -59,13 +59,27 @@ impl Model {
 
     /// Finds an organization by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
-        Entity::find()
+        let uuid = match Uuid::parse_str(pid) {
+            Ok(u) => u,
+            Err(e) => {
+                eprintln!("[ORG] find_by_pid: invalid UUID '{pid}': {e}");
+                return None;
+            }
+        };
+        match Entity::find()
             .filter(Column::Pid.eq(uuid))
             .one(db)
             .await
-            .ok()
-            .flatten()
+        {
+            Ok(result) => {
+                eprintln!("[ORG] find_by_pid('{pid}'): found={}", result.is_some());
+                result
+            }
+            Err(e) => {
+                eprintln!("[ORG] find_by_pid('{pid}') FAILED: {e}");
+                None
+            }
+        }
     }
 
     /// Finds an organization by slug.
@@ -80,13 +94,38 @@ impl Model {
 
     /// Finds all organizations a user belongs to.
     pub async fn find_orgs_for_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
-        Entity::find()
+        eprintln!("[ORG] find_orgs_for_user called for user_id={user_id}");
+
+        // Debug: check if any org_members rows exist for this user
+        match org_members::Entity::find()
+            .filter(org_members::Column::UserId.eq(user_id))
+            .all(db)
+            .await
+        {
+            Ok(members) => eprintln!(
+                "[ORG] user_id={user_id} has {} org_member rows: {:?}",
+                members.len(),
+                members.iter().map(|m| (m.org_id, &m.role)).collect::<Vec<_>>()
+            ),
+            Err(e) => eprintln!("[ORG] org_members query failed: {e}"),
+        }
+
+        match Entity::find()
             .inner_join(org_members::Entity)
             .filter(org_members::Column::UserId.eq(user_id))
             .order_by_asc(Column::Name)
             .all(db)
             .await
-            .unwrap_or_default()
+        {
+            Ok(orgs) => {
+                eprintln!("[ORG] find_orgs_for_user returned {} orgs for user_id={user_id}", orgs.len());
+                orgs
+            }
+            Err(e) => {
+                eprintln!("[ORG] find_orgs_for_user FAILED for user_id={user_id}: {e}");
+                vec![]
+            }
+        }
     }
 }
 
