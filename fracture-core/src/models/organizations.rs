@@ -66,11 +66,7 @@ impl Model {
                 return None;
             }
         };
-        match Entity::find()
-            .filter(Column::Pid.eq(uuid))
-            .one(db)
-            .await
-        {
+        match Entity::find().filter(Column::Pid.eq(uuid)).one(db).await {
             Ok(result) => {
                 eprintln!("[ORG] find_by_pid('{pid}'): found={}", result.is_some());
                 result
@@ -105,7 +101,10 @@ impl Model {
             Ok(members) => eprintln!(
                 "[ORG] user_id={user_id} has {} org_member rows: {:?}",
                 members.len(),
-                members.iter().map(|m| (m.org_id, &m.role)).collect::<Vec<_>>()
+                members
+                    .iter()
+                    .map(|m| (m.org_id, &m.role))
+                    .collect::<Vec<_>>()
             ),
             Err(e) => eprintln!("[ORG] org_members query failed: {e}"),
         }
@@ -118,7 +117,10 @@ impl Model {
             .await
         {
             Ok(orgs) => {
-                eprintln!("[ORG] find_orgs_for_user returned {} orgs for user_id={user_id}", orgs.len());
+                eprintln!(
+                    "[ORG] find_orgs_for_user returned {} orgs for user_id={user_id}",
+                    orgs.len()
+                );
                 orgs
             }
             Err(e) => {
