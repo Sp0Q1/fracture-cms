@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{QueryOrder, TransactionTrait};
+use sea_orm::{QueryOrder, QuerySelect, TransactionTrait};
 
 use super::_entities::org_members;
 pub use super::_entities::organizations::{ActiveModel, Column, Entity, Model};
@@ -59,23 +59,13 @@ impl Model {
 
     /// Finds an organization by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = match Uuid::parse_str(pid) {
-            Ok(u) => u,
-            Err(e) => {
-                eprintln!("[ORG] find_by_pid: invalid UUID '{pid}': {e}");
-                return None;
-            }
-        };
-        match Entity::find().filter(Column::Pid.eq(uuid)).one(db).await {
-            Ok(result) => {
-                eprintln!("[ORG] find_by_pid('{pid}'): found={}", result.is_some());
-                result
-            }
-            Err(e) => {
-                eprintln!("[ORG] find_by_pid('{pid}') FAILED: {e}");
-                None
-            }
-        }
+        let uuid = Uuid::parse_str(pid).ok()?;
+        Entity::find()
+            .filter(Column::Pid.eq(uuid))
+            .one(db)
+            .await
+            .ok()
+            .flatten()
     }
 
     /// Finds an organization by slug.
@@ -89,45 +79,36 @@ impl Model {
     }
 
     /// Finds all organizations a user belongs to.
+    ///
+    /// Uses a two-step query (subquery for org IDs, then fetch orgs) to avoid
+    /// a SeaORM + SQLite join bug where UUID columns lose type metadata and
+    /// fail to decode (expected 16 bytes binary, got 36 bytes text).
     pub async fn find_orgs_for_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
-        eprintln!("[ORG] find_orgs_for_user called for user_id={user_id}");
-
-        // Debug: check if any org_members rows exist for this user
-        match org_members::Entity::find()
+        let org_ids: Vec<i32> = match org_members::Entity::find()
             .filter(org_members::Column::UserId.eq(user_id))
+            .select_only()
+            .column(org_members::Column::OrgId)
+            .into_tuple()
             .all(db)
             .await
         {
-            Ok(members) => eprintln!(
-                "[ORG] user_id={user_id} has {} org_member rows: {:?}",
-                members.len(),
-                members
-                    .iter()
-                    .map(|m| (m.org_id, &m.role))
-                    .collect::<Vec<_>>()
-            ),
-            Err(e) => eprintln!("[ORG] org_members query failed: {e}"),
+            Ok(ids) => ids,
+            Err(e) => {
+                tracing::error!(user_id, error = %e, "failed to query org_members");
+                return vec![];
+            }
+        };
+
+        if org_ids.is_empty() {
+            return vec![];
         }
 
-        match Entity::find()
-            .inner_join(org_members::Entity)
-            .filter(org_members::Column::UserId.eq(user_id))
+        Entity::find()
+            .filter(Column::Id.is_in(org_ids))
             .order_by_asc(Column::Name)
             .all(db)
             .await
-        {
-            Ok(orgs) => {
-                eprintln!(
-                    "[ORG] find_orgs_for_user returned {} orgs for user_id={user_id}",
-                    orgs.len()
-                );
-                orgs
-            }
-            Err(e) => {
-                eprintln!("[ORG] find_orgs_for_user FAILED for user_id={user_id}: {e}");
-                vec![]
-            }
-        }
+            .unwrap_or_default()
     }
 }
 
