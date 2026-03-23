@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{QueryOrder, QuerySelect, TransactionTrait};
+use sea_orm::{QueryOrder, TransactionTrait};
 
 use super::_entities::org_members;
 pub use super::_entities::organizations::{ActiveModel, Column, Entity, Model};
@@ -14,7 +14,7 @@ impl ActiveModelBehavior for ActiveModel {
     {
         let mut this = self;
         if insert {
-            this.pid = sea_orm::ActiveValue::Set(Uuid::new_v4().to_string());
+            this.pid = sea_orm::ActiveValue::Set(Uuid::new_v4());
         } else if this.updated_at.is_unchanged() {
             this.updated_at = sea_orm::ActiveValue::Set(chrono::Utc::now().into());
         }
@@ -59,10 +59,9 @@ impl Model {
 
     /// Finds an organization by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        // Validate UUID format
-        Uuid::parse_str(pid).ok()?;
+        let uuid = Uuid::parse_str(pid).ok()?;
         Entity::find()
-            .filter(Column::Pid.eq(pid))
+            .filter(Column::Pid.eq(uuid))
             .one(db)
             .await
             .ok()
@@ -81,24 +80,9 @@ impl Model {
 
     /// Finds all organizations a user belongs to.
     pub async fn find_orgs_for_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
-        let org_ids: Vec<i32> = match org_members::Entity::find()
-            .filter(org_members::Column::UserId.eq(user_id))
-            .select_only()
-            .column(org_members::Column::OrgId)
-            .into_tuple()
-            .all(db)
-            .await
-        {
-            Ok(ids) => ids,
-            Err(_) => return vec![],
-        };
-
-        if org_ids.is_empty() {
-            return vec![];
-        }
-
         Entity::find()
-            .filter(Column::Id.is_in(org_ids))
+            .inner_join(org_members::Entity)
+            .filter(org_members::Column::UserId.eq(user_id))
             .order_by_asc(Column::Name)
             .all(db)
             .await
