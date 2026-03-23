@@ -59,10 +59,11 @@ impl Model {
 
     /// Finds an organization by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        Uuid::parse_str(pid).ok()?;
-        // Use into_json() to avoid SeaORM UUID text decode issues on SQLite
+        let uuid = Uuid::parse_str(pid).ok()?;
+        // Filter with UUID value (matches both binary and text storage),
+        // but decode via into_json() to avoid SeaORM UUID text decode issues.
         let row = Entity::find()
-            .filter(Column::Pid.eq(pid))
+            .filter(Column::Pid.eq(uuid))
             .into_json()
             .one(db)
             .await
