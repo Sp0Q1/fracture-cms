@@ -25,3 +25,4 @@ target/
 .env
 .env.*
 !.env.*.example
+.cargo-cache/
