@@ -67,12 +67,12 @@ async fn test_find_by_pid_and_org() {
 
     let project = create_project(db, "Scoped Project", org.id).await;
 
-    let found = Model::find_by_pid_and_org(db, &project.pid.to_string(), org.id).await;
+    let found = Model::find_by_pid_and_org(db, &project.pid.clone(), org.id).await;
     assert!(found.is_some());
     assert_eq!(found.unwrap().title, "Scoped Project");
 
     // Wrong org should return None
-    let not_found = Model::find_by_pid_and_org(db, &project.pid.to_string(), org.id + 999).await;
+    let not_found = Model::find_by_pid_and_org(db, &project.pid.clone(), org.id + 999).await;
     assert!(not_found.is_none());
 }
 
@@ -105,12 +105,12 @@ async fn test_cross_org_isolation() {
 
     // Cross-org lookup fails
     assert!(
-        Model::find_by_pid_and_org(db, &alice_project.pid.to_string(), bob_org.id)
+        Model::find_by_pid_and_org(db, &alice_project.pid.clone(), bob_org.id)
             .await
             .is_none()
     );
     assert!(
-        Model::find_by_pid_and_org(db, &bob_project.pid.to_string(), alice_org.id)
+        Model::find_by_pid_and_org(db, &bob_project.pid.clone(), alice_org.id)
             .await
             .is_none()
     );
@@ -127,7 +127,7 @@ async fn test_project_sets_pid_on_insert() {
     let org = &orgs[0];
 
     let project = create_project(db, "PID Test", org.id).await;
-    assert!(!project.pid.is_nil());
+    assert!(!project.pid.is_empty());
 }
 
 #[tokio::test]

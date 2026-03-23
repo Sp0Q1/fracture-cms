@@ -48,7 +48,7 @@ pub fn settings(
     let mut ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
     ctx["org"] = serde_json::json!({
         "name": org.name,
-        "pid": org.pid.to_string(),
+        "pid": org.pid.clone(),
         "slug": org.slug,
         "is_personal": org.is_personal,
     });
@@ -77,7 +77,7 @@ pub fn members(
     let mut ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
     ctx["org"] = serde_json::json!({
         "name": data.org.name,
-        "pid": data.org.pid.to_string(),
+        "pid": data.org.pid.clone(),
         "slug": data.org.slug,
         "is_personal": data.org.is_personal,
     });
@@ -88,7 +88,7 @@ pub fn members(
             serde_json::json!({
                 "user_name": u.name,
                 "user_email": u.email,
-                "user_pid": u.pid.to_string(),
+                "user_pid": u.pid.clone(),
                 "role": m.role,
             })
         })
@@ -100,7 +100,7 @@ pub fn members(
             serde_json::json!({
                 "email": i.email,
                 "role": i.role,
-                "pid": i.pid.to_string(),
+                "pid": i.pid.clone(),
                 "accept_url": format!("{}/invites/{}/accept", data.app_url, i.pid),
             })
         })

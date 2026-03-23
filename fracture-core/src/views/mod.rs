@@ -14,13 +14,13 @@ pub fn base_context(
 ) -> Value {
     json!({
         "user_name": user.name,
-        "user_pid": user.pid.to_string(),
+        "user_pid": user.pid.clone(),
         "org_name": org_ctx.as_ref().map(|o| o.org.name.clone()),
-        "org_pid": org_ctx.as_ref().map(|o| o.org.pid.to_string()),
+        "org_pid": org_ctx.as_ref().map(|o| o.org.pid.clone()),
         "user_role": org_ctx.as_ref().map(|o| o.role.to_string()),
         "user_orgs": user_orgs.iter().map(|o| json!({
             "name": o.name,
-            "pid": o.pid.to_string(),
+            "pid": o.pid.clone(),
             "is_personal": o.is_personal,
         })).collect::<Vec<_>>(),
     })
