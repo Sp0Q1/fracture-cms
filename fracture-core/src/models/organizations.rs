@@ -14,7 +14,7 @@ impl ActiveModelBehavior for ActiveModel {
     {
         let mut this = self;
         if insert {
-            this.pid = sea_orm::ActiveValue::Set(Uuid::new_v4());
+            this.pid = sea_orm::ActiveValue::Set(Uuid::new_v4().to_string());
         } else if this.updated_at.is_unchanged() {
             this.updated_at = sea_orm::ActiveValue::Set(chrono::Utc::now().into());
         }
@@ -59,57 +59,27 @@ impl Model {
 
     /// Finds an organization by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
-        // Filter with UUID value (matches both binary and text storage),
-        // but decode via into_json() to avoid SeaORM UUID text decode issues.
-        let row = Entity::find()
-            .filter(Column::Pid.eq(uuid))
-            .into_json()
+        // Validate UUID format
+        Uuid::parse_str(pid).ok()?;
+        Entity::find()
+            .filter(Column::Pid.eq(pid))
             .one(db)
             .await
             .ok()
-            .flatten()?;
-        Self::from_json_row(&row)
+            .flatten()
     }
 
     /// Finds an organization by slug.
     pub async fn find_by_slug(db: &DatabaseConnection, slug: &str) -> Option<Self> {
-        let row = Entity::find()
+        Entity::find()
             .filter(Column::Slug.eq(slug))
-            .into_json()
             .one(db)
             .await
             .ok()
-            .flatten()?;
-        Self::from_json_row(&row)
-    }
-
-    /// Converts a JSON row to a Model, handling SQLite UUID text format.
-    fn from_json_row(row: &serde_json::Value) -> Option<Self> {
-        let created_str = row.get("created_at")?.as_str()?;
-        let updated_str = row.get("updated_at")?.as_str()?;
-        let created_at =
-            chrono::DateTime::parse_from_str(&format!("{created_str} +00:00"), "%Y-%m-%d %H:%M:%S %z")
-                .ok()?;
-        let updated_at =
-            chrono::DateTime::parse_from_str(&format!("{updated_str} +00:00"), "%Y-%m-%d %H:%M:%S %z")
-                .ok()?;
-        Some(Self {
-            id: row.get("id")?.as_i64()? as i32,
-            pid: Uuid::parse_str(row.get("pid")?.as_str()?).ok()?,
-            name: row.get("name")?.as_str()?.to_string(),
-            slug: row.get("slug")?.as_str()?.to_string(),
-            is_personal: row.get("is_personal")?.as_bool()?,
-            created_at: created_at.into(),
-            updated_at: updated_at.into(),
-        })
+            .flatten()
     }
 
     /// Finds all organizations a user belongs to.
-    ///
-    /// Uses `into_json()` because `SeaORM` cannot decode UUID text columns
-    /// (36 bytes) in `SQLite` via the typed `.all()` — it expects 16-byte
-    /// binary blobs. `into_json()` handles both formats.
     pub async fn find_orgs_for_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
         let org_ids: Vec<i32> = match org_members::Entity::find()
             .filter(org_members::Column::UserId.eq(user_id))
@@ -127,21 +97,12 @@ impl Model {
             return vec![];
         }
 
-        let json_rows: Vec<serde_json::Value> = match Entity::find()
+        Entity::find()
             .filter(Column::Id.is_in(org_ids))
             .order_by_asc(Column::Name)
-            .into_json()
             .all(db)
             .await
-        {
-            Ok(rows) => rows,
-            Err(_) => return vec![],
-        };
-
-        json_rows
-            .into_iter()
-            .filter_map(|row| Self::from_json_row(&row))
-            .collect()
+            .unwrap_or_default()
     }
 }
 

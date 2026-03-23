@@ -12,7 +12,7 @@ impl ActiveModelBehavior for ActiveModel {
     {
         let mut this = self;
         if insert {
-            this.pid = sea_orm::ActiveValue::Set(Uuid::new_v4());
+            this.pid = sea_orm::ActiveValue::Set(Uuid::new_v4().to_string());
         } else if this.updated_at.is_unchanged() {
             this.updated_at = sea_orm::ActiveValue::Set(chrono::Utc::now().into());
         }
@@ -72,9 +72,9 @@ impl Model {
 
     /// Finds an invite by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
+        Uuid::parse_str(pid).ok()?;
         Entity::find()
-            .filter(Column::Pid.eq(uuid))
+            .filter(Column::Pid.eq(pid))
             .one(db)
             .await
             .ok()

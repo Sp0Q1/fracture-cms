@@ -80,6 +80,7 @@ services:
       - OIDC_ISSUER_URL=http://localhost:8080
       - OIDC_REDIRECT_URI=http://localhost:5150/api/auth/oidc/callback
       - MAILER_HOST=localhost
+      - MAILER_ENABLED=true
       - SERVER_BINDING=0.0.0.0
     entrypoint: ["/entrypoint.sh"]
 
