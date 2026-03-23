@@ -60,7 +60,7 @@ async fn test_find_by_pid() {
     let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
     let org = &orgs[0];
 
-    let found = organizations::Model::find_by_pid(db, &org.pid.clone()).await;
+    let found = organizations::Model::find_by_pid(db, &org.pid.to_string()).await;
     assert!(found.is_some());
     assert_eq!(found.unwrap().id, org.id);
 

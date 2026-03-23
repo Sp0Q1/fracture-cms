@@ -41,7 +41,7 @@ impl ActiveModelBehavior for super::_entities::users::ActiveModel {
         self.validate()?;
         if insert {
             let mut this = self;
-            this.pid = ActiveValue::Set(Uuid::new_v4().to_string());
+            this.pid = ActiveValue::Set(Uuid::new_v4());
             this.api_key = ActiveValue::Set(format!("lo-{}", Uuid::new_v4()));
             Ok(this)
         } else {
@@ -93,11 +93,11 @@ impl Model {
     ///
     /// When could not find user  or DB query error
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> ModelResult<Self> {
-        Uuid::parse_str(pid).map_err(|e| ModelError::Any(e.into()))?;
+        let parse_uuid = Uuid::parse_str(pid).map_err(|e| ModelError::Any(e.into()))?;
         let user = users::Entity::find()
             .filter(
                 model::query::condition()
-                    .eq(users::Column::Pid, pid)
+                    .eq(users::Column::Pid, parse_uuid)
                     .build(),
             )
             .one(db)
@@ -221,7 +221,7 @@ impl Model {
     /// when could not convert user claims to jwt token
     pub fn generate_jwt(&self, secret: &str, expiration: u64) -> ModelResult<String> {
         jwt::JWT::new(secret)
-            .generate_token(expiration, self.pid.clone(), Map::new())
+            .generate_token(expiration, self.pid.to_string(), Map::new())
             .map_err(ModelError::from)
     }
 }

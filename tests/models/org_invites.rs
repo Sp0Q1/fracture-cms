@@ -49,7 +49,7 @@ async fn test_create_and_find_invite() {
     assert!(invite.accepted_at.is_none());
 
     // Find by pid
-    let found = org_invites::Model::find_by_pid(db, &invite.pid.clone()).await;
+    let found = org_invites::Model::find_by_pid(db, &invite.pid.to_string()).await;
     assert!(found.is_some());
     assert_eq!(found.unwrap().id, invite.id);
 }
@@ -124,7 +124,7 @@ async fn test_cannot_accept_already_accepted_invite() {
         .unwrap();
 
     // Reload invite to get the updated one
-    let updated_invite = org_invites::Model::find_by_pid(db, &invite.pid.clone())
+    let updated_invite = org_invites::Model::find_by_pid(db, &invite.pid.to_string())
         .await
         .unwrap();
     let result = org_invites::Model::accept_invite(db, updated_invite, invitee.id).await;

@@ -92,12 +92,12 @@ async fn test_find_by_pid_and_org() {
     let project = create_project(db, "Note PID Project", org.id).await;
     let note = create_note(db, "Find Me", project.id, org.id).await;
 
-    let found = NoteModel::find_by_pid_and_org(db, &note.pid.clone(), org.id).await;
+    let found = NoteModel::find_by_pid_and_org(db, &note.pid.to_string(), org.id).await;
     assert!(found.is_some());
     assert_eq!(found.unwrap().title, "Find Me");
 
     // Wrong org
-    let not_found = NoteModel::find_by_pid_and_org(db, &note.pid.clone(), org.id + 999).await;
+    let not_found = NoteModel::find_by_pid_and_org(db, &note.pid.to_string(), org.id + 999).await;
     assert!(not_found.is_none());
 }
 
@@ -113,7 +113,7 @@ async fn test_note_sets_pid_on_insert() {
     let project = create_project(db, "PID Note Project", org.id).await;
     let note = create_note(db, "PID Note", project.id, org.id).await;
 
-    assert!(!note.pid.is_empty());
+    assert!(!note.pid.is_nil());
 }
 
 #[tokio::test]
@@ -138,7 +138,7 @@ async fn test_notes_cross_org_isolation() {
 
     // Alice's notes not visible from Bob's org
     assert!(
-        NoteModel::find_by_pid_and_org(db, &alice_note.pid.clone(), bob_org.id)
+        NoteModel::find_by_pid_and_org(db, &alice_note.pid.to_string(), bob_org.id)
             .await
             .is_none()
     );

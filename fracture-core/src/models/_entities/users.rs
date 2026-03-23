@@ -10,8 +10,7 @@ pub struct Model {
     pub updated_at: DateTimeWithTimeZone,
     #[sea_orm(primary_key)]
     pub id: i32,
-    #[sea_orm(column_type = "Text")]
-    pub pid: String,
+    pub pid: Uuid,
     #[sea_orm(unique)]
     pub email: String,
     #[serde(skip_serializing)]
