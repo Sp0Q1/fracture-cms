@@ -188,13 +188,20 @@ nav[data-topnav] a[aria-current="page"] {
     height: 24px;
 }
 
+/* --- Admin Stats Grid --- */
+.admin-stats.row {
+    --grid-cols: 3;
+    --grid-gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
 /* --- Stat Cards --- */
 .stat-card {
     text-align: center;
     padding: 1.5rem;
 }
 
-.stat-card .stat-number {
+.stat-card h3 {
     font-size: 2rem;
     font-weight: 700;
     color: #62cb98;
@@ -202,9 +209,23 @@ nav[data-topnav] a[aria-current="page"] {
     margin-bottom: 0.25rem;
 }
 
-.stat-card .stat-label {
+.stat-card p {
     font-size: 0.875rem;
     color: var(--text-light, #9ca3af);
+    margin: 0;
+}
+
+/* --- Blog --- */
+.blog-post-card {
+    margin-bottom: 1.5rem;
+}
+
+.blog-back-link {
+    margin-top: 2rem;
+}
+
+.inline-form {
+    display: inline;
 }
 
 /* --- Clickable elements (rows, cards) --- */
@@ -563,5 +584,9 @@ table.clickable-rows tbody tr:hover {
     .page-header .hstack {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .admin-stats.row {
+        --grid-cols: 1;
     }
 }

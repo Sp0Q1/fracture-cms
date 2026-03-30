@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Organizations — Platform Admin{% endblock title %}
+
+{% block content %}
+<div class="page-header">
+    <div class="hstack">
+        <div>
+            <h1>All Organizations <span class="badge secondary">{{ all_orgs | length }}</span></h1>
+            <p class="page-subtitle">Cross-organization overview</p>
+        </div>
+        <a href="/admin" class="button outline">Back to Dashboard</a>
+    </div>
+</div>
+
+{% if all_orgs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for org in all_orgs %}
+            <tr>
+                <td>
+                    {{ org.name }}
+                    {% if org.is_platform_admin %}<span class="badge success">Admin</span>{% endif %}
+                </td>
+                <td><code>{{ org.slug }}</code></td>
+                <td>
+                    {% if org.is_personal %}<span class="badge">Personal</span>
+                    {% else %}<span class="badge secondary">Team</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <article class="card empty-state">
+        <h3>No Organizations</h3>
+        <p>No organizations have been created yet.</p>
+    </article>
+{% endif %}
+{% endblock content %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Platform Admin — Fracture CMS{% endblock title %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Platform Admin</h1>
+    <p class="page-subtitle">System overview and management</p>
+</div>
+
+<div class="admin-stats row">
+    <article class="card stat-card">
+        <h3>{{ total_orgs }}</h3>
+        <p>Organizations</p>
+    </article>
+    <article class="card stat-card">
+        <h3>{{ total_users }}</h3>
+        <p>Users</p>
+    </article>
+    <article class="card stat-card">
+        <h3>{{ total_blog_posts }}</h3>
+        <p>Blog Posts</p>
+    </article>
+</div>
+
+<h2>Management</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Section</th>
+            <th>Description</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Blog</strong></td>
+            <td>Create and manage blog posts</td>
+            <td><a href="/admin/blog" class="button outline small">Manage</a></td>
+        </tr>
+        <tr>
+            <td><strong>Organizations</strong></td>
+            <td>View all organizations and their members</td>
+            <td><a href="/admin/orgs" class="button outline small">View</a></td>
+        </tr>
+        {% block admin_sections %}
+        {% endblock admin_sections %}
+    </tbody>
+</table>
+{% endblock content %}

@@ -4,4 +4,6 @@ pub mod prelude;
 
 pub mod notes;
 pub mod projects;
-pub use fracture_core::models::_entities::{org_invites, org_members, organizations, users};
+pub use fracture_core::models::_entities::{
+    blog_posts, org_invites, org_members, organizations, users,
+};

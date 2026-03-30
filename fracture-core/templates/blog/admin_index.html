@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Blog Posts — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<div class="page-header">
+    <div class="hstack">
+        <div>
+            <h1>Blog Posts <span class="badge secondary">{{ posts | length }}</span></h1>
+            <p class="page-subtitle">Manage blog content</p>
+        </div>
+        <a href="/admin/blog/new" class="button">New Post</a>
+    </div>
+</div>
+
+{% if posts %}
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Published</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for post in posts %}
+            <tr>
+                <td>{{ post.title }}</td>
+                <td>
+                    {% if post.status == "published" %}
+                        <span class="badge success">Published</span>
+                    {% else %}
+                        <span class="badge">Draft</span>
+                    {% endif %}
+                </td>
+                <td>{{ post.published_at | default(value="—") }}</td>
+                <td class="action-links">
+                    <a href="/admin/blog/{{ post.pid }}/edit" class="button outline small">Edit</a>
+                    {% if post.status == "published" %}
+                        <form action="/admin/blog/{{ post.pid }}/unpublish" method="post" class="inline-form">
+                            <button type="submit" class="button outline small">Unpublish</button>
+                        </form>
+                        <a href="/blog/{{ post.slug }}" class="button outline small" target="_blank">View</a>
+                    {% else %}
+                        <form action="/admin/blog/{{ post.pid }}/publish" method="post" class="inline-form">
+                            <button type="submit" class="button outline small">Publish</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <article class="card empty-state">
+        <h3>No Blog Posts</h3>
+        <p>Create your first blog post to get started.</p>
+        <a href="/admin/blog/new" class="button">New Post</a>
+    </article>
+{% endif %}
+{% endblock content %}

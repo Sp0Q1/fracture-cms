@@ -58,6 +58,12 @@
         {% block nav_guest %}
         {% endblock nav_guest %}
         {% endif %}
+        {% block nav_public %}
+        <a href="/blog">Blog</a>
+        {% endblock nav_public %}
+        {% if is_platform_admin %}
+        <a href="/admin">Admin</a>
+        {% endif %}
         <ot-dropdown class="nav-end">
             {% if user_name %}
             <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">

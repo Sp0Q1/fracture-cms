@@ -16,7 +16,9 @@ use std::path::Path;
 
 use crate::{
     controllers, initializers,
-    models::_entities::{notes, org_invites, org_members, organizations, projects, users},
+    models::_entities::{
+        blog_posts, notes, org_invites, org_members, organizations, projects, users,
+    },
     workers::downloader::DownloadWorker,
 };
 
@@ -60,6 +62,9 @@ impl Hooks for App {
             .add_route(controllers::org::invite_routes())
             .add_route(controllers::project::routes())
             .add_route(controllers::note::routes())
+            .add_route(controllers::blog::public_routes())
+            .add_route(controllers::blog::admin_routes())
+            .add_route(controllers::admin::routes())
             .add_route(controllers::oidc::routes())
     }
     async fn after_routes(router: AxumRouter, _ctx: &AppContext) -> Result<AxumRouter> {
@@ -75,6 +80,7 @@ impl Hooks for App {
         // tasks-inject (do not remove)
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {
+        truncate_table(&ctx.db, blog_posts::Entity).await?;
         truncate_table(&ctx.db, notes::Entity).await?;
         truncate_table(&ctx.db, projects::Entity).await?;
         truncate_table(&ctx.db, org_invites::Entity).await?;

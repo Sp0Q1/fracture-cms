@@ -72,6 +72,8 @@ mailer:
 # The app boots without OIDC when client_id/client_secret are empty or the
 # IdP is unreachable.  Set the OIDC_* env vars to enable authentication.
 settings:
+  blog:
+    org_slug: "platform-admin"
   oidc:
     provider_name: zitadel
     issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="http://localhost:8080") }}

@@ -15,6 +15,7 @@ mod m20260220_000002_create_org_members;
 mod m20260220_000003_create_org_invites;
 mod m20260220_000006_drop_movies;
 mod m20260330_000001_add_is_platform_admin_to_organizations;
+mod m20260330_000002_create_blog_posts;
 
 pub struct Migrator;
 
@@ -33,6 +34,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260220_000003_create_org_invites::Migration),
             Box::new(m20260220_000006_drop_movies::Migration),
             Box::new(m20260330_000001_add_is_platform_admin_to_organizations::Migration),
+            Box::new(m20260330_000002_create_blog_posts::Migration),
         ]
     }
 }
