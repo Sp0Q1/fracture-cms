@@ -33,16 +33,23 @@ pub async fn dashboard(
         .count(&ctx.db)
         .await
         .unwrap_or(0);
+    let total_jobs = crate::models::_entities::job_definitions::Entity::find()
+        .count(&ctx.db)
+        .await
+        .unwrap_or(0);
+    let total_job_runs = crate::models::_entities::job_runs::Entity::find()
+        .count(&ctx.db)
+        .await
+        .unwrap_or(0);
 
-    views::admin::dashboard(
-        &v,
-        &user,
-        &org_ctx,
-        &user_orgs,
+    let stats = views::admin::DashboardStats {
         total_orgs,
         total_users,
         total_blog_posts,
-    )
+        total_jobs,
+        total_job_runs,
+    };
+    views::admin::dashboard(&v, &user, &org_ctx, &user_orgs, &stats)
 }
 
 /// `GET /admin/orgs` — list all organizations (platform admin).

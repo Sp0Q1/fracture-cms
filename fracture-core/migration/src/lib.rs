@@ -16,6 +16,9 @@ mod m20260220_000003_create_org_invites;
 mod m20260220_000006_drop_movies;
 mod m20260330_000001_add_is_platform_admin_to_organizations;
 mod m20260330_000002_create_blog_posts;
+mod m20260330_000003_create_job_definitions;
+mod m20260330_000004_create_job_runs;
+mod m20260330_000005_create_job_run_diffs;
 
 pub struct Migrator;
 
@@ -35,6 +38,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260220_000006_drop_movies::Migration),
             Box::new(m20260330_000001_add_is_platform_admin_to_organizations::Migration),
             Box::new(m20260330_000002_create_blog_posts::Migration),
+            Box::new(m20260330_000003_create_job_definitions::Migration),
+            Box::new(m20260330_000004_create_job_runs::Migration),
+            Box::new(m20260330_000005_create_job_run_diffs::Migration),
         ]
     }
 }

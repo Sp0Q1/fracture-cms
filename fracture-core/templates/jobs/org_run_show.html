@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Run {{ run.pid }} — {{ definition.name }} — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/jobs">Jobs</a>
+    <span class="separator">/</span>
+    <a href="/jobs/{{ definition.pid }}">{{ definition.name }}</a>
+    <span class="separator">/</span>
+    <span>Run</span>
+</nav>
+
+<div class="page-header">
+    <h1>Job Run</h1>
+    <p class="page-subtitle">{{ definition.name }}</p>
+</div>
+
+<article class="card detail-card">
+    <div class="detail-row">
+        <span class="detail-label">Status</span>
+        <span class="detail-value"><span class="badge job-status-{{ run.status }}">{{ run.status }}</span></span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Started</span>
+        <span class="detail-value">{{ run.started_at | default(value="—") }}</span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Completed</span>
+        <span class="detail-value">{{ run.completed_at | default(value="—") }}</span>
+    </div>
+    {% if run.error_message %}
+    <div class="detail-row">
+        <span class="detail-label">Error</span>
+        <span class="detail-value">{{ run.error_message }}</span>
+    </div>
+    {% endif %}
+    {% if run.result_summary %}
+    <div class="detail-row">
+        <span class="detail-label">Summary</span>
+        <span class="detail-value"><pre class="json-block">{{ run.result_summary }}</pre></span>
+    </div>
+    {% endif %}
+    <div class="detail-row">
+        <span class="detail-label">Created</span>
+        <span class="detail-value">{{ run.created_at }}</span>
+    </div>
+</article>
+
+<h2>Diffs</h2>
+
+{% if diffs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Entity Key</th>
+                <th>Old Value</th>
+                <th>New Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for diff in diffs %}
+            <tr>
+                <td><span class="badge diff-type-{{ diff.diff_type }}">{{ diff.diff_type }}</span></td>
+                <td>{{ diff.entity_key }}</td>
+                <td>{{ diff.old_value | default(value="—") }}</td>
+                <td>{{ diff.new_value | default(value="—") }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <article class="card empty-state">
+        <h3>No Diffs</h3>
+        <p>No changes were recorded for this run.</p>
+    </article>
+{% endif %}
+{% endblock content %}

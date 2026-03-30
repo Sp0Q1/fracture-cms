@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Jobs <span class="badge secondary">{{ definitions | length }}</span></h1>
+    <p class="page-subtitle">Automated job definitions for your organization</p>
+</div>
+
+{% if definitions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Schedule</th>
+                <th>Enabled</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for def in definitions %}
+            <tr>
+                <td><strong>{{ def.name }}</strong></td>
+                <td>{{ def.job_type }}</td>
+                <td>{{ def.schedule | default(value="Manual") }}</td>
+                <td>
+                    {% if def.enabled %}
+                        <span class="badge success">Yes</span>
+                    {% else %}
+                        <span class="badge">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/jobs/{{ def.pid }}" class="button outline small">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <article class="card empty-state">
+        <h3>No Jobs</h3>
+        <p>No job definitions have been created for this organization yet.</p>
+    </article>
+{% endif %}
+{% endblock content %}

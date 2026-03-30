@@ -4,6 +4,15 @@ use serde_json::json;
 use crate::controllers::middleware::OrgContext;
 use crate::models::_entities::{organizations, users};
 
+/// Stats for the admin dashboard.
+pub struct DashboardStats {
+    pub total_orgs: u64,
+    pub total_users: u64,
+    pub total_blog_posts: u64,
+    pub total_jobs: u64,
+    pub total_job_runs: u64,
+}
+
 /// Renders the platform admin dashboard.
 ///
 /// # Errors
@@ -14,14 +23,14 @@ pub fn dashboard(
     user: &users::Model,
     org_ctx: &Option<OrgContext>,
     user_orgs: &[organizations::Model],
-    total_orgs: u64,
-    total_users: u64,
-    total_blog_posts: u64,
+    stats: &DashboardStats,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
-    ctx["total_orgs"] = json!(total_orgs);
-    ctx["total_users"] = json!(total_users);
-    ctx["total_blog_posts"] = json!(total_blog_posts);
+    ctx["total_orgs"] = json!(stats.total_orgs);
+    ctx["total_users"] = json!(stats.total_users);
+    ctx["total_blog_posts"] = json!(stats.total_blog_posts);
+    ctx["total_jobs"] = json!(stats.total_jobs);
+    ctx["total_job_runs"] = json!(stats.total_job_runs);
     format::render().view(v, "admin/dashboard.html", data!(ctx))
 }
 

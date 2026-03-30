@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod blog;
+pub mod jobs;
 pub mod org;
 
 use serde_json::{json, Value};

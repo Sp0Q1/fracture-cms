@@ -190,7 +190,7 @@ nav[data-topnav] a[aria-current="page"] {
 
 /* --- Admin Stats Grid --- */
 .admin-stats.row {
-    --grid-cols: 3;
+    --grid-cols: 5;
     --grid-gap: 1.5rem;
     margin-bottom: 2rem;
 }
@@ -519,6 +519,55 @@ nav[data-topnav] a[aria-current="page"] {
     margin-right: auto;
     padding-left: 1rem;
     padding-right: 1rem;
+}
+
+/* --- Job Status Badges --- */
+.job-status-queued {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+}
+
+.job-status-running {
+    background: rgba(90, 96, 206, 0.15);
+    color: #8b8ff5;
+}
+
+.job-status-completed {
+    background: rgba(98, 203, 152, 0.15);
+    color: #62cb98;
+}
+
+.job-status-failed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+/* --- Diff Type Badges --- */
+.diff-type-added {
+    background: rgba(98, 203, 152, 0.15);
+    color: #62cb98;
+}
+
+.diff-type-removed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.diff-type-changed {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+}
+
+/* --- JSON Block --- */
+.json-block {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
 }
 
 /* --- Table Enhancements --- */

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}All Jobs — Platform Admin — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<div class="page-header">
+    <div class="hstack">
+        <div>
+            <h1>All Jobs <span class="badge secondary">{{ definitions | length }}</span></h1>
+            <p class="page-subtitle">Cross-organization job definitions</p>
+        </div>
+        <a href="/admin" class="button outline">Back to Dashboard</a>
+    </div>
+</div>
+
+{% if definitions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Organization</th>
+                <th>Type</th>
+                <th>Schedule</th>
+                <th>Enabled</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for def in definitions %}
+            <tr>
+                <td><strong>{{ def.name }}</strong></td>
+                <td>{{ def.org_name }}</td>
+                <td>{{ def.job_type }}</td>
+                <td>{{ def.schedule | default(value="Manual") }}</td>
+                <td>
+                    {% if def.enabled %}
+                        <span class="badge success">Yes</span>
+                    {% else %}
+                        <span class="badge">No</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <article class="card empty-state">
+        <h3>No Jobs</h3>
+        <p>No job definitions exist in the system yet.</p>
+    </article>
+{% endif %}
+{% endblock content %}

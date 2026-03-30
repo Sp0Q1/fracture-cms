@@ -21,6 +21,14 @@
         <h3>{{ total_blog_posts }}</h3>
         <p>Blog Posts</p>
     </article>
+    <article class="card stat-card">
+        <h3>{{ total_jobs }}</h3>
+        <p>Jobs</p>
+    </article>
+    <article class="card stat-card">
+        <h3>{{ total_job_runs }}</h3>
+        <p>Job Runs</p>
+    </article>
 </div>
 
 <h2>Management</h2>
@@ -42,6 +50,11 @@
             <td><strong>Organizations</strong></td>
             <td>View all organizations and their members</td>
             <td><a href="/admin/orgs" class="button outline small">View</a></td>
+        </tr>
+        <tr>
+            <td><strong>Jobs</strong></td>
+            <td>View all job definitions across organizations</td>
+            <td><a href="/admin/jobs" class="button outline small">View</a></td>
         </tr>
         {% block admin_sections %}
         {% endblock admin_sections %}

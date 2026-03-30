@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}{{ definition.name }} — Jobs — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/jobs">Jobs</a>
+    <span class="separator">/</span>
+    <span>{{ definition.name }}</span>
+</nav>
+
+<div class="page-header">
+    <div class="hstack">
+        <div>
+            <h1>{{ definition.name }}</h1>
+            <p class="page-subtitle">{{ definition.job_type }}{% if definition.schedule %} &middot; {{ definition.schedule }}{% endif %}</p>
+        </div>
+        <form action="/jobs/{{ definition.pid }}/run" method="post" class="inline-form">
+            <button type="submit" class="button">Run Now</button>
+        </form>
+    </div>
+</div>
+
+<article class="card detail-card">
+    <div class="detail-row">
+        <span class="detail-label">Type</span>
+        <span class="detail-value">{{ definition.job_type }}</span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Schedule</span>
+        <span class="detail-value">{{ definition.schedule | default(value="Manual") }}</span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Enabled</span>
+        <span class="detail-value">
+            {% if definition.enabled %}
+                <span class="badge success">Yes</span>
+            {% else %}
+                <span class="badge">No</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Created</span>
+        <span class="detail-value">{{ definition.created_at }}</span>
+    </div>
+</article>
+
+<h2>Recent Runs</h2>
+
+{% if runs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Completed</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in runs %}
+            <tr>
+                <td><span class="badge job-status-{{ run.status }}">{{ run.status }}</span></td>
+                <td>{{ run.started_at | default(value="—") }}</td>
+                <td>{{ run.completed_at | default(value="—") }}</td>
+                <td>
+                    <a href="/jobs/{{ definition.pid }}/runs/{{ run.pid }}" class="button outline small">Details</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <article class="card empty-state">
+        <h3>No Runs</h3>
+        <p>This job has not been run yet. Click "Run Now" to trigger it.</p>
+    </article>
+{% endif %}
+{% endblock content %}
