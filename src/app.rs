@@ -57,6 +57,9 @@ impl Hooks for App {
     }
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
+        fracture_core::entity_registry::init_entity_registry(
+            fracture_core::entity_registry::default_entity_registry(),
+        );
         AppRoutes::with_default_routes() // controller routes below
             .add_route(controllers::home::routes())
             .add_route(controllers::org::routes())

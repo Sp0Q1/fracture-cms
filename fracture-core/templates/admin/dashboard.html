@@ -9,26 +9,12 @@
 </div>
 
 <div class="admin-stats row">
+    {% for stat in entity_stats %}
     <article class="card stat-card">
-        <h3>{{ total_orgs }}</h3>
-        <p>Organizations</p>
+        <h3>{{ stat.count }}</h3>
+        <p>{{ stat.name }}</p>
     </article>
-    <article class="card stat-card">
-        <h3>{{ total_users }}</h3>
-        <p>Users</p>
-    </article>
-    <article class="card stat-card">
-        <h3>{{ total_blog_posts }}</h3>
-        <p>Blog Posts</p>
-    </article>
-    <article class="card stat-card">
-        <h3>{{ total_jobs }}</h3>
-        <p>Jobs</p>
-    </article>
-    <article class="card stat-card">
-        <h3>{{ total_job_runs }}</h3>
-        <p>Job Runs</p>
-    </article>
+    {% endfor %}
 </div>
 
 <h2>Management</h2>
@@ -41,21 +27,15 @@
         </tr>
     </thead>
     <tbody>
+        {% for stat in entity_stats %}
+        {% if stat.url != "" %}
         <tr>
-            <td><strong>Blog</strong></td>
-            <td>Create and manage blog posts</td>
-            <td><a href="/admin/blog" class="button outline small">Manage</a></td>
+            <td><strong>{{ stat.name }}</strong></td>
+            <td>{{ stat.description }}</td>
+            <td><a href="{{ stat.url }}" class="button outline small">{{ stat.action_label }}</a></td>
         </tr>
-        <tr>
-            <td><strong>Organizations</strong></td>
-            <td>View all organizations and their members</td>
-            <td><a href="/admin/orgs" class="button outline small">View</a></td>
-        </tr>
-        <tr>
-            <td><strong>Jobs</strong></td>
-            <td>View all job definitions across organizations</td>
-            <td><a href="/admin/jobs" class="button outline small">View</a></td>
-        </tr>
+        {% endif %}
+        {% endfor %}
         {% block admin_sections %}
         {% endblock admin_sections %}
     </tbody>

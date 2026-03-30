@@ -1,10 +1,12 @@
 use axum_extra::extract::CookieJar;
 use loco_rs::prelude::*;
-use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
+use sea_orm::{EntityTrait, QueryOrder};
 
 use crate::controllers::middleware;
+use crate::entity_registry::entity_registry;
 use crate::models::organizations as org_model;
 use crate::views;
+use crate::views::admin::EntityStat;
 use crate::{require_platform_admin, require_user};
 
 /// `GET /admin` — platform admin dashboard.
@@ -24,31 +26,19 @@ pub async fn dashboard(
     require_platform_admin!(org_ctx);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
 
-    let total_orgs = org_model::Entity::find().count(&ctx.db).await.unwrap_or(0);
-    let total_users = crate::models::_entities::users::Entity::find()
-        .count(&ctx.db)
-        .await
-        .unwrap_or(0);
-    let total_blog_posts = crate::models::_entities::blog_posts::Entity::find()
-        .count(&ctx.db)
-        .await
-        .unwrap_or(0);
-    let total_jobs = crate::models::_entities::job_definitions::Entity::find()
-        .count(&ctx.db)
-        .await
-        .unwrap_or(0);
-    let total_job_runs = crate::models::_entities::job_runs::Entity::find()
-        .count(&ctx.db)
-        .await
-        .unwrap_or(0);
+    let registry = entity_registry();
+    let mut stats = Vec::new();
+    for entity in registry.entities() {
+        let count = entity.count_all(&ctx.db).await;
+        stats.push(EntityStat {
+            name: entity.entity_name().to_string(),
+            count,
+            url: entity.url_prefix().to_string(),
+            description: entity.description().to_string(),
+            action_label: entity.action_label().to_string(),
+        });
+    }
 
-    let stats = views::admin::DashboardStats {
-        total_orgs,
-        total_users,
-        total_blog_posts,
-        total_jobs,
-        total_job_runs,
-    };
     views::admin::dashboard(&v, &user, &org_ctx, &user_orgs, &stats)
 }
 
