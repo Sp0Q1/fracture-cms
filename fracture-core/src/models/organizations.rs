@@ -39,6 +39,7 @@ impl Model {
             name: sea_orm::ActiveValue::Set(format!("{}'s Personal", user.name)),
             slug: sea_orm::ActiveValue::Set(slug),
             is_personal: sea_orm::ActiveValue::Set(true),
+            is_platform_admin: sea_orm::ActiveValue::Set(false),
             ..Default::default()
         }
         .insert(&txn)
@@ -76,6 +77,18 @@ impl Model {
             .await
             .ok()
             .flatten()
+    }
+
+    /// Returns true if the user is a member of any org with `is_platform_admin`.
+    pub async fn is_user_platform_admin(db: &DatabaseConnection, user_id: i32) -> bool {
+        Entity::find()
+            .inner_join(org_members::Entity)
+            .filter(org_members::Column::UserId.eq(user_id))
+            .filter(Column::IsPlatformAdmin.eq(true))
+            .count(db)
+            .await
+            .unwrap_or(0)
+            > 0
     }
 
     /// Finds all organizations a user belongs to.

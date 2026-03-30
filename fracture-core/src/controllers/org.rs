@@ -129,12 +129,8 @@ pub async fn settings(
     let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
-    let org_ctx = middleware::OrgContext {
-        org: org.clone(),
-        membership,
-        role,
-    };
+    let org_ctx =
+        middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Admin);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
     views::org::settings(&v, &user, &org_ctx, &user_orgs, &org)
@@ -160,12 +156,8 @@ pub async fn update_settings(
     let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
-    let org_ctx = middleware::OrgContext {
-        org: org.clone(),
-        membership,
-        role,
-    };
+    let org_ctx =
+        middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Admin);
 
     let mut active: organizations::ActiveModel = org.into();
@@ -195,12 +187,8 @@ pub async fn members(
     let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
-    let org_ctx = middleware::OrgContext {
-        org: org.clone(),
-        membership,
-        role,
-    };
+    let org_ctx =
+        middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Viewer);
 
     let members_list = org_members::Model::find_members(&ctx.db, org.id).await;
@@ -252,12 +240,8 @@ pub async fn invite(
     let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
-    let org_ctx = middleware::OrgContext {
-        org: org.clone(),
-        membership,
-        role,
-    };
+    let org_ctx =
+        middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Admin);
 
     let invite_role = OrgRole::from_str_role(&params.role).unwrap_or(OrgRole::Member);
@@ -304,12 +288,8 @@ pub async fn update_role(
     let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
-    let org_ctx = middleware::OrgContext {
-        org: org.clone(),
-        membership,
-        role,
-    };
+    let org_ctx =
+        middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Admin);
 
     let target_user = users_entity::Model::find_by_pid(&ctx.db, &user_pid)
@@ -357,12 +337,8 @@ pub async fn remove_member(
     let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
-    let org_ctx = middleware::OrgContext {
-        org: org.clone(),
-        membership,
-        role,
-    };
+    let org_ctx =
+        middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Admin);
 
     let target_user = users_entity::Model::find_by_pid(&ctx.db, &user_pid)

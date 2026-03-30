@@ -25,6 +25,29 @@ pub struct OrgContext {
     pub org: organizations::Model,
     pub membership: org_members::Model,
     pub role: OrgRole,
+    /// True if the user is a member of any org with `is_platform_admin`.
+    pub is_platform_admin: bool,
+}
+
+impl OrgContext {
+    /// Constructs an `OrgContext` for a specific org/membership pair.
+    /// Use this in handlers that resolve the org from a path parameter
+    /// rather than the cookie.
+    pub async fn from_membership(
+        db: &DatabaseConnection,
+        org: organizations::Model,
+        membership: org_members::Model,
+        user_id: i32,
+    ) -> Self {
+        let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
+        let is_platform_admin = organizations::Model::is_user_platform_admin(db, user_id).await;
+        Self {
+            org,
+            membership,
+            role,
+            is_platform_admin,
+        }
+    }
 }
 
 /// Resolves the active org from the `org_pid` cookie.
@@ -34,6 +57,8 @@ pub async fn get_org_context_or_default(
     db: &DatabaseConnection,
     user: &users::Model,
 ) -> Option<OrgContext> {
+    let is_platform_admin = organizations::Model::is_user_platform_admin(db, user.id).await;
+
     // Try cookie first
     if let Some(cookie) = jar.get("org_pid") {
         let org_pid = cookie.value();
@@ -45,6 +70,7 @@ pub async fn get_org_context_or_default(
                     org,
                     membership,
                     role,
+                    is_platform_admin,
                 });
             }
         }
@@ -59,7 +85,25 @@ pub async fn get_org_context_or_default(
         org,
         membership,
         role,
+        is_platform_admin,
     })
+}
+
+/// Macro to require platform admin. Returns 403 if the user is not a platform admin.
+#[macro_export]
+macro_rules! require_platform_admin {
+    ($org_ctx:expr) => {
+        if !$org_ctx.as_ref().is_some_and(|ctx| ctx.is_platform_admin) {
+            return Ok(axum::response::Response::builder()
+                .status(axum::http::StatusCode::FORBIDDEN)
+                .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
+                .body(axum::body::Body::from(
+                    "<h1>403 Forbidden</h1><p>You do not have admin access.</p>",
+                ))
+                .expect("static response body")
+                .into_response());
+        }
+    };
 }
 
 /// Macro to require a minimum role. Returns 403 if the user's role is insufficient.

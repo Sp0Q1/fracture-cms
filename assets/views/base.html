@@ -79,6 +79,10 @@
                 <hr>
                 {% block account_menu_items %}
                 <a href="/orgs" role="menuitem">Organizations</a>
+                {% if is_platform_admin %}
+                <hr>
+                <a href="/admin" role="menuitem">Platform Admin</a>
+                {% endif %}
                 {% endblock account_menu_items %}
                 <a href="/api/auth/oidc/logout" role="menuitem">Sign out</a>
                 {% else %}
