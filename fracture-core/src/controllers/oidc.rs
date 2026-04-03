@@ -17,6 +17,12 @@ use crate::{
     models::{_entities::users, users::OidcUserInfo},
 };
 
+/// Returns `true` when the configured server host uses HTTPS, meaning cookies
+/// should be marked `Secure`.
+fn is_secure(ctx: &AppContext) -> bool {
+    ctx.config.server.host.starts_with("https")
+}
+
 fn oidc_unavailable_response() -> Response {
     Response::builder()
         .status(503)
@@ -163,11 +169,13 @@ async fn callback(
         .generate_jwt(&jwt_secret.secret, jwt_secret.expiration)
         .or_else(|_| unauthorized("unauthorized!"))?;
 
+    let secure = is_secure(&ctx);
+
     let jwt_cookie = Cookie::build(("jwt", token))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(true)
+        .secure(secure)
         .build();
 
     // Store the raw ID token for use as id_token_hint during logout.
@@ -175,7 +183,7 @@ async fn callback(
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(true)
+        .secure(secure)
         .build();
 
     // Set org_pid cookie to the user's first org
@@ -185,7 +193,7 @@ async fn callback(
             .path("/")
             .http_only(true)
             .same_site(SameSite::Lax)
-            .secure(true)
+            .secure(secure)
             .build()
     });
 
@@ -229,22 +237,27 @@ async fn providers(oidc: Option<Extension<OidcContext>>) -> Result<Response> {
 }
 
 #[debug_handler]
-async fn logout(oidc: Option<Extension<OidcContext>>, jar: CookieJar) -> Result<Response> {
+async fn logout(
+    oidc: Option<Extension<OidcContext>>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+) -> Result<Response> {
     let Some(Extension(oidc)) = oidc else {
         return Ok(Redirect::temporary("/").into_response());
     };
+    let secure = is_secure(&ctx);
     let clear_jwt = Cookie::build(("jwt", ""))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(true)
+        .secure(secure)
         .max_age(time::Duration::ZERO)
         .build();
     let clear_id_token = Cookie::build(("id_token", ""))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(true)
+        .secure(secure)
         .max_age(time::Duration::ZERO)
         .build();
 
@@ -306,7 +319,7 @@ async fn refresh(State(ctx): State<AppContext>, jar: CookieJar) -> Result<Respon
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(true)
+        .secure(is_secure(&ctx))
         .build();
     let mut response = format::empty_json()?.into_response();
     response.headers_mut().insert(

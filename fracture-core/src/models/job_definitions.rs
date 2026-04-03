@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::sea_query::Order;
 use sea_orm::QueryOrder;
 
 pub use super::_entities::job_definitions::{ActiveModel, Column, Entity, Model};
@@ -35,11 +36,11 @@ impl Model {
             .flatten()
     }
 
-    /// Returns all job definitions for an org, ordered by name.
+    /// Returns all job definitions for an org, newest first.
     pub async fn find_all_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
-            .order_by_asc(Column::Name)
+            .order_by(Column::CreatedAt, Order::Desc)
             .all(db)
             .await
             .unwrap_or_default()
