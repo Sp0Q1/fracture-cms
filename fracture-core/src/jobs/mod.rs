@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -67,4 +68,26 @@ impl Default for JobRegistry {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// --- Global registry access ---
+
+static JOB_REGISTRY: OnceLock<JobRegistry> = OnceLock::new();
+
+/// Initialises the global job registry. Safe to call multiple times
+/// (only the first call takes effect).
+pub fn init_job_registry(registry: JobRegistry) {
+    JOB_REGISTRY.get_or_init(|| registry);
+}
+
+/// Returns a reference to the global job registry.
+///
+/// # Panics
+///
+/// Panics if `init_job_registry` has not been called.
+#[must_use]
+pub fn job_registry() -> &'static JobRegistry {
+    JOB_REGISTRY
+        .get()
+        .expect("JobRegistry not initialised — call init_job_registry() first")
 }
