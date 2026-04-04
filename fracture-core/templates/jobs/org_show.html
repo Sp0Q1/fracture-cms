@@ -55,6 +55,7 @@
         <thead>
             <tr>
                 <th>Status</th>
+                <th>Created</th>
                 <th>Started</th>
                 <th>Completed</th>
                 <th>Actions</th>
@@ -64,6 +65,7 @@
             {% for run in runs %}
             <tr>
                 <td><span class="badge job-status-{{ run.status }}">{{ run.status }}</span></td>
+                <td>{{ run.created_at }}</td>
                 <td>{{ run.started_at | default(value="—") }}</td>
                 <td>{{ run.completed_at | default(value="—") }}</td>
                 <td>
