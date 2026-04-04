@@ -17,6 +17,8 @@ pub struct Model {
     pub slug: String,
     pub is_personal: bool,
     pub is_platform_admin: bool,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub settings: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

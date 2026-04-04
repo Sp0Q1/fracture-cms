@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{QueryOrder, TransactionTrait};
+use sea_orm::{ActiveModelTrait, QueryOrder, TransactionTrait};
 
 use super::_entities::org_members;
 pub use super::_entities::organizations::{ActiveModel, Column, Entity, Model};
@@ -40,6 +40,7 @@ impl Model {
             slug: sea_orm::ActiveValue::Set(slug),
             is_personal: sea_orm::ActiveValue::Set(true),
             is_platform_admin: sea_orm::ActiveValue::Set(false),
+            settings: sea_orm::ActiveValue::Set(None),
             ..Default::default()
         }
         .insert(&txn)
@@ -89,6 +90,49 @@ impl Model {
             .await
             .unwrap_or(0)
             > 0
+    }
+
+    /// Returns the parsed settings JSON, or an empty object if unset/invalid.
+    #[must_use]
+    pub fn get_settings(&self) -> serde_json::Value {
+        self.settings
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_else(|| serde_json::json!({}))
+    }
+
+    /// Returns a single setting value by key, or `None` if missing.
+    #[must_use]
+    pub fn get_setting(&self, key: &str) -> Option<serde_json::Value> {
+        let settings = self.get_settings();
+        settings.get(key).cloned()
+    }
+
+    /// Sets a single setting key/value and persists to the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails.
+    pub async fn set_setting(
+        db: &DatabaseConnection,
+        org_id: i32,
+        key: &str,
+        value: serde_json::Value,
+    ) -> Result<(), DbErr> {
+        let org = Entity::find_by_id(org_id)
+            .one(db)
+            .await?
+            .ok_or(DbErr::RecordNotFound("organization not found".into()))?;
+        let mut settings = org.get_settings();
+        settings
+            .as_object_mut()
+            .expect("settings is always an object")
+            .insert(key.to_string(), value);
+        let mut active: ActiveModel = org.into();
+        active.settings =
+            sea_orm::ActiveValue::Set(Some(serde_json::to_string(&settings).unwrap()));
+        active.update(db).await?;
+        Ok(())
     }
 
     /// Finds all organizations a user belongs to.
