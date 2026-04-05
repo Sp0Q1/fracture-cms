@@ -112,7 +112,8 @@ impl Model {
     ///
     /// # Errors
     ///
-    /// Returns an error if the database update fails.
+    /// Returns an error if the database update fails or the settings JSON
+    /// is corrupt.
     pub async fn set_setting(
         db: &DatabaseConnection,
         org_id: i32,
@@ -124,13 +125,13 @@ impl Model {
             .await?
             .ok_or(DbErr::RecordNotFound("organization not found".into()))?;
         let mut settings = org.get_settings();
-        settings
+        let obj = settings
             .as_object_mut()
-            .expect("settings is always an object")
-            .insert(key.to_string(), value);
+            .ok_or(DbErr::Custom("settings is not a JSON object".into()))?;
+        obj.insert(key.to_string(), value);
+        let json = serde_json::to_string(&settings).map_err(|e| DbErr::Custom(e.to_string()))?;
         let mut active: ActiveModel = org.into();
-        active.settings =
-            sea_orm::ActiveValue::Set(Some(serde_json::to_string(&settings).unwrap()));
+        active.settings = sea_orm::ActiveValue::Set(Some(json));
         active.update(db).await?;
         Ok(())
     }
