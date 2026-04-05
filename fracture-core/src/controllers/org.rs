@@ -354,6 +354,86 @@ pub async fn remove_member(
     Ok(Redirect::to(&format!("/orgs/{pid}/members")).into_response())
 }
 
+/// POST /orgs/:pid/delete — delete organization (platform admin + org owner only)
+///
+/// Cannot delete platform admin orgs or personal orgs.
+/// Deletes all org members and invites, then the org itself.
+///
+/// # Errors
+///
+/// Returns an error if the database query fails or the user is not authenticated.
+///
+/// # Panics
+///
+/// Panics if the HTTP response builder fails, which should not occur with valid status codes.
+#[debug_handler]
+pub async fn delete(
+    Path(pid): Path<String>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org = org_model::Model::find_by_pid(&ctx.db, &pid)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    let org_ctx =
+        middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
+
+    // Require both Owner role on the org AND platform admin status
+    require_role!(org_ctx, OrgRole::Owner);
+    if !org_ctx.is_platform_admin {
+        return Ok(axum::response::Response::builder()
+            .status(axum::http::StatusCode::FORBIDDEN)
+            .body(axum::body::Body::from("Forbidden"))
+            .unwrap()
+            .into_response());
+    }
+
+    // Cannot delete platform admin orgs
+    if org.is_platform_admin {
+        return Ok(axum::response::Response::builder()
+            .status(axum::http::StatusCode::FORBIDDEN)
+            .body(axum::body::Body::from(
+                "Cannot delete the platform admin organization",
+            ))
+            .unwrap()
+            .into_response());
+    }
+
+    // Cannot delete personal orgs
+    if org.is_personal {
+        return Ok(axum::response::Response::builder()
+            .status(axum::http::StatusCode::FORBIDDEN)
+            .body(axum::body::Body::from(
+                "Cannot delete personal organizations",
+            ))
+            .unwrap()
+            .into_response());
+    }
+
+    // Delete all org members
+    org_members::Entity::delete_many()
+        .filter(org_members::Column::OrgId.eq(org.id))
+        .exec(&ctx.db)
+        .await?;
+
+    // Delete all org invites
+    crate::models::_entities::org_invites::Entity::delete_many()
+        .filter(crate::models::_entities::org_invites::Column::OrgId.eq(org.id))
+        .exec(&ctx.db)
+        .await?;
+
+    // Delete the organization itself
+    let active: organizations::ActiveModel = org.into();
+    active.delete(&ctx.db).await?;
+
+    Ok(Redirect::to("/orgs").into_response())
+}
+
 /// GET /orgs/switch/:pid — switch active org
 ///
 /// # Errors
@@ -445,6 +525,7 @@ pub fn routes() -> Routes {
         .add("/{pid}/members/invite", post(invite))
         .add("/{pid}/members/{user_pid}/role", post(update_role))
         .add("/{pid}/members/{user_pid}/remove", post(remove_member))
+        .add("/{pid}/delete", post(delete))
         .add("/switch/{pid}", get(switch))
 }
 
