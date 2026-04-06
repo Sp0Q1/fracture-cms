@@ -7,7 +7,7 @@ use crate::models::_entities::uploads;
 
 use super::config::UploadConfig;
 use super::storage::{FilesystemBackend, StorageBackend, StorageError};
-use super::validate::{ValidationError, ValidationPipeline, ValidatedFile};
+use super::validate::{ValidatedFile, ValidationError, ValidationPipeline};
 
 /// Errors from the upload service.
 #[derive(Debug, Error)]
@@ -65,6 +65,7 @@ impl UploadService {
     /// 5. Store on disk
     /// 6. Insert database record
     /// 7. Return result
+    #[allow(clippy::too_many_arguments)]
     pub async fn upload(
         &self,
         db: &DatabaseConnection,
@@ -89,7 +90,9 @@ impl UploadService {
             content_type,
             extension,
             clean_data,
-        } = self.pipeline.validate(original_name, declared_content_type, data)?;
+        } = self
+            .pipeline
+            .validate(original_name, declared_content_type, data)?;
 
         // Step 3: Generate UUID-based storage path
         let file_uuid = Uuid::new_v4();
@@ -125,8 +128,8 @@ impl UploadService {
             ..Default::default()
         };
 
-        let model = <uploads::ActiveModel as sea_orm::ActiveModelTrait>::insert(active_model, db)
-            .await?;
+        let model =
+            <uploads::ActiveModel as sea_orm::ActiveModelTrait>::insert(active_model, db).await?;
 
         // Step 7: Return result
         Ok(UploadResult {

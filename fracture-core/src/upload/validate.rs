@@ -393,7 +393,10 @@ mod tests {
     fn test_disallowed_extension() {
         let p = pipeline();
         let result = p.validate("test.exe", "application/octet-stream", vec![0; 10]);
-        assert!(matches!(result, Err(ValidationError::DisallowedExtension(_))));
+        assert!(matches!(
+            result,
+            Err(ValidationError::DisallowedExtension(_))
+        ));
     }
 
     #[test]

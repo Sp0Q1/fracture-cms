@@ -1,8 +1,3 @@
-use axum::body::Body;
-use axum::extract::Multipart;
-use axum::http::header;
-use axum_extra::extract::cookie::CookieJar;
-use loco_rs::prelude::*;
 use crate::controllers::middleware;
 use crate::models::_entities::uploads as uploads_entity;
 use crate::models::org_members::OrgRole;
@@ -10,6 +5,11 @@ use crate::models::uploads as upload_model;
 use crate::require_user;
 use crate::upload::config::UploadConfig;
 use crate::upload::service::{UploadError, UploadService};
+use axum::body::Body;
+use axum::extract::Multipart;
+use axum::http::header;
+use axum_extra::extract::cookie::CookieJar;
+use loco_rs::prelude::*;
 
 /// Constructs an `UploadService` from the application settings.
 async fn get_upload_service(ctx: &AppContext) -> Result<UploadService> {
@@ -55,10 +55,7 @@ pub async fn create(
         let name = field.name().unwrap_or("").to_string();
 
         if name == "file" {
-            let filename = field
-                .file_name()
-                .unwrap_or("unnamed")
-                .to_string();
+            let filename = field.file_name().unwrap_or("unnamed").to_string();
             let content_type = field
                 .content_type()
                 .unwrap_or("application/octet-stream")
@@ -139,7 +136,7 @@ pub async fn show(
         .ok_or_else(|| Error::NotFound)?;
 
     // Access control based on visibility
-    let vis = upload_model::Visibility::from_str(&upload.visibility);
+    let vis = upload_model::Visibility::parse(&upload.visibility);
     match vis {
         Some(upload_model::Visibility::Public) => {
             // Public files are served to everyone
@@ -158,17 +155,12 @@ pub async fn show(
             };
 
             let is_platform_admin =
-                crate::models::organizations::Model::is_user_platform_admin(&ctx.db, user.id)
-                    .await;
+                crate::models::organizations::Model::is_user_platform_admin(&ctx.db, user.id).await;
 
             if !is_platform_admin {
                 let is_org_member = crate::models::_entities::org_members::Entity::find()
-                    .filter(
-                        crate::models::_entities::org_members::Column::OrgId.eq(upload.org_id),
-                    )
-                    .filter(
-                        crate::models::_entities::org_members::Column::UserId.eq(user.id),
-                    )
+                    .filter(crate::models::_entities::org_members::Column::OrgId.eq(upload.org_id))
+                    .filter(crate::models::_entities::org_members::Column::UserId.eq(user.id))
                     .one(&ctx.db)
                     .await
                     .ok()

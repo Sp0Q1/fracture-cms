@@ -1,7 +1,6 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use clap::{Parser, Subcommand};
 use std::fs;
-use std::io::Read;
 use std::process::Command;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
