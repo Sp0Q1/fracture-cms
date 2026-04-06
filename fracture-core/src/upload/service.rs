@@ -115,7 +115,14 @@ impl UploadService {
         // Step 4: Compute SHA-256 checksum
         let mut hasher = Sha256::new();
         hasher.update(&clean_data);
-        let checksum = format!("{:x}", hasher.finalize());
+        let hash_bytes = hasher.finalize();
+        let checksum = hash_bytes
+            .iter()
+            .fold(String::with_capacity(64), |mut s, b| {
+                use std::fmt::Write;
+                let _ = write!(s, "{b:02x}");
+                s
+            });
 
         // Step 5: Store on disk
         let storage_path = self.storage.store(&relative_path, &clean_data).await?;
