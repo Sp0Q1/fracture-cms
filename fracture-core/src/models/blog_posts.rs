@@ -38,7 +38,7 @@ fn render_markdown(input: &str) -> String {
     options.extension.table = true;
     options.extension.autolink = true;
     options.extension.tasklist = true;
-    options.render.unsafe_ = false;
+    options.render.r#unsafe = false;
     markdown_to_html(input, &options)
 }
 
