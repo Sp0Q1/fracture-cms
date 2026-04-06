@@ -48,13 +48,17 @@ pub struct ValidationPipeline {
 impl ValidationPipeline {
     /// Creates a new validation pipeline with the given allowed content types.
     #[must_use]
-    pub fn new(allowed_content_types: Vec<String>) -> Self {
+    pub const fn new(allowed_content_types: Vec<String>) -> Self {
         Self {
             allowed_content_types,
         }
     }
 
     /// Runs the full validation pipeline on a file.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ValidationError` if the file fails any validation step.
     pub fn validate(
         &self,
         filename: &str,
@@ -62,16 +66,16 @@ impl ValidationPipeline {
         data: Vec<u8>,
     ) -> Result<ValidatedFile, ValidationError> {
         // Step 1: Extension allowlist
-        let extension = self.check_extension(filename)?;
+        let extension = Self::check_extension(filename)?;
 
         // Step 2: Content-type allowlist
         self.check_content_type(declared_content_type)?;
 
         // Step 3: Magic bytes detection
-        let detected_type = self.detect_magic_type(&data)?;
+        let detected_type = Self::detect_magic_type(&data)?;
 
         // Step 4: Extension-to-magic consistency
-        self.check_consistency(&extension, &detected_type)?;
+        Self::check_consistency(&extension, &detected_type)?;
 
         // Step 5: SVG sanitization if applicable
         let clean_data = if detected_type == "image/svg+xml" {
@@ -88,7 +92,7 @@ impl ValidationPipeline {
     }
 
     /// Checks that the file extension is in the allowlist.
-    fn check_extension(&self, filename: &str) -> Result<String, ValidationError> {
+    fn check_extension(filename: &str) -> Result<String, ValidationError> {
         let extension = filename
             .rsplit('.')
             .next()
@@ -115,14 +119,12 @@ impl ValidationPipeline {
         if self.allowed_content_types.iter().any(|t| t == &media_type) {
             Ok(())
         } else {
-            Err(ValidationError::DisallowedContentType(
-                media_type.to_string(),
-            ))
+            Err(ValidationError::DisallowedContentType(media_type))
         }
     }
 
     /// Detects the file type from magic bytes.
-    fn detect_magic_type(&self, data: &[u8]) -> Result<String, ValidationError> {
+    fn detect_magic_type(data: &[u8]) -> Result<String, ValidationError> {
         // PNG: 89 50 4E 47
         if data.len() >= 4 && data[..4] == [0x89, 0x50, 0x4E, 0x47] {
             return Ok("image/png".to_string());
@@ -152,11 +154,7 @@ impl ValidationPipeline {
     }
 
     /// Verifies that the detected content type is consistent with the file extension.
-    fn check_consistency(
-        &self,
-        extension: &str,
-        detected_type: &str,
-    ) -> Result<(), ValidationError> {
+    fn check_consistency(extension: &str, detected_type: &str) -> Result<(), ValidationError> {
         let expected_type = ALLOWED_EXTENSIONS
             .iter()
             .find(|(ext, _)| *ext == extension)
@@ -180,9 +178,8 @@ fn is_svg(data: &[u8]) -> bool {
         data
     };
 
-    let s = match std::str::from_utf8(text) {
-        Ok(s) => s,
-        Err(_) => return false,
+    let Ok(s) = std::str::from_utf8(text) else {
+        return false;
     };
 
     let trimmed = s.trim_start();
@@ -337,10 +334,10 @@ fn remove_data_urls(input: &str) -> String {
         loop {
             let lower = result.to_ascii_lowercase();
             // Find attr="data:..." or attr='data:...'
-            let pattern_dq = format!("{}=\"data:", attr);
-            let pattern_sq = format!("{}='data:", attr);
+            let double_quote_pat = format!("{attr}=\"data:");
+            let single_quote_pat = format!("{attr}='data:");
 
-            if let Some(pos) = lower.find(&pattern_dq) {
+            if let Some(pos) = lower.find(&double_quote_pat) {
                 // Replace the data: URL value with empty
                 let value_start = pos + attr.len() + 2; // after ="
                 if let Some(end) = result[value_start..].find('"') {
@@ -348,7 +345,7 @@ fn remove_data_urls(input: &str) -> String {
                 } else {
                     break;
                 }
-            } else if let Some(pos) = lower.find(&pattern_sq) {
+            } else if let Some(pos) = lower.find(&single_quote_pat) {
                 let value_start = pos + attr.len() + 2; // after ='
                 if let Some(end) = result[value_start..].find('\'') {
                     result.replace_range(value_start..value_start + end, "");

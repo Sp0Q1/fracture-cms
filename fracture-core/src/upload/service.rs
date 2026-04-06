@@ -47,6 +47,10 @@ pub struct UploadService {
 
 impl UploadService {
     /// Creates a new upload service with the given config.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StorageError` if the storage backend cannot be initialized.
     pub async fn new(config: UploadConfig) -> Result<Self, StorageError> {
         let storage = FilesystemBackend::new(&config.storage_root).await?;
         let pipeline = ValidationPipeline::new(config.allowed_types.clone());
@@ -65,6 +69,10 @@ impl UploadService {
     /// 5. Store on disk
     /// 6. Insert database record
     /// 7. Return result
+    ///
+    /// # Errors
+    ///
+    /// Returns an `UploadError` if the file fails validation, storage, or DB insert.
     #[allow(clippy::too_many_arguments)]
     pub async fn upload(
         &self,
@@ -113,7 +121,7 @@ impl UploadService {
         let storage_path = self.storage.store(&relative_path, &clean_data).await?;
 
         // Step 6: Insert database record
-        let size_bytes = clean_data.len() as i64;
+        let size_bytes = i64::try_from(clean_data.len()).unwrap_or(0);
         let active_model = uploads::ActiveModel {
             org_id: sea_orm::ActiveValue::Set(org_id),
             uploaded_by: sea_orm::ActiveValue::Set(uploaded_by),
@@ -135,12 +143,16 @@ impl UploadService {
         Ok(UploadResult {
             pid: model.pid,
             content_type,
-            size_bytes: size_bytes as u64,
+            size_bytes: u64::try_from(size_bytes).unwrap_or(0),
             checksum_sha256: checksum,
         })
     }
 
     /// Reads the file data for a given upload record.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StorageError` if the file cannot be read from storage.
     pub async fn read_file(&self, upload: &uploads::Model) -> Result<Vec<u8>, StorageError> {
         // The storage_path is absolute; we need the relative portion.
         // Derive relative path from the stored absolute path by stripping the root.
@@ -154,6 +166,10 @@ impl UploadService {
     }
 
     /// Deletes the file and returns Ok. The caller is responsible for deleting the DB record.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StorageError` if the file cannot be deleted from storage.
     pub async fn delete_file(&self, upload: &uploads::Model) -> Result<(), StorageError> {
         let root = &self.config.storage_root;
         let relative = upload

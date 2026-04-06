@@ -106,12 +106,7 @@ pub async fn create(
         "checksum_sha256": result.checksum_sha256,
     });
 
-    Ok(axum::response::Response::builder()
-        .status(axum::http::StatusCode::CREATED)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(serde_json::to_string(&body).unwrap()))
-        .unwrap()
-        .into_response())
+    format::json(body)
 }
 
 /// GET /api/uploads/{pid} — serve an uploaded file.
@@ -149,9 +144,8 @@ pub async fn show(
             // Apps can extend this with additional checks (e.g. pentester
             // assignment) by overriding the upload routes.
             let user = middleware::get_current_user(&jar, &ctx).await;
-            let user = match user {
-                Some(u) => u,
-                None => return Err(Error::NotFound),
+            let Some(user) = user else {
+                return Err(Error::NotFound);
             };
 
             let is_platform_admin =
@@ -186,7 +180,7 @@ pub async fn show(
         _ => "private, no-cache",
     };
 
-    Ok(axum::response::Response::builder()
+    axum::response::Response::builder()
         .status(axum::http::StatusCode::OK)
         .header(header::CONTENT_TYPE, &upload.content_type)
         .header(header::CACHE_CONTROL, cache_control)
@@ -196,8 +190,8 @@ pub async fn show(
         )
         .header("X-Content-Type-Options", "nosniff")
         .body(Body::from(data))
-        .unwrap()
-        .into_response())
+        .map(axum::response::IntoResponse::into_response)
+        .map_err(|e| Error::Message(format!("Response build error: {e}")))
 }
 
 /// DELETE /api/uploads/{pid} — delete an uploaded file.
@@ -249,11 +243,11 @@ pub async fn destroy(
     let active: uploads_entity::ActiveModel = upload.into();
     active.delete(&ctx.db).await?;
 
-    Ok(axum::response::Response::builder()
+    axum::response::Response::builder()
         .status(axum::http::StatusCode::NO_CONTENT)
         .body(Body::empty())
-        .unwrap()
-        .into_response())
+        .map(axum::response::IntoResponse::into_response)
+        .map_err(|e| Error::Message(format!("Response build error: {e}")))
 }
 
 pub fn routes() -> Routes {

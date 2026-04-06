@@ -38,6 +38,10 @@ pub struct FilesystemBackend {
 impl FilesystemBackend {
     /// Creates a new filesystem backend rooted at `root`.
     /// Creates the root directory if it does not exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StorageError` if the root directory cannot be created or canonicalized.
     pub async fn new(root: impl Into<PathBuf>) -> Result<Self, StorageError> {
         let root = root.into();
         tokio::fs::create_dir_all(&root)
@@ -57,7 +61,7 @@ impl FilesystemBackend {
         // Normalize the path components to detect traversal attempts.
         // We check that no component is ".." after joining.
         for component in path.components() {
-            if let std::path::Component::ParentDir = component {
+            if component == std::path::Component::ParentDir {
                 return Err(StorageError::PathTraversal);
             }
         }

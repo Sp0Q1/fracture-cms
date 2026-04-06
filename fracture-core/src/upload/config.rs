@@ -56,6 +56,7 @@ fn default_allowed_types() -> Vec<String> {
 impl UploadConfig {
     /// Reads upload config from the application settings.
     /// Falls back to defaults if the `uploads` key is missing.
+    #[must_use]
     pub fn from_settings(settings: Option<&serde_json::Value>) -> Self {
         settings
             .and_then(|s| s.get("uploads"))
