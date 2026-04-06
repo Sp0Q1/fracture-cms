@@ -7,4 +7,5 @@ pub use super::job_runs::Entity as JobRuns;
 pub use super::org_invites::Entity as OrgInvites;
 pub use super::org_members::Entity as OrgMembers;
 pub use super::organizations::Entity as Organizations;
+pub use super::uploads::Entity as Uploads;
 pub use super::users::Entity as Users;

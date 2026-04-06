@@ -1,0 +1,74 @@
+use sea_orm::entity::prelude::*;
+use sea_orm::QueryOrder;
+
+pub use super::_entities::uploads::{ActiveModel, Column, Entity, Model};
+pub type Uploads = Entity;
+
+/// Upload visibility levels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Visibility {
+    /// Visible only to members of the owning organization.
+    Org,
+    /// Publicly accessible (e.g. blog images).
+    Public,
+}
+
+impl Visibility {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Org => "org",
+            Self::Public => "public",
+        }
+    }
+
+    #[must_use]
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "org" => Some(Self::Org),
+            "public" => Some(Self::Public),
+            _ => None,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ActiveModelBehavior for ActiveModel {
+    async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut this = self;
+        if insert {
+            this.pid = sea_orm::ActiveValue::Set(Uuid::new_v4());
+        }
+        Ok(this)
+    }
+}
+
+impl Model {
+    /// Finds an upload by its public ID (UUID).
+    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
+        let uuid = Uuid::parse_str(pid).ok()?;
+        Entity::find()
+            .filter(Column::Pid.eq(uuid))
+            .one(db)
+            .await
+            .ok()
+            .flatten()
+    }
+
+    /// Returns all uploads for an organization, newest first.
+    pub async fn find_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+        Entity::find()
+            .filter(Column::OrgId.eq(org_id))
+            .order_by_desc(Column::CreatedAt)
+            .all(db)
+            .await
+            .unwrap_or_default()
+    }
+}
+
+impl ActiveModel {}
+
+impl Entity {}

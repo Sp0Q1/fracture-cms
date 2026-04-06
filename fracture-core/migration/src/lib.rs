@@ -20,6 +20,7 @@ mod m20260330_000003_create_job_definitions;
 mod m20260330_000004_create_job_runs;
 mod m20260330_000005_create_job_run_diffs;
 mod m20260404_000001_add_settings_to_organizations;
+mod m20260406_000001_create_uploads;
 
 pub struct Migrator;
 
@@ -43,6 +44,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260330_000004_create_job_runs::Migration),
             Box::new(m20260330_000005_create_job_run_diffs::Migration),
             Box::new(m20260404_000001_add_settings_to_organizations::Migration),
+            Box::new(m20260406_000001_create_uploads::Migration),
         ]
     }
 }

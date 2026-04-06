@@ -4,6 +4,7 @@ pub mod initializers;
 pub mod jobs;
 pub mod mailers;
 pub mod models;
+pub mod upload;
 pub mod views;
 
 use include_dir::{include_dir, Dir};

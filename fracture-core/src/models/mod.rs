@@ -6,4 +6,5 @@ pub mod job_runs;
 pub mod org_invites;
 pub mod org_members;
 pub mod organizations;
+pub mod uploads;
 pub mod users;

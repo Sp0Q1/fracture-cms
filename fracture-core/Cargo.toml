@@ -27,4 +27,7 @@ tera = { version = "1" }
 time = { version = "0.3" }
 tracing = { version = "0.1" }
 validator = { version = "0.20" }
+sha2 = "0.10"
+tokio = { version = "1", features = ["fs"] }
+thiserror = "2"
 fracture-core-migration = { path = "migration" }
