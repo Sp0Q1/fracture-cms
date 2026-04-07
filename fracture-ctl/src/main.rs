@@ -886,19 +886,19 @@ fn run_db_query(sql: &str) -> String {
                     .unwrap_or("gethacked.sqlite");
                 let db_path = format!("{vol}/{filename}");
 
-                // Try without sudo first (rootless podman — user owns the volume)
+                // Try direct access first
                 let output = Command::new("sqlite3").args([&db_path, sql]).output();
-                if let Ok(o) = output {
+                if let Ok(ref o) = output {
                     if o.status.success() {
                         return String::from_utf8_lossy(&o.stdout).to_string();
                     }
                 }
 
-                // Fall back to sudo only if needed
-                let output = Command::new("sudo")
-                    .args(["sqlite3", &db_path, sql])
+                // Try podman unshare (enters rootless user namespace — can access volume files)
+                let output = Command::new("podman")
+                    .args(["unshare", "sqlite3", &db_path, sql])
                     .output();
-                if let Ok(o) = output {
+                if let Ok(ref o) = output {
                     if o.status.success() {
                         return String::from_utf8_lossy(&o.stdout).to_string();
                     }
