@@ -848,15 +848,30 @@ fn run_db_query(sql: &str) -> String {
                     }
                 });
 
-            // Also try common volume names
+            // Also try: list all volumes and find one containing "app_data"
             let volume_path = volume_path.or_else(|| {
-                for name in &["fracture-pt_app_data", "fracturept_app_data", "app_data"] {
-                    if let Ok(o) = Command::new("podman")
-                        .args(["volume", "inspect", name, "--format", "{{.Mountpoint}}"])
-                        .output()
-                    {
-                        if o.status.success() {
-                            return Some(String::from_utf8_lossy(&o.stdout).trim().to_string());
+                let Ok(o) = Command::new("podman")
+                    .args(["volume", "ls", "--format", "{{.Name}}"])
+                    .output()
+                else {
+                    return None;
+                };
+                if !o.status.success() {
+                    return None;
+                }
+                let names = String::from_utf8_lossy(&o.stdout);
+                for name in names.lines() {
+                    let name = name.trim();
+                    if name.contains("app_data") || name.contains("appdata") {
+                        if let Ok(inspect) = Command::new("podman")
+                            .args(["volume", "inspect", name, "--format", "{{.Mountpoint}}"])
+                            .output()
+                        {
+                            if inspect.status.success() {
+                                return Some(
+                                    String::from_utf8_lossy(&inspect.stdout).trim().to_string(),
+                                );
+                            }
                         }
                     }
                 }
@@ -871,18 +886,18 @@ fn run_db_query(sql: &str) -> String {
                     .unwrap_or("gethacked.sqlite");
                 let db_path = format!("{vol}/{filename}");
 
-                // Try sqlite3 on the host first
-                let output = Command::new("sudo")
-                    .args(["sqlite3", &db_path, sql])
-                    .output();
+                // Try without sudo first (rootless podman — user owns the volume)
+                let output = Command::new("sqlite3").args([&db_path, sql]).output();
                 if let Ok(o) = output {
                     if o.status.success() {
                         return String::from_utf8_lossy(&o.stdout).to_string();
                     }
                 }
 
-                // Try without sudo
-                let output = Command::new("sqlite3").args([&db_path, sql]).output();
+                // Fall back to sudo only if needed
+                let output = Command::new("sudo")
+                    .args(["sqlite3", &db_path, sql])
+                    .output();
                 if let Ok(o) = output {
                     if o.status.success() {
                         return String::from_utf8_lossy(&o.stdout).to_string();
