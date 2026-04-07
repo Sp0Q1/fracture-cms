@@ -27,7 +27,7 @@
         </div>
         <div data-field>
             <label for="body">Body (Markdown)</label>
-            <textarea id="body" name="body" rows="20" placeholder="Write your post in Markdown..." required></textarea>
+            <textarea id="body" name="body" rows="20" placeholder="Write your post in Markdown..." required data-md-editor></textarea>
         </div>
         <details>
             <summary>SEO Settings</summary>
@@ -47,3 +47,7 @@
     </form>
 </article>
 {% endblock content %}
+
+{% block js %}
+<script src="/static/md-editor.js?v=1" crossorigin="anonymous"></script>
+{% endblock js %}
