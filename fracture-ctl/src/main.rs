@@ -406,12 +406,52 @@ fn cmd_up() {
         eprintln!();
     }
 
+    // Auto-backup before deploying (safety net for auto_migrate)
+    let cname = container_name("app");
+    let is_running = Command::new("podman")
+        .args(["inspect", "--format", "{{.State.Running}}", &cname])
+        .output()
+        .ok()
+        .is_some_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "true");
+
+    if is_running {
+        let timestamp = chrono_timestamp();
+        let backup_file = format!(".backup-pre-deploy-{timestamp}.sqlite");
+        eprintln!("Taking pre-deploy backup...");
+        cmd_backup(Some(backup_file.clone()));
+        eprintln!();
+
+        // Clean old pre-deploy backups (keep last 3)
+        let mut backups: Vec<_> = fs::read_dir(".")
+            .ok()
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with(".backup-pre-deploy-")
+            })
+            .collect();
+        backups.sort_by_key(|e| e.file_name());
+        while backups.len() > 3 {
+            if let Some(old) = backups.first() {
+                let _ = fs::remove_file(old.path());
+            }
+            backups.remove(0);
+        }
+    } else {
+        eprintln!("App not running — skipping pre-deploy backup (fresh start).");
+    }
+
     // Pull latest image before starting
     eprintln!("Pulling latest image...");
     let _ = Command::new("podman")
         .args(["compose", "-f", "compose.prod.yaml", "pull", "app"])
         .status();
+
     // Force recreate to use the new image
+    // auto_migrate: true in config ensures migrations run on boot
     let status = Command::new("podman")
         .args([
             "compose",
