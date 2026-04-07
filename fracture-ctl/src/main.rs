@@ -625,66 +625,33 @@ fn cmd_backup(output: Option<String>) {
         }
         "sqlite" => {
             let out = output.unwrap_or_else(|| format!("backup-{timestamp}.sqlite"));
-            eprintln!("Backing up SQLite database '{db_user_or_path}'...");
+            let cname = container_name("app");
+            eprintln!("Backing up SQLite database '{db_user_or_path}' from container '{cname}'...");
 
-            // Copy the SQLite file via the app container's volume
-            let status = Command::new("podman")
+            // Checkpoint WAL to ensure consistent copy (best-effort)
+            let _ = Command::new("podman")
                 .args([
-                    "compose",
-                    "-f",
-                    compose_file(),
                     "exec",
-                    "-T",
-                    "app",
-                    "sqlite3",
-                    &db_user_or_path,
-                    ".backup /tmp/backup.sqlite",
+                    &cname,
+                    "sh",
+                    "-c",
+                    &format!(
+                        "sqlite3 '{}' 'PRAGMA wal_checkpoint(TRUNCATE);' 2>/dev/null || true",
+                        db_user_or_path
+                    ),
                 ])
                 .status();
 
-            let success = status.map(|s| s.success()).unwrap_or(false);
-            if success {
-                // Copy from container
-                let _ = Command::new("podman")
-                    .args([
-                        "compose",
-                        "-f",
-                        compose_file(),
-                        "cp",
-                        "app:/tmp/backup.sqlite",
-                        &out,
-                    ])
-                    .status();
-                let _ = Command::new("podman")
-                    .args([
-                        "compose",
-                        "-f",
-                        compose_file(),
-                        "exec",
-                        "-T",
-                        "app",
-                        "rm",
-                        "/tmp/backup.sqlite",
-                    ])
-                    .status();
-            } else {
-                // Fallback: direct file copy if sqlite3 not available
-                eprintln!("sqlite3 not available in container, using file copy...");
-                let cp_status = Command::new("podman")
-                    .args([
-                        "compose",
-                        "-f",
-                        compose_file(),
-                        "cp",
-                        &format!("app:{db_user_or_path}"),
-                        &out,
-                    ])
-                    .status()
-                    .expect("failed to copy database file");
-                if !cp_status.success() {
-                    eprintln!("Error: could not copy database file");
-                    std::process::exit(1);
-                }
+            // Use podman cp (not podman-compose cp which doesn't exist)
+            let cp_status = Command::new("podman")
+                .args(["cp", &format!("{cname}:{db_user_or_path}"), &out])
+                .status()
+                .expect("failed to run podman cp");
+
+            if !cp_status.success() {
+                eprintln!("Error: could not copy database file from container");
+                eprintln!("Is the app container running? Check: podman ps");
+                std::process::exit(1);
             }
 
             let size = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
@@ -754,25 +721,31 @@ fn cmd_restore(file: String, yes: bool) {
             }
         }
         "sqlite" => {
-            eprintln!("Restoring SQLite database from {file}...");
+            let cname = container_name("app");
+            eprintln!("Restoring SQLite database from {file} into container '{cname}'...");
 
-            // Copy backup into the container and replace the database
+            // Use podman cp to copy backup into container
             let cp_status = Command::new("podman")
-                .args([
-                    "compose",
-                    "-f",
-                    compose_file(),
-                    "cp",
-                    &file,
-                    &format!("app:{db_user_or_path}"),
-                ])
+                .args(["cp", &file, &format!("{cname}:{db_user_or_path}")])
                 .status()
-                .expect("failed to copy backup file");
+                .expect("failed to run podman cp");
 
             if cp_status.success() {
+                // Remove WAL/SHM files so the app starts clean
+                let _ = Command::new("podman")
+                    .args([
+                        "exec",
+                        &cname,
+                        "rm",
+                        "-f",
+                        &format!("{db_user_or_path}-wal"),
+                        &format!("{db_user_or_path}-shm"),
+                    ])
+                    .status();
                 eprintln!("Restore complete. Restart the app: fracture-ctl up");
             } else {
-                eprintln!("Error: could not copy backup file into container");
+                eprintln!("Error: could not copy backup into container");
+                eprintln!("Is the container running? Try: podman ps");
                 std::process::exit(1);
             }
         }
@@ -790,6 +763,35 @@ fn chrono_timestamp() -> String {
         .output()
         .expect("failed to get timestamp");
     String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// Resolve the running container name for a compose service.
+fn container_name(service: &str) -> String {
+    let output = Command::new("podman")
+        .args([
+            "compose",
+            "-f",
+            compose_file(),
+            "ps",
+            "--format",
+            "{{.Names}}",
+            service,
+        ])
+        .output();
+    if let Ok(out) = output {
+        let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !name.is_empty() {
+            // podman-compose may return multiple lines; take the first
+            return name.lines().next().unwrap_or(&name).to_string();
+        }
+    }
+    // Fallback: guess from common naming conventions
+    let dir = std::env::current_dir()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "fracture".into())
+        .replace(['-', '_'], "");
+    format!("{dir}_{service}_1")
 }
 
 /// Find the compose file to use.
