@@ -41,6 +41,21 @@ enum Commands {
         #[arg(long)]
         setup: bool,
     },
+    /// Back up the database to a file
+    Backup {
+        /// Output file path (default: backup-{timestamp}.sql or .sqlite)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    /// Restore the database from a backup file
+    Restore {
+        /// Backup file to restore from
+        file: String,
+
+        /// Skip confirmation prompt
+        #[arg(long)]
+        yes: bool,
+    },
     /// Update fracture-ctl to the latest version
     Update,
 }
@@ -461,6 +476,334 @@ fn cmd_dev(setup: bool) {
     std::process::exit(status.code().unwrap_or(1));
 }
 
+/// Detect the database type from .env.prod or compose config.
+/// Returns ("postgres", db_user, db_password, db_name, db_host) or ("sqlite", path, "", "", "").
+fn detect_database() -> (String, String, String, String, String) {
+    // Check .env.prod for DATABASE_URL
+    let env_content = fs::read_to_string(".env.prod")
+        .or_else(|_| fs::read_to_string(".env"))
+        .unwrap_or_default();
+
+    for line in env_content.lines() {
+        let line = line.trim();
+        if line.starts_with('#') || !line.contains('=') {
+            continue;
+        }
+        if let Some(val) = line.strip_prefix("DATABASE_URL=") {
+            let val = val.trim();
+            if val.starts_with("postgres://") || val.starts_with("postgresql://") {
+                // Parse postgres URL: postgres://user:pass@host:port/dbname
+                let after_scheme = val
+                    .strip_prefix("postgres://")
+                    .or_else(|| val.strip_prefix("postgresql://"))
+                    .unwrap_or(val);
+                let (userpass, hostdb) = after_scheme.split_once('@').unwrap_or(("", after_scheme));
+                let (user, pass) = userpass.split_once(':').unwrap_or((userpass, ""));
+                let (hostport, dbname) = hostdb.split_once('/').unwrap_or((hostdb, "fracture"));
+                let host = hostport.split(':').next().unwrap_or("localhost");
+                return (
+                    "postgres".into(),
+                    user.to_string(),
+                    pass.to_string(),
+                    dbname.to_string(),
+                    host.to_string(),
+                );
+            }
+            if val.starts_with("sqlite") {
+                // sqlite:///path/to/db.sqlite?mode=rwc
+                let path = val
+                    .strip_prefix("sqlite:///")
+                    .unwrap_or(val)
+                    .split('?')
+                    .next()
+                    .unwrap_or("data/app.sqlite");
+                return (
+                    "sqlite".into(),
+                    path.to_string(),
+                    String::new(),
+                    String::new(),
+                    String::new(),
+                );
+            }
+        }
+    }
+
+    // Default: check for SQLite file in common locations
+    for path in &[
+        "/app/data/gethacked.sqlite",
+        "data/app.sqlite",
+        "gethacked.sqlite",
+    ] {
+        if std::path::Path::new(path).exists() {
+            return (
+                "sqlite".into(),
+                (*path).to_string(),
+                String::new(),
+                String::new(),
+                String::new(),
+            );
+        }
+    }
+
+    // Check if compose has a db service (implies postgres)
+    let compose = fs::read_to_string("compose.prod.yaml").unwrap_or_default();
+    if compose.contains("postgres") {
+        // Read credentials from env vars in compose
+        let user = env_content
+            .lines()
+            .find_map(|l| l.strip_prefix("APP_DB_USER="))
+            .unwrap_or("fracture")
+            .to_string();
+        let pass = env_content
+            .lines()
+            .find_map(|l| l.strip_prefix("APP_DB_PASSWORD="))
+            .unwrap_or("")
+            .to_string();
+        let name = env_content
+            .lines()
+            .find_map(|l| l.strip_prefix("APP_DB_NAME="))
+            .unwrap_or("fracture")
+            .to_string();
+        return ("postgres".into(), user, pass, name, "db".into());
+    }
+
+    // Fallback: assume SQLite on app_data volume
+    (
+        "sqlite".into(),
+        "/app/data/gethacked.sqlite".into(),
+        String::new(),
+        String::new(),
+        String::new(),
+    )
+}
+
+fn cmd_backup(output: Option<String>) {
+    let (db_type, db_user_or_path, db_pass, db_name, db_host) = detect_database();
+    let timestamp = chrono_timestamp();
+
+    match db_type.as_str() {
+        "postgres" => {
+            let out = output.unwrap_or_else(|| format!("backup-{timestamp}.sql"));
+            eprintln!("Backing up PostgreSQL database '{db_name}' on {db_host}...");
+
+            // Use podman exec to run pg_dump inside the db container
+            let status = Command::new("podman")
+                .args([
+                    "compose",
+                    "-f",
+                    compose_file(),
+                    "exec",
+                    "-T",
+                    "db",
+                    "pg_dump",
+                    "-U",
+                    &db_user_or_path,
+                    "-d",
+                    &db_name,
+                    "--no-owner",
+                    "--no-privileges",
+                    "--clean",
+                    "--if-exists",
+                ])
+                .stdout(fs::File::create(&out).expect("cannot create output file"))
+                .envs(if db_pass.is_empty() {
+                    vec![]
+                } else {
+                    vec![("PGPASSWORD", db_pass.as_str())]
+                })
+                .status()
+                .expect("failed to run pg_dump");
+
+            if status.success() {
+                let size = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+                eprintln!("Backup saved: {out} ({} bytes)", size);
+            } else {
+                eprintln!("Error: pg_dump failed");
+                let _ = fs::remove_file(&out);
+                std::process::exit(1);
+            }
+        }
+        "sqlite" => {
+            let out = output.unwrap_or_else(|| format!("backup-{timestamp}.sqlite"));
+            eprintln!("Backing up SQLite database '{db_user_or_path}'...");
+
+            // Copy the SQLite file via the app container's volume
+            let status = Command::new("podman")
+                .args([
+                    "compose",
+                    "-f",
+                    compose_file(),
+                    "exec",
+                    "-T",
+                    "app",
+                    "sqlite3",
+                    &db_user_or_path,
+                    ".backup /tmp/backup.sqlite",
+                ])
+                .status();
+
+            let success = status.map(|s| s.success()).unwrap_or(false);
+            if success {
+                // Copy from container
+                let _ = Command::new("podman")
+                    .args([
+                        "compose",
+                        "-f",
+                        compose_file(),
+                        "cp",
+                        "app:/tmp/backup.sqlite",
+                        &out,
+                    ])
+                    .status();
+                let _ = Command::new("podman")
+                    .args([
+                        "compose",
+                        "-f",
+                        compose_file(),
+                        "exec",
+                        "-T",
+                        "app",
+                        "rm",
+                        "/tmp/backup.sqlite",
+                    ])
+                    .status();
+            } else {
+                // Fallback: direct file copy if sqlite3 not available
+                eprintln!("sqlite3 not available in container, using file copy...");
+                let cp_status = Command::new("podman")
+                    .args([
+                        "compose",
+                        "-f",
+                        compose_file(),
+                        "cp",
+                        &format!("app:{db_user_or_path}"),
+                        &out,
+                    ])
+                    .status()
+                    .expect("failed to copy database file");
+                if !cp_status.success() {
+                    eprintln!("Error: could not copy database file");
+                    std::process::exit(1);
+                }
+            }
+
+            let size = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+            eprintln!("Backup saved: {out} ({size} bytes)");
+        }
+        _ => {
+            eprintln!("Error: unknown database type '{db_type}'");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn cmd_restore(file: String, yes: bool) {
+    if !std::path::Path::new(&file).exists() {
+        eprintln!("Error: backup file not found: {file}");
+        std::process::exit(1);
+    }
+
+    let (db_type, db_user_or_path, db_pass, db_name, _db_host) = detect_database();
+
+    if !yes {
+        eprintln!("WARNING: This will replace the current {db_type} database with the backup from '{file}'.");
+        eprintln!("         The application should be stopped first (fracture-ctl down).");
+        eprint!("Continue? [y/N] ");
+        let mut answer = String::new();
+        std::io::stdin().read_line(&mut answer).unwrap_or(0);
+        if answer.trim().to_lowercase() != "y" {
+            eprintln!("Aborted.");
+            std::process::exit(0);
+        }
+    }
+
+    match db_type.as_str() {
+        "postgres" => {
+            eprintln!("Restoring PostgreSQL database '{db_name}' from {file}...");
+
+            // Pipe the SQL file into psql
+            let input = fs::File::open(&file).expect("cannot open backup file");
+            let status = Command::new("podman")
+                .args([
+                    "compose",
+                    "-f",
+                    compose_file(),
+                    "exec",
+                    "-T",
+                    "db",
+                    "psql",
+                    "-U",
+                    &db_user_or_path,
+                    "-d",
+                    &db_name,
+                ])
+                .stdin(input)
+                .envs(if db_pass.is_empty() {
+                    vec![]
+                } else {
+                    vec![("PGPASSWORD", db_pass.as_str())]
+                })
+                .status()
+                .expect("failed to run psql");
+
+            if status.success() {
+                eprintln!("Restore complete. Restart the app: fracture-ctl up");
+            } else {
+                eprintln!("Error: psql restore failed");
+                std::process::exit(1);
+            }
+        }
+        "sqlite" => {
+            eprintln!("Restoring SQLite database from {file}...");
+
+            // Copy backup into the container and replace the database
+            let cp_status = Command::new("podman")
+                .args([
+                    "compose",
+                    "-f",
+                    compose_file(),
+                    "cp",
+                    &file,
+                    &format!("app:{db_user_or_path}"),
+                ])
+                .status()
+                .expect("failed to copy backup file");
+
+            if cp_status.success() {
+                eprintln!("Restore complete. Restart the app: fracture-ctl up");
+            } else {
+                eprintln!("Error: could not copy backup file into container");
+                std::process::exit(1);
+            }
+        }
+        _ => {
+            eprintln!("Error: unknown database type '{db_type}'");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Get a simple timestamp string for backup filenames.
+fn chrono_timestamp() -> String {
+    let output = Command::new("date")
+        .args(["+%Y%m%d-%H%M%S"])
+        .output()
+        .expect("failed to get timestamp");
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// Find the compose file to use.
+fn compose_file() -> &'static str {
+    if std::path::Path::new("compose.prod.yaml").exists() {
+        "compose.prod.yaml"
+    } else if std::path::Path::new("compose.yaml").exists() {
+        "compose.yaml"
+    } else {
+        eprintln!("Error: no compose file found");
+        std::process::exit(1);
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -475,6 +818,8 @@ fn main() {
         Commands::Down => cmd_down(),
         Commands::Ci => cmd_ci(),
         Commands::Dev { setup } => cmd_dev(setup),
+        Commands::Backup { output } => cmd_backup(output),
+        Commands::Restore { file, yes } => cmd_restore(file, yes),
         Commands::Update => cmd_update(),
     }
 }
