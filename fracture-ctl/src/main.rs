@@ -56,8 +56,24 @@ enum Commands {
         #[arg(long)]
         yes: bool,
     },
+    /// Manage platform administrators
+    Admin {
+        #[command(subcommand)]
+        action: AdminAction,
+    },
     /// Update fracture-ctl to the latest version
     Update,
+}
+
+#[derive(Subcommand)]
+enum AdminAction {
+    /// Promote a user to platform admin by email
+    Set {
+        /// Email address of the user to promote
+        email: String,
+    },
+    /// List all platform admins
+    List,
 }
 
 fn generate_secret(bytes: usize) -> String {
@@ -806,6 +822,200 @@ fn compose_file() -> &'static str {
     }
 }
 
+/// Run a SQL query against the database and return stdout.
+/// Uses sqlite3 on the host (via volume path) or psql via podman exec.
+fn run_db_query(sql: &str) -> String {
+    let (db_type, db_user_or_path, db_pass, db_name, _db_host) = detect_database();
+
+    match db_type.as_str() {
+        "sqlite" => {
+            // Try to find the SQLite file via the volume
+            let volume_path = Command::new("podman")
+                .args([
+                    "volume",
+                    "inspect",
+                    "fracture-pt_app_data",
+                    "--format",
+                    "{{.Mountpoint}}",
+                ])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    } else {
+                        None
+                    }
+                });
+
+            // Also try common volume names
+            let volume_path = volume_path.or_else(|| {
+                for name in &["fracture-pt_app_data", "fracturept_app_data", "app_data"] {
+                    if let Ok(o) = Command::new("podman")
+                        .args(["volume", "inspect", name, "--format", "{{.Mountpoint}}"])
+                        .output()
+                    {
+                        if o.status.success() {
+                            return Some(String::from_utf8_lossy(&o.stdout).trim().to_string());
+                        }
+                    }
+                }
+                None
+            });
+
+            if let Some(vol) = volume_path {
+                // Derive the filename from the db path
+                let filename = db_user_or_path
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("gethacked.sqlite");
+                let db_path = format!("{vol}/{filename}");
+
+                // Try sqlite3 on the host first
+                let output = Command::new("sudo")
+                    .args(["sqlite3", &db_path, sql])
+                    .output();
+                if let Ok(o) = output {
+                    if o.status.success() {
+                        return String::from_utf8_lossy(&o.stdout).to_string();
+                    }
+                }
+
+                // Try without sudo
+                let output = Command::new("sqlite3").args([&db_path, sql]).output();
+                if let Ok(o) = output {
+                    if o.status.success() {
+                        return String::from_utf8_lossy(&o.stdout).to_string();
+                    }
+                }
+            }
+
+            eprintln!("Error: could not access SQLite database.");
+            eprintln!("Install sqlite3: sudo apt install sqlite3");
+            std::process::exit(1);
+        }
+        "postgres" => {
+            let cname = container_name("db");
+            let output = Command::new("podman")
+                .args([
+                    "exec",
+                    "-i",
+                    &cname,
+                    "psql",
+                    "-U",
+                    &db_user_or_path,
+                    "-d",
+                    &db_name,
+                    "-t",
+                    "-A",
+                    "-c",
+                    sql,
+                ])
+                .envs(if db_pass.is_empty() {
+                    vec![]
+                } else {
+                    vec![("PGPASSWORD", db_pass.as_str())]
+                })
+                .output()
+                .expect("failed to run psql");
+            if output.status.success() {
+                return String::from_utf8_lossy(&output.stdout).to_string();
+            }
+            eprintln!("Error: psql query failed");
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+            std::process::exit(1);
+        }
+        _ => {
+            eprintln!("Error: unknown database type");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn cmd_admin(action: AdminAction) {
+    match action {
+        AdminAction::Set { email } => {
+            eprintln!("Promoting '{email}' to platform admin...");
+
+            // Find the user
+            let result = run_db_query(&format!(
+                "SELECT id, name FROM users WHERE email = '{}'",
+                email.replace('\'', "''")
+            ));
+            let result = result.trim();
+            if result.is_empty() {
+                eprintln!("Error: no user found with email '{email}'");
+                eprintln!("The user must log in at least once before they can be promoted.");
+                std::process::exit(1);
+            }
+            let parts: Vec<&str> = result.split('|').collect();
+            let user_id = parts[0];
+            let user_name = parts.get(1).unwrap_or(&"");
+            eprintln!("  Found user: {user_name} (id={user_id})");
+
+            // Find the platform admin org
+            let org_result = run_db_query(
+                "SELECT id, name FROM organizations WHERE is_platform_admin = 1 LIMIT 1",
+            );
+            let org_result = org_result.trim();
+            if org_result.is_empty() {
+                eprintln!("Error: no platform admin organization found.");
+                eprintln!(
+                    "The app may not have been seeded. Start it once to create the admin org."
+                );
+                std::process::exit(1);
+            }
+            let org_parts: Vec<&str> = org_result.split('|').collect();
+            let org_id = org_parts[0];
+            let org_name = org_parts.get(1).unwrap_or(&"");
+            eprintln!("  Admin org: {org_name} (id={org_id})");
+
+            // Check if already a member
+            let existing = run_db_query(&format!(
+                "SELECT id FROM org_members WHERE org_id = {org_id} AND user_id = {user_id}"
+            ));
+            if !existing.trim().is_empty() {
+                eprintln!("  User is already a member of the admin org. Updating role to owner...");
+                run_db_query(&format!(
+                    "UPDATE org_members SET role = 'owner' WHERE org_id = {org_id} AND user_id = {user_id}"
+                ));
+            } else {
+                run_db_query(&format!(
+                    "INSERT INTO org_members (org_id, user_id, role, created_at, updated_at) \
+                     VALUES ({org_id}, {user_id}, 'owner', datetime('now'), datetime('now'))"
+                ));
+            }
+
+            eprintln!("  Done! {user_name} is now a platform admin.");
+            eprintln!("  Refresh the browser to see the Admin menu.");
+        }
+        AdminAction::List => {
+            let result = run_db_query(
+                "SELECT u.email, u.name, om.role \
+                 FROM users u \
+                 JOIN org_members om ON om.user_id = u.id \
+                 JOIN organizations o ON o.id = om.org_id \
+                 WHERE o.is_platform_admin = 1 \
+                 ORDER BY om.role, u.name",
+            );
+            let result = result.trim();
+            if result.is_empty() {
+                eprintln!("No platform admins found.");
+                eprintln!("Promote one with: fracture-ctl admin set user@example.com");
+            } else {
+                eprintln!("Platform admins:");
+                for line in result.lines() {
+                    let parts: Vec<&str> = line.split('|').collect();
+                    let email = parts.first().unwrap_or(&"?");
+                    let name = parts.get(1).unwrap_or(&"?");
+                    let role = parts.get(2).unwrap_or(&"?");
+                    eprintln!("  {name} <{email}> ({role})");
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -822,6 +1032,7 @@ fn main() {
         Commands::Dev { setup } => cmd_dev(setup),
         Commands::Backup { output } => cmd_backup(output),
         Commands::Restore { file, yes } => cmd_restore(file, yes),
+        Commands::Admin { action } => cmd_admin(action),
         Commands::Update => cmd_update(),
     }
 }
