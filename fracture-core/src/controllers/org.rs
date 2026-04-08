@@ -126,7 +126,7 @@ pub async fn settings(
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+    let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
@@ -153,7 +153,7 @@ pub async fn update_settings(
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+    let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
@@ -184,7 +184,7 @@ pub async fn members(
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+    let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
@@ -237,7 +237,7 @@ pub async fn invite(
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+    let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
@@ -285,7 +285,7 @@ pub async fn update_role(
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+    let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
@@ -334,7 +334,7 @@ pub async fn remove_member(
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+    let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
@@ -377,7 +377,7 @@ pub async fn delete(
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+    let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
@@ -456,7 +456,7 @@ pub async fn switch(
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    let _membership = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+    let _membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
         .await
         .ok_or_else(|| Error::NotFound)?;
 
