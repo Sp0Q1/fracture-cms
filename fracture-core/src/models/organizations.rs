@@ -146,6 +146,20 @@ impl Model {
             .await
             .unwrap_or_default()
     }
+
+    /// Finds all organizations visible to a user.
+    /// Platform admins see ALL orgs; regular users see only their memberships.
+    pub async fn find_visible_orgs(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
+        if Self::is_user_platform_admin(db, user_id).await {
+            Entity::find()
+                .order_by_asc(Column::Name)
+                .all(db)
+                .await
+                .unwrap_or_default()
+        } else {
+            Self::find_orgs_for_user(db, user_id).await
+        }
+    }
 }
 
 impl ActiveModel {}

@@ -64,6 +64,20 @@ impl Model {
             .flatten()
     }
 
+    /// Creates a virtual (non-persisted) admin membership for platform admins
+    /// accessing orgs they are not a member of.
+    #[must_use]
+    pub fn virtual_admin(org_id: i32, user_id: i32) -> Self {
+        Self {
+            id: 0,
+            created_at: chrono::Utc::now().into(),
+            updated_at: chrono::Utc::now().into(),
+            org_id,
+            user_id,
+            role: "admin".to_string(),
+        }
+    }
+
     /// Finds all members of an organization.
     pub async fn find_members(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
         Entity::find()
