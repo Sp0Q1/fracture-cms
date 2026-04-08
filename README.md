@@ -13,7 +13,11 @@ The core infrastructure lives in the `fracture-core` library crate. Downstream p
 - **Session management** — JWT stored in HTTP-only cookies. The frontend refreshes the token every 12 minutes; on failure, the user sees a "session expired" message with a re-login link.
 - **Security headers** — Content-Security-Policy (`default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'`), plus X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and X-Permitted-Cross-Domain-Policies.
 - **Back-channel logout** — The IdP can POST a signed `logout_token` to invalidate a user's session server-side. The app verifies the token signature via JWKS before acting on it.
-- **Template overrides** — Core org templates (list, new, settings, members, invite accept) are embedded in the `fracture-core` binary. Place a same-named file in your `assets/views/` directory to override any of them.
+- **File uploads** — Org-scoped file upload API with configurable size limits, MIME type validation, SHA-256 checksums, and visibility control (`org` or `public`). Files stored on disk under a configurable storage root.
+- **Blog system** — Markdown-based blog with GFM support (tables, strikethrough, task lists). Posts tied to a configurable blog org. Public routes for readers, admin routes for platform admins. Markdown rendered to HTML on save via comrak.
+- **Generic jobs system** — Define job types, schedule runs, and track diffs. Apps implement the `JobExecutor` trait; fracture-core handles the execution lifecycle, run history, and diff storage. Includes both org-scoped and platform admin views.
+- **Template overrides** — Core templates (org, blog, jobs) are embedded in the `fracture-core` binary. Place a same-named file in your `assets/views/` directory to override any of them.
+- **Markdown editor hook** — Blog admin templates use the `data-md-editor` attribute on textareas. Consuming apps provide their own `md-editor.js` to initialize a Markdown editor (toolbar, preview, etc.) for elements with this attribute. fracture-core does not bundle an editor implementation.
 - **i18n** — Fluent-based internationalization with locale files in `assets/i18n/`.
 
 ## Quick Start
@@ -110,21 +114,38 @@ fracture-core/                      # Library crate (reusable across projects)
       oidc.rs                        # OIDC login, logout, back-channel logout
       oidc_state.rs                  # OIDC state store (CSRF tokens, PKCE verifiers)
       org.rs                         # Organization CRUD, members, invites, switching
+      uploads.rs                     # File upload API (create, serve, delete)
+      blog.rs                        # Blog public + admin routes
+      jobs.rs                        # Job definitions, runs, diffs, trigger
     models/
-      _entities/                     # Core SeaORM entities (users, orgs, members, invites)
+      _entities/                     # Core SeaORM entities
       users.rs                       # User lookup, OIDC account creation/linking
       organizations.rs               # Org creation, personal orgs, slug lookup
       org_members.rs                 # Membership, OrgRole enum, role hierarchy
       org_invites.rs                 # Email invitations, auto-accept on signup
+      uploads.rs                     # Upload queries, Visibility enum
+      blog_posts.rs                  # Blog queries, Markdown rendering
+      job_definitions.rs             # Job definition queries
+      job_runs.rs                    # Job run lifecycle
+      job_run_diffs.rs               # Diff queries
+    upload/
+      config.rs                      # UploadConfig (size limits, allowed types, storage root)
+      service.rs                     # UploadService (validation, storage, checksums)
+    jobs/
+      mod.rs                         # JobExecutor trait, JobRegistry, JobResult, JobDiff
     initializers/
       oidc.rs                        # OIDC discovery, client setup, JWKS URI
       security_headers.rs            # CSP, X-Frame-Options, etc.
     views/
       org.rs                         # Org view helpers (list, settings, members)
+      blog.rs                        # Blog view helpers (public + admin)
+      jobs.rs                        # Jobs view helpers (org + admin)
     mailers/
       invite.rs                      # Invitation email (SMTP via background worker)
     lib.rs                           # Module exports + register_templates()
-  templates/org/                     # Embedded HTML templates (overridable by app)
+  templates/org/                     # Embedded org templates (overridable by app)
+  templates/blog/                    # Embedded blog admin templates (overridable by app)
+  static/upload.js                   # Upload helper script
   migration/src/                     # Core database migrations
 
 src/                                 # App (your domain-specific code)
@@ -148,6 +169,8 @@ assets/
   views/                             # App Tera templates (can override core templates)
   static/                            # CSS, JS, images
   i18n/                              # Fluent locale files (en-US, de-DE)
+fracture-ctl/                        # CLI tool for deployment management
+  src/main.rs                        # init, up, down, backup, restore, admin, ci, dev, update
 config/                              # Loco YAML config per environment
 docs/                                # Architecture, template guide, resource recipes
 dev/
@@ -204,6 +227,49 @@ dev/
 | GET | `/projects/{pid}/notes/{note_pid}` | Viewer |
 | GET/POST | `/projects/{pid}/notes/{note_pid}/edit` | Member |
 | DELETE | `/projects/{pid}/notes/{note_pid}` | Member |
+
+### Uploads
+
+| Method | Path | Auth |
+|--------|------|------|
+| POST | `/api/uploads` | Authenticated |
+| GET | `/api/uploads/{pid}` | Public or org member |
+| DELETE | `/api/uploads/{pid}` | Uploader / org admin |
+
+### Blog
+
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/blog/` | Public |
+| GET | `/blog/{slug}` | Public |
+| GET/POST | `/admin/blog/...` | Platform admin |
+
+### Jobs
+
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/jobs` | Authenticated |
+| GET | `/jobs/{pid}` | Authenticated |
+| POST | `/jobs/{pid}/run` | Authenticated |
+| GET | `/jobs/{pid}/runs/{run_pid}` | Authenticated |
+| GET | `/admin/jobs` | Platform admin |
+
+## fracture-ctl
+
+CLI tool for managing deployments. Install from [GitHub Releases](https://github.com/Sp0Q1/fracture-cms/releases). See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full walkthrough.
+
+| Command | Description |
+|---------|-------------|
+| `init --image <img> [--repo <url>]` | Generate production config (`.env.prod` + `compose.prod.yaml`) |
+| `up` | Pull latest image, auto-backup, start services |
+| `down` | Stop all services |
+| `backup [-o file]` | Back up the database |
+| `restore <file> [--yes]` | Restore from backup |
+| `admin set <email>` | Promote user to platform admin |
+| `admin list` | List platform admins |
+| `ci` | Run CI checks via `dev/ci.sh` |
+| `dev [--setup]` | Start the dev stack |
+| `update` | Self-update to latest release |
 
 ## Building on This
 
