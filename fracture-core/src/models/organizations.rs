@@ -62,8 +62,19 @@ impl Model {
     /// Finds an organization by its public ID.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
         let uuid = Uuid::parse_str(pid).ok()?;
-        Entity::find()
+        // Try UUID (blob) first — standard SeaORM storage format
+        if let Some(org) = Entity::find()
             .filter(Column::Pid.eq(uuid))
+            .one(db)
+            .await
+            .ok()
+            .flatten()
+        {
+            return Some(org);
+        }
+        // Fall back to text match — for records created via raw SQL or CLI tools
+        Entity::find()
+            .filter(Column::Pid.eq(pid))
             .one(db)
             .await
             .ok()

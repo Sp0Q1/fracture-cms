@@ -452,7 +452,7 @@ pub async fn switch(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
 
-    // Verify membership
+    // Verify membership (admins can access any org)
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
         .await
         .ok_or_else(|| Error::NotFound)?;
