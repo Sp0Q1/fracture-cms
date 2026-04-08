@@ -50,6 +50,22 @@ impl ActiveModelBehavior for ActiveModel {}
 
 impl Model {
     /// Finds a membership for a user in an organization.
+    /// Platform admins get a virtual admin membership if they're not a real member.
+    pub async fn find_membership_or_admin(
+        db: &DatabaseConnection,
+        org_id: i32,
+        user_id: i32,
+    ) -> Option<Self> {
+        if let Some(m) = Self::find_membership(db, org_id, user_id).await {
+            return Some(m);
+        }
+        if super::organizations::Model::is_user_platform_admin(db, user_id).await {
+            return Some(Self::virtual_admin(org_id, user_id));
+        }
+        None
+    }
+
+    /// Finds a membership for a user in an organization (exact match only).
     pub async fn find_membership(
         db: &DatabaseConnection,
         org_id: i32,
