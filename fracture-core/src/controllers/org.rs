@@ -47,7 +47,7 @@ pub async fn list(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id).await;
     views::org::list(&v, &user, &org_ctx, &user_orgs)
 }
 
@@ -65,7 +65,7 @@ pub async fn new(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id).await;
     views::org::new(&v, &user, &org_ctx, &user_orgs)
 }
 
@@ -132,7 +132,7 @@ pub async fn settings(
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Admin);
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id).await;
     views::org::settings(&v, &user, &org_ctx, &user_orgs, &org)
 }
 
@@ -204,7 +204,7 @@ pub async fn members(
         }
     }
     let pending_invites = org_invites::Model::find_pending_by_org(&ctx.db, org.id).await;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id).await;
     let app_url = ctx.config.server.host.clone();
     views::org::members(
         &v,

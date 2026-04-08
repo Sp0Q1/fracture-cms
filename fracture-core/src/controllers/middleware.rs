@@ -73,14 +73,32 @@ pub async fn get_org_context_or_default(
                     is_platform_admin,
                 });
             }
+            // Platform admins can access any org even without membership
+            if is_platform_admin {
+                return Some(OrgContext {
+                    membership: org_members::Model::virtual_admin(org.id, user.id),
+                    org,
+                    role: OrgRole::Admin,
+                    is_platform_admin,
+                });
+            }
         }
     }
 
     // Fall back to first org
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let orgs = organizations::Model::find_visible_orgs(db, user.id).await;
     let org = orgs.into_iter().next()?;
-    let membership = org_members::Model::find_membership(db, org.id, user.id).await?;
-    let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
+    let membership = org_members::Model::find_membership(db, org.id, user.id).await;
+    let role = membership
+        .as_ref()
+        .and_then(|m| OrgRole::from_str_role(&m.role))
+        .unwrap_or(if is_platform_admin {
+            OrgRole::Admin
+        } else {
+            return None;
+        });
+    let membership =
+        membership.unwrap_or_else(|| org_members::Model::virtual_admin(org.id, user.id));
     Some(OrgContext {
         org,
         membership,
