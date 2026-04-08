@@ -98,6 +98,205 @@ Request → get_current_user(jwt cookie)
 | org_invites    | Email-based invitations           | belongs_to organizations, users |
 | projects       | Org-scoped projects               | belongs_to organizations, has_many notes |
 | notes          | Project-scoped notes              | belongs_to projects, organizations |
+| uploads        | File uploads (org-scoped)         | belongs_to organizations, users |
+| blog_posts     | Blog content (Markdown + HTML)    | belongs_to organizations, users |
+| job_definitions | Job type + config + schedule     | belongs_to organizations, has_many job_runs |
+| job_runs       | Execution records for jobs        | belongs_to job_definitions, organizations, has_many job_run_diffs |
+| job_run_diffs  | Change diffs produced by a run    | belongs_to job_runs |
+
+## Upload Subsystem
+
+The upload subsystem lives in `fracture-core` and provides org-scoped file storage with visibility control.
+
+### Configuration
+
+Read from `settings.uploads` in the Loco YAML config. Falls back to defaults if the key is missing.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `max_file_size` | 5 MiB | Maximum size per file |
+| `max_total_size` | 20 MiB | Maximum total size per request |
+| `storage_root` | `/app/data/uploads` | Directory for stored files |
+| `allowed_types` | `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml` | Allowed MIME types |
+
+### Architecture
+
+```
+fracture-core/src/upload/
+  config.rs       # UploadConfig — deserialized from settings.uploads
+  service.rs      # UploadService — validation pipeline, storage, SHA-256 checksum
+  mod.rs          # Module exports
+```
+
+- **UploadConfig**: Loaded via `UploadConfig::from_settings()`. Apps can extend allowed types in their config YAML.
+- **ValidationPipeline**: Checks MIME type against the allow list. Runs before storage.
+- **UploadService**: Validates, stores the file on disk (in `storage_root`), computes SHA-256, creates the `uploads` DB record.
+
+### Visibility
+
+Each upload has a `visibility` field: `"org"` (default) or `"public"`.
+
+- **Org**: Requires authenticated user who is a member of the owning org (or a platform admin).
+- **Public**: Served to anyone (used for blog images, public assets). Cached with `Cache-Control: public, max-age=86400, immutable`.
+
+Access denied returns 404 (not 403) to prevent enumeration.
+
+### Routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/uploads` | Authenticated | Upload a file (multipart form: `file` + optional `visibility`) |
+| GET | `/api/uploads/{pid}` | Depends on visibility | Serve a file |
+| DELETE | `/api/uploads/{pid}` | Uploader, org admin, or platform admin | Delete a file |
+
+### Database Schema (`uploads`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `pid` | UUID | Public identifier |
+| `org_id` | i32 | Owning organization |
+| `uploaded_by` | i32 | User who uploaded |
+| `original_name` | String(255) | Original filename |
+| `storage_path` | String(512) | Path on disk |
+| `content_type` | String(127) | MIME type |
+| `size_bytes` | i64 | File size |
+| `visibility` | String(16) | `"org"` or `"public"` |
+| `checksum_sha256` | String(64) | SHA-256 hex digest |
+
+## Blog System
+
+The blog system lives in `fracture-core`. Blog posts are org-scoped (tied to a "blog org" defined in config) and written in Markdown.
+
+### Configuration
+
+Set `settings.blog.org_slug` in the Loco YAML config to the slug of the organization that owns blog posts. Posts are only served when this is configured.
+
+### Architecture
+
+- **Model (`blog_posts.rs`)**: Markdown body is rendered to HTML via comrak (GFM extensions: tables, strikethrough, autolinks, task lists) in `before_save`. Both `body` (Markdown source) and `body_html` (rendered) are stored.
+- **Controller (`blog.rs`)**: Public routes (no auth) for the blog index and post pages. Admin routes (platform admin only) for CRUD and publish/unpublish.
+- **Views (`views/blog.rs`)**: Tera view helpers for both public and admin templates.
+- **Templates**: `fracture-core/templates/blog/` contains admin templates (list, new, edit). Public templates are provided by the consuming app.
+
+### Routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/blog/` | Public | Blog index (published posts) |
+| GET | `/blog/{slug}` | Public | Single post by slug |
+| GET | `/admin/blog/` | Platform admin | Admin post list (all statuses) |
+| GET | `/admin/blog/new` | Platform admin | New post form |
+| POST | `/admin/blog/` | Platform admin | Create post |
+| GET | `/admin/blog/{pid}/edit` | Platform admin | Edit post form |
+| POST | `/admin/blog/{pid}` | Platform admin | Update post |
+| POST | `/admin/blog/{pid}/publish` | Platform admin | Set status to "published" |
+| POST | `/admin/blog/{pid}/unpublish` | Platform admin | Set status to "draft" |
+
+### Markdown Editor
+
+Blog admin templates use `data-md-editor` on the body textarea. The consuming app is responsible for providing `md-editor.js` in its static assets, which initializes a Markdown editor (toolbar, preview, etc.) for any element with this attribute. fracture-core does not bundle a Markdown editor implementation -- it only provides the data attribute hook.
+
+### Database Schema (`blog_posts`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `pid` | UUID | Public identifier |
+| `org_id` | i32 | Owning organization (blog org) |
+| `author_id` | i32 | Author user |
+| `title` | String | Post title |
+| `slug` | String | URL slug (auto-generated from title, unique per org) |
+| `body` | Text | Markdown source |
+| `body_html` | Text | Rendered HTML (auto-generated in `before_save`) |
+| `excerpt` | String? | Optional short summary |
+| `status` | String | `"draft"` or `"published"` |
+| `published_at` | DateTime? | Set on publish, cleared on unpublish |
+| `meta_title` | String? | SEO title override |
+| `meta_description` | String? | SEO description |
+
+## Generic Jobs System
+
+The jobs system provides a framework for defining, scheduling, and executing background tasks with diff tracking. fracture-core provides the infrastructure; consuming apps implement `JobExecutor` for their specific job types.
+
+### Architecture
+
+```
+fracture-core/src/jobs/
+  mod.rs          # JobExecutor trait, JobRegistry, JobResult, JobDiff
+```
+
+**`JobExecutor` trait**: Apps implement this to define job behavior:
+
+```rust
+#[async_trait]
+pub trait JobExecutor: Send + Sync {
+    fn job_type(&self) -> &str;
+    async fn execute(
+        &self,
+        db: &DatabaseConnection,
+        definition: &job_definitions::Model,
+        previous_run: Option<&job_runs::Model>,
+    ) -> Result<JobResult, Box<dyn Error + Send + Sync>>;
+}
+```
+
+**`JobRegistry`**: A global `OnceLock`-backed registry. Apps call `init_job_registry()` at startup with their registered executors. The registry maps `job_type` strings to executor instances.
+
+**`JobResult`**: Returned by executors. Contains a JSON `summary` and a vec of `JobDiff` entries (type, entity key, old/new values).
+
+### Tables
+
+**`job_definitions`** -- what to run:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `pid` | UUID | Public identifier |
+| `org_id` | i32 | Owning organization |
+| `name` | String | Human-readable name |
+| `job_type` | String | Maps to a registered `JobExecutor` |
+| `schedule` | String? | Cron-like schedule (optional) |
+| `enabled` | bool | Whether the job is active |
+| `config` | Text (JSON) | Job-specific configuration |
+
+**`job_runs`** -- execution history:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `pid` | UUID | Public identifier |
+| `job_definition_id` | i32 | Parent definition |
+| `org_id` | i32 | Organization |
+| `status` | String | `"queued"`, `"running"`, `"completed"`, `"failed"` |
+| `started_at` | DateTime? | When execution began |
+| `completed_at` | DateTime? | When execution finished |
+| `error_message` | Text? | Error details on failure |
+| `result_summary` | Text? | JSON summary from `JobResult` |
+
+**`job_run_diffs`** -- changes detected by a run:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `job_run_id` | i32 | Parent run |
+| `diff_type` | String | Type of change (app-defined) |
+| `entity_key` | String | Identifier for the changed entity |
+| `old_value` | Text? | Previous state (JSON) |
+| `new_value` | Text? | New state (JSON) |
+
+### Routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/jobs` | Authenticated | List job definitions for current org |
+| GET | `/jobs/{pid}` | Authenticated | Show definition + runs |
+| POST | `/jobs/{pid}/run` | Authenticated | Trigger a new queued run |
+| GET | `/jobs/{pid}/runs/{run_pid}` | Authenticated | Show a run + its diffs |
+| GET | `/admin/jobs` | Platform admin | List all definitions across all orgs |
+
+## Template Overrides
+
+Core templates are embedded in the `fracture-core` binary via `include_dir!`. The app's `view_engine` initializer calls `fracture_core::register_templates(tera)`, which only adds a template when no filesystem version already exists.
+
+To override a core template, place a file at the same relative path under `assets/views/`. For example, `assets/views/org/list.html` overrides the embedded `org/list.html`.
+
+This applies to all core template directories: `org/`, `blog/`, `jobs/`, etc. Apps can override individual templates without forking the core.
 
 ## Invite Flow
 
