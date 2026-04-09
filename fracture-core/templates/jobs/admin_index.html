@@ -16,7 +16,7 @@
 </div>
 
 {% if definitions %}
-    <table>
+    <table class="clickable-rows">
         <thead>
             <tr>
                 <th>Name</th>
@@ -29,7 +29,7 @@
         </thead>
         <tbody>
             {% for def in definitions %}
-            <tr>
+            <tr data-href="/jobs/{{ def.pid }}">
                 <td><strong>{{ def.name }}</strong></td>
                 <td>{{ def.org_name }}</td>
                 <td>{{ def.job_type }}</td>

@@ -383,9 +383,9 @@ pub async fn delete(
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
 
-    // Require both Owner role on the org AND platform admin status
-    require_role!(org_ctx, OrgRole::Owner);
-    if !org_ctx.is_platform_admin {
+    // Platform admins can delete any org. Org owners can delete their own non-personal org.
+    let is_owner = org_ctx.role.at_least(OrgRole::Owner);
+    if !org_ctx.is_platform_admin && !is_owner {
         return Ok(axum::response::Response::builder()
             .status(axum::http::StatusCode::FORBIDDEN)
             .body(axum::body::Body::from("Forbidden"))
@@ -404,13 +404,24 @@ pub async fn delete(
             .into_response());
     }
 
-    // Cannot delete personal orgs
-    if org.is_personal {
+    // For personal orgs: also delete the associated user
+    let delete_user_id = if org.is_personal {
+        // Find the owner of the personal org
+        let owner = org_members::Entity::find()
+            .filter(org_members::Column::OrgId.eq(org.id))
+            .filter(org_members::Column::Role.eq("owner"))
+            .one(&ctx.db)
+            .await?;
+        owner.map(|m| m.user_id)
+    } else {
+        None
+    };
+
+    // Cannot delete yourself via personal org deletion
+    if delete_user_id == Some(user.id) {
         return Ok(axum::response::Response::builder()
             .status(axum::http::StatusCode::FORBIDDEN)
-            .body(axum::body::Body::from(
-                "Cannot delete personal organizations",
-            ))
+            .body(axum::body::Body::from("Cannot delete your own account"))
             .unwrap()
             .into_response());
     }
@@ -428,8 +439,22 @@ pub async fn delete(
         .await?;
 
     // Delete the organization itself
-    let active: organizations::ActiveModel = org.into();
-    active.delete(&ctx.db).await?;
+    let org_active: organizations::ActiveModel = org.into();
+    org_active.delete(&ctx.db).await?;
+
+    // If personal org, also delete the user and their other memberships
+    if let Some(uid) = delete_user_id {
+        // Remove from all other orgs
+        org_members::Entity::delete_many()
+            .filter(org_members::Column::UserId.eq(uid))
+            .exec(&ctx.db)
+            .await?;
+        // Delete the user
+        if let Some(u) = users_entity::Entity::find_by_id(uid).one(&ctx.db).await? {
+            let u_active: users_entity::ActiveModel = u.into();
+            u_active.delete(&ctx.db).await?;
+        }
+    }
 
     Ok(Redirect::to("/orgs").into_response())
 }
