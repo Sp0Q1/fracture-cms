@@ -34,7 +34,7 @@
                 <td>{{ def.org_name }}</td>
                 <td>{{ def.job_type }}</td>
                 <td>{{ def.schedule | default(value="Manual") }}</td>
-                <td>{{ def.created_at | date(format="%Y-%m-%d %H:%M") }}</td>
+                <td>{{ def.created_at | truncate(length=16, end="") }}</td>
                 <td>
                     {% if def.enabled %}
                         <span class="badge success">Yes</span>

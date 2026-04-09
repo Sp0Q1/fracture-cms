@@ -44,7 +44,7 @@
     </div>
     <div class="detail-row">
         <span class="detail-label">Created</span>
-        <span class="detail-value">{{ definition.created_at | date(format="%Y-%m-%d %H:%M") }}</span>
+        <span class="detail-value">{{ definition.created_at | truncate(length=16, end="") }}</span>
     </div>
 </article>
 
@@ -65,7 +65,7 @@
             {% for run in runs %}
             <tr>
                 <td><span class="badge job-status-{{ run.status }}">{{ run.status }}</span></td>
-                <td>{{ run.created_at | date(format="%Y-%m-%d %H:%M") }}</td>
+                <td>{{ run.created_at | truncate(length=16, end="") }}</td>
                 <td>{{ run.started_at | default(value="—") }}</td>
                 <td>{{ run.completed_at | default(value="—") }}</td>
                 <td>

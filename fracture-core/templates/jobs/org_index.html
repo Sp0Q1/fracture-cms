@@ -35,7 +35,7 @@
                         <span class="badge">No</span>
                     {% endif %}
                 </td>
-                <td>{{ def.created_at | date(format="%Y-%m-%d %H:%M") }}</td>
+                <td>{{ def.created_at | truncate(length=16, end="") }}</td>
                 <td>
                     <a href="/jobs/{{ def.pid }}" class="button outline small">View</a>
                 </td>
