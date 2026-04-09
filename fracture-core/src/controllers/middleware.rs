@@ -78,7 +78,7 @@ pub async fn get_org_context_or_default(
                 return Some(OrgContext {
                     membership: org_members::Model::virtual_admin(org.id, user.id),
                     org,
-                    role: OrgRole::Admin,
+                    role: OrgRole::Owner,
                     is_platform_admin,
                 });
             }

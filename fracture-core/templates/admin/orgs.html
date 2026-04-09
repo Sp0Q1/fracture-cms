@@ -14,7 +14,7 @@
 </div>
 
 {% if all_orgs %}
-    <table>
+    <table class="clickable-rows">
         <thead>
             <tr>
                 <th>Name</th>
@@ -24,7 +24,7 @@
         </thead>
         <tbody>
             {% for org in all_orgs %}
-            <tr>
+            <tr data-href="/orgs/{{ org.pid }}/settings">
                 <td>
                     {{ org.name }}
                     {% if org.is_platform_admin %}<span class="badge success">Admin</span>{% endif %}

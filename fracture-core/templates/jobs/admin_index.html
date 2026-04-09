@@ -16,7 +16,7 @@
 </div>
 
 {% if definitions %}
-    <table>
+    <table class="clickable-rows">
         <thead>
             <tr>
                 <th>Name</th>
@@ -29,12 +29,12 @@
         </thead>
         <tbody>
             {% for def in definitions %}
-            <tr>
+            <tr data-href="/jobs/{{ def.pid }}">
                 <td><strong>{{ def.name }}</strong></td>
                 <td>{{ def.org_name }}</td>
                 <td>{{ def.job_type }}</td>
                 <td>{{ def.schedule | default(value="Manual") }}</td>
-                <td>{{ def.created_at | date(format="%Y-%m-%d %H:%M") }}</td>
+                <td>{{ def.created_at | truncate(length=16, end="") }}</td>
                 <td>
                     {% if def.enabled %}
                         <span class="badge success">Yes</span>

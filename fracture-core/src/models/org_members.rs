@@ -90,7 +90,7 @@ impl Model {
             updated_at: chrono::Utc::now().into(),
             org_id,
             user_id,
-            role: "admin".to_string(),
+            role: "owner".to_string(),
         }
     }
 
