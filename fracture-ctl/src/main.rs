@@ -301,6 +301,7 @@ services:
     dns:
       - 9.9.9.9
       - 149.112.112.112
+      - 2620:fe::fe
     ports:
       - "127.0.0.1:${{APP_PORT:-5150}}:5150"
     volumes:
@@ -312,6 +313,12 @@ services:
     environment:
       LOCO_ENV: production
       SERVER_BINDING: 0.0.0.0
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+
+networks:
+  default:
+    enable_ipv6: true
 
 volumes:
   db_data:
