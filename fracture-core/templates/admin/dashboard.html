@@ -10,10 +10,17 @@
 
 <div class="admin-stats row">
     {% for stat in entity_stats %}
+    {% if stat.url != "" %}
+    <a href="{{ stat.url }}" class="card stat-card" style="text-decoration:none;color:inherit">
+        <h3>{{ stat.count }}</h3>
+        <p>{{ stat.name }}</p>
+    </a>
+    {% else %}
     <article class="card stat-card">
         <h3>{{ stat.count }}</h3>
         <p>{{ stat.name }}</p>
     </article>
+    {% endif %}
     {% endfor %}
 </div>
 
