@@ -42,13 +42,13 @@ async fn test_find_by_org() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "orglist").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
     let org = &orgs[0];
 
     create_project(db, "Project A", org.id).await;
     create_project(db, "Project B", org.id).await;
 
-    let projects = Model::find_by_org(db, org.id).await;
+    let projects = Model::find_by_org(db, org.id).await.unwrap();
     assert_eq!(projects.len(), 2);
     // Ordered by id DESC
     assert_eq!(projects[0].title, "Project B");
@@ -62,17 +62,17 @@ async fn test_find_by_pid_and_org() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "pidorg").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
     let org = &orgs[0];
 
     let project = create_project(db, "Scoped Project", org.id).await;
 
-    let found = Model::find_by_pid_and_org(db, &project.pid.to_string(), org.id).await;
+    let found = Model::find_by_pid_and_org(db, &project.pid.to_string(), org.id).await.unwrap();
     assert!(found.is_some());
     assert_eq!(found.unwrap().title, "Scoped Project");
 
     // Wrong org should return None
-    let not_found = Model::find_by_pid_and_org(db, &project.pid.to_string(), org.id + 999).await;
+    let not_found = Model::find_by_pid_and_org(db, &project.pid.to_string(), org.id + 999).await.unwrap();
     assert!(not_found.is_none());
 }
 
@@ -85,21 +85,21 @@ async fn test_cross_org_isolation() {
     let alice = create_test_user(db, "iso-alice").await;
     let bob = create_test_user(db, "iso-bob").await;
 
-    let alice_orgs = organizations::Model::find_orgs_for_user(db, alice.id).await;
+    let alice_orgs = organizations::Model::find_orgs_for_user(db, alice.id).await.unwrap();
     let alice_org = &alice_orgs[0];
-    let bob_orgs = organizations::Model::find_orgs_for_user(db, bob.id).await;
+    let bob_orgs = organizations::Model::find_orgs_for_user(db, bob.id).await.unwrap();
     let bob_org = &bob_orgs[0];
 
     let alice_project = create_project(db, "Alice's Project", alice_org.id).await;
     let bob_project = create_project(db, "Bob's Project", bob_org.id).await;
 
     // Alice's org lists only Alice's project
-    let alice_list = Model::find_by_org(db, alice_org.id).await;
+    let alice_list = Model::find_by_org(db, alice_org.id).await.unwrap();
     assert_eq!(alice_list.len(), 1);
     assert_eq!(alice_list[0].id, alice_project.id);
 
     // Bob's org lists only Bob's project
-    let bob_list = Model::find_by_org(db, bob_org.id).await;
+    let bob_list = Model::find_by_org(db, bob_org.id).await.unwrap();
     assert_eq!(bob_list.len(), 1);
     assert_eq!(bob_list[0].id, bob_project.id);
 
@@ -107,11 +107,13 @@ async fn test_cross_org_isolation() {
     assert!(
         Model::find_by_pid_and_org(db, &alice_project.pid.to_string(), bob_org.id)
             .await
+            .unwrap()
             .is_none()
     );
     assert!(
         Model::find_by_pid_and_org(db, &bob_project.pid.to_string(), alice_org.id)
             .await
+            .unwrap()
             .is_none()
     );
 }
@@ -123,7 +125,7 @@ async fn test_project_sets_pid_on_insert() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "setpid").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
     let org = &orgs[0];
 
     let project = create_project(db, "PID Test", org.id).await;
@@ -158,15 +160,15 @@ async fn test_find_by_pid_returns_none_for_invalid_uuid() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "badpid").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await;
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
     let org = &orgs[0];
 
     // Invalid UUID string
-    let result = Model::find_by_pid_and_org(db, "not-a-valid-uuid", org.id).await;
+    let result = Model::find_by_pid_and_org(db, "not-a-valid-uuid", org.id).await.unwrap();
     assert!(result.is_none(), "Invalid UUID should return None");
 
     // Valid UUID but nonexistent
     let result =
-        Model::find_by_pid_and_org(db, "00000000-0000-0000-0000-000000000000", org.id).await;
+        Model::find_by_pid_and_org(db, "00000000-0000-0000-0000-000000000000", org.id).await.unwrap();
     assert!(result.is_none(), "Nonexistent UUID should return None");
 }

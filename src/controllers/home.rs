@@ -20,13 +20,18 @@ pub async fn index(
     match user {
         Some(user) => {
             let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-            let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+            let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+                .await
+                .unwrap_or_default();
             let project_count = if let Some(ref oc) = org_ctx {
-                projects::Model::find_by_org(&ctx.db, oc.org.id).await.len()
+                projects::Model::find_by_org(&ctx.db, oc.org.id)
+                    .await
+                    .unwrap_or_default()
+                    .len()
             } else {
                 0
             };
-            views::home::index(&v, &user, &org_ctx, &user_orgs, project_count)
+            views::home::index(&v, &user, org_ctx.as_ref(), &user_orgs, project_count)
         }
         None => views::home::index_guest(&v),
     }

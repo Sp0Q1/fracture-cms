@@ -54,7 +54,7 @@ fn diff_json(diff: &job_run_diffs::Model) -> serde_json::Value {
 pub fn org_index(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     definitions: &[job_definitions::Model],
 ) -> Result<Response> {
@@ -71,7 +71,7 @@ pub fn org_index(
 pub fn org_show(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     definition: &job_definitions::Model,
     runs: &[job_runs::Model],
@@ -90,7 +90,7 @@ pub fn org_show(
 pub fn org_run_show(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     definition: &job_definitions::Model,
     run: &job_runs::Model,
@@ -111,7 +111,7 @@ pub fn org_run_show(
 pub fn admin_index(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     definitions: &[job_definitions::Model],
     orgs: &[organizations::Model],

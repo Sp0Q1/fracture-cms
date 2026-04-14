@@ -75,7 +75,7 @@ pub fn public_show(
 pub fn admin_index(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     posts: &[blog_posts::Model],
 ) -> Result<Response> {
@@ -92,7 +92,7 @@ pub fn admin_index(
 pub fn admin_new(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
 ) -> Result<Response> {
     let ctx = super::base_context(user, org_ctx, user_orgs);
@@ -107,7 +107,7 @@ pub fn admin_new(
 pub fn admin_edit(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     post: &blog_posts::Model,
 ) -> Result<Response> {

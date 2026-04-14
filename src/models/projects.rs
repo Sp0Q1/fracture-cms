@@ -23,29 +23,36 @@ impl ActiveModelBehavior for ActiveModel {
 
 impl Model {
     /// Finds all projects belonging to an organization.
-    pub async fn find_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_org(db: &DatabaseConnection, org_id: i32) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
             .order_by(Column::Id, Order::Desc)
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Finds a project by pid, scoped to an organization.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn find_by_pid_and_org(
         db: &DatabaseConnection,
         pid: &str,
         org_id: i32,
-    ) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
+    ) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
         Entity::find()
             .filter(Column::Pid.eq(uuid))
             .filter(Column::OrgId.eq(org_id))
             .one(db)
             .await
-            .ok()
-            .flatten()
     }
 }
 

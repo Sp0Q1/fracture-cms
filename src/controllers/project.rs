@@ -39,8 +39,10 @@ pub async fn list(
         .await
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Viewer);
-    let items = Model::find_by_org(&ctx.db, org_ctx.org.id).await;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let items = Model::find_by_org(&ctx.db, org_ctx.org.id).await?;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     views::project::list(&v, &user, &org_ctx, &user_orgs, &items)
 }
 
@@ -61,7 +63,9 @@ pub async fn new(
         .await
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Member);
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     views::project::create(&v, &user, &org_ctx, &user_orgs)
 }
 
@@ -111,12 +115,14 @@ pub async fn show(
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Viewer);
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let notes =
         crate::models::notes::Model::find_by_project_and_org(&ctx.db, item.id, org_ctx.org.id)
-            .await;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+            .await?;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     views::project::show(&v, &user, &org_ctx, &user_orgs, &item, &notes)
 }
 
@@ -139,9 +145,11 @@ pub async fn edit(
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Member);
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     views::project::edit(&v, &user, &org_ctx, &user_orgs, &item)
 }
 
@@ -164,7 +172,7 @@ pub async fn update(
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Member);
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let mut item = item.into_active_model();
     params.update(&mut item);
@@ -190,7 +198,7 @@ pub async fn remove(
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Member);
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     item.delete(&ctx.db).await?;
     format::empty()

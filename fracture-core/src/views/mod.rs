@@ -12,16 +12,16 @@ use crate::models::_entities::{organizations, users};
 #[must_use]
 pub fn base_context(
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
 ) -> Value {
     json!({
         "user_name": user.name,
         "user_pid": user.pid.to_string(),
-        "org_name": org_ctx.as_ref().map(|o| o.org.name.clone()),
-        "org_pid": org_ctx.as_ref().map(|o| o.org.pid.to_string()),
-        "user_role": org_ctx.as_ref().map(|o| o.role.to_string()),
-        "is_platform_admin": org_ctx.as_ref().is_some_and(|o| o.is_platform_admin),
+        "org_name": org_ctx.map(|o| o.org.name.clone()),
+        "org_pid": org_ctx.map(|o| o.org.pid.to_string()),
+        "user_role": org_ctx.map(|o| o.role.to_string()),
+        "is_platform_admin": org_ctx.is_some_and(|o| o.is_platform_admin),
         "user_orgs": user_orgs.iter().map(|o| json!({
             "name": o.name,
             "pid": o.pid.to_string(),

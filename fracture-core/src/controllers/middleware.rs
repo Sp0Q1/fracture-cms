@@ -62,8 +62,15 @@ pub async fn get_org_context_or_default(
     // Try cookie first
     if let Some(cookie) = jar.get("org_pid") {
         let org_pid = cookie.value();
-        if let Some(org) = organizations::Model::find_by_pid(db, org_pid).await {
-            if let Some(membership) = org_members::Model::find_membership(db, org.id, user.id).await
+        if let Some(org) = organizations::Model::find_by_pid(db, org_pid)
+            .await
+            .ok()
+            .flatten()
+        {
+            if let Some(membership) = org_members::Model::find_membership(db, org.id, user.id)
+                .await
+                .ok()
+                .flatten()
             {
                 let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
                 return Some(OrgContext {
@@ -86,9 +93,14 @@ pub async fn get_org_context_or_default(
     }
 
     // Fall back to first org
-    let orgs = organizations::Model::find_visible_orgs(db, user.id).await;
+    let orgs = organizations::Model::find_visible_orgs(db, user.id)
+        .await
+        .unwrap_or_default();
     let org = orgs.into_iter().next()?;
-    let membership = org_members::Model::find_membership(db, org.id, user.id).await;
+    let membership = org_members::Model::find_membership(db, org.id, user.id)
+        .await
+        .ok()
+        .flatten();
     let role = membership
         .as_ref()
         .and_then(|m| OrgRole::from_str_role(&m.role))

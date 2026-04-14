@@ -11,7 +11,7 @@ use crate::models::_entities::{org_invites, org_members, organizations, users};
 pub fn list(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
 ) -> Result<Response> {
     let ctx = super::base_context(user, org_ctx, user_orgs);
@@ -26,7 +26,7 @@ pub fn list(
 pub fn new(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
 ) -> Result<Response> {
     let ctx = super::base_context(user, org_ctx, user_orgs);
@@ -45,7 +45,7 @@ pub fn settings(
     user_orgs: &[organizations::Model],
     org: &organizations::Model,
 ) -> Result<Response> {
-    let mut ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
+    let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
     ctx["org"] = serde_json::json!({
         "name": org.name,
         "pid": org.pid.to_string(),
@@ -75,7 +75,7 @@ pub fn members(
     user_orgs: &[organizations::Model],
     data: &MembersViewData<'_>,
 ) -> Result<Response> {
-    let mut ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
+    let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
     ctx["org"] = serde_json::json!({
         "name": data.org.name,
         "pid": data.org.pid.to_string(),

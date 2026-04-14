@@ -51,33 +51,39 @@ impl ActiveModelBehavior for ActiveModel {}
 impl Model {
     /// Finds a membership for a user in an organization.
     /// Platform admins get a virtual admin membership if they're not a real member.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn find_membership_or_admin(
         db: &DatabaseConnection,
         org_id: i32,
         user_id: i32,
-    ) -> Option<Self> {
-        if let Some(m) = Self::find_membership(db, org_id, user_id).await {
-            return Some(m);
+    ) -> Result<Option<Self>, DbErr> {
+        if let Some(m) = Self::find_membership(db, org_id, user_id).await? {
+            return Ok(Some(m));
         }
         if super::organizations::Model::is_user_platform_admin(db, user_id).await {
-            return Some(Self::virtual_admin(org_id, user_id));
+            return Ok(Some(Self::virtual_admin(org_id, user_id)));
         }
-        None
+        Ok(None)
     }
 
     /// Finds a membership for a user in an organization (exact match only).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn find_membership(
         db: &DatabaseConnection,
         org_id: i32,
         user_id: i32,
-    ) -> Option<Self> {
+    ) -> Result<Option<Self>, DbErr> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
             .filter(Column::UserId.eq(user_id))
             .one(db)
             .await
-            .ok()
-            .flatten()
     }
 
     /// Creates a virtual (non-persisted) admin membership for platform admins
@@ -95,12 +101,15 @@ impl Model {
     }
 
     /// Finds all members of an organization.
-    pub async fn find_members(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_members(db: &DatabaseConnection, org_id: i32) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Adds a member to an organization.

@@ -26,13 +26,15 @@ pub async fn org_index(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let definitions = match org_ctx {
-        Some(ref oc) => job_def_model::Model::find_all_by_org(&ctx.db, oc.org.id).await,
+        Some(ref oc) => job_def_model::Model::find_all_by_org(&ctx.db, oc.org.id).await?,
         None => vec![],
     };
-    views::jobs::org_index(&v, &user, &org_ctx, &user_orgs, &definitions)
+    views::jobs::org_index(&v, &user, org_ctx.as_ref(), &user_orgs, &definitions)
 }
 
 /// GET `/jobs/:pid` — show a job definition and its runs.
@@ -50,15 +52,17 @@ pub async fn org_show(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let org_id = org_ctx.as_ref().map_or(0, |oc| oc.org.id);
     let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
-    let runs = job_run_model::Model::find_by_definition(&ctx.db, definition.id).await;
-    views::jobs::org_show(&v, &user, &org_ctx, &user_orgs, &definition, &runs)
+    let runs = job_run_model::Model::find_by_definition(&ctx.db, definition.id).await?;
+    views::jobs::org_show(&v, &user, org_ctx.as_ref(), &user_orgs, &definition, &runs)
 }
 
 /// POST `/jobs/:pid/run` — trigger a new queued run for a job definition.
@@ -78,7 +82,7 @@ pub async fn org_trigger(
 
     let org_id = org_ctx.as_ref().map_or(0, |oc| oc.org.id);
     let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     job_run_model::Model::create_queued(&ctx.db, definition.id, org_id).await?;
@@ -101,15 +105,17 @@ pub async fn org_run_show(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let org_id = org_ctx.as_ref().map_or(0, |oc| oc.org.id);
     let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     let run = job_run_model::Model::find_by_pid(&ctx.db, &run_pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     // Verify the run belongs to this definition
@@ -117,8 +123,16 @@ pub async fn org_run_show(
         return Err(Error::NotFound);
     }
 
-    let diffs = job_diff_model::Model::find_by_run(&ctx.db, run.id).await;
-    views::jobs::org_run_show(&v, &user, &org_ctx, &user_orgs, &definition, &run, &diffs)
+    let diffs = job_diff_model::Model::find_by_run(&ctx.db, run.id).await?;
+    views::jobs::org_run_show(
+        &v,
+        &user,
+        org_ctx.as_ref(),
+        &user_orgs,
+        &definition,
+        &run,
+        &diffs,
+    )
 }
 
 /// GET /admin/jobs — list all job definitions across all orgs (platform admin only).
@@ -136,7 +150,9 @@ pub async fn admin_index(
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let definitions = job_definitions::Entity::find()
         .order_by_asc(job_definitions::Column::Name)
@@ -149,7 +165,7 @@ pub async fn admin_index(
         .await
         .unwrap_or_default();
 
-    views::jobs::admin_index(&v, &user, &org_ctx, &user_orgs, &definitions, &orgs)
+    views::jobs::admin_index(&v, &user, org_ctx.as_ref(), &user_orgs, &definitions, &orgs)
 }
 
 pub fn org_routes() -> Routes {

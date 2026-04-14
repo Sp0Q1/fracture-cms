@@ -47,7 +47,14 @@ impl Model {
     }
 
     /// Finds all pending (non-accepted, non-expired) invites for an email.
-    pub async fn find_pending_by_email(db: &DatabaseConnection, email: &str) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_pending_by_email(
+        db: &DatabaseConnection,
+        email: &str,
+    ) -> Result<Vec<Self>, DbErr> {
         let now = chrono::Utc::now();
         Entity::find()
             .filter(Column::Email.eq(email))
@@ -55,11 +62,17 @@ impl Model {
             .filter(Column::ExpiresAt.gt(now))
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Finds all pending (non-accepted, non-expired) invites for an org.
-    pub async fn find_pending_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_pending_by_org(
+        db: &DatabaseConnection,
+        org_id: i32,
+    ) -> Result<Vec<Self>, DbErr> {
         let now = chrono::Utc::now();
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
@@ -67,18 +80,18 @@ impl Model {
             .filter(Column::ExpiresAt.gt(now))
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Finds an invite by its public ID.
-    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
-        Entity::find()
-            .filter(Column::Pid.eq(uuid))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
+        Entity::find().filter(Column::Pid.eq(uuid)).one(db).await
     }
 
     /// Accepts an invite: creates the membership and marks the invite as accepted.
@@ -103,7 +116,8 @@ impl Model {
         let role = OrgRole::from_str_role(&invite.role).unwrap_or(OrgRole::Member);
 
         // Check if already a member
-        let existing = super::org_members::Model::find_membership(db, invite.org_id, user_id).await;
+        let existing =
+            super::org_members::Model::find_membership(db, invite.org_id, user_id).await?;
         if existing.is_none() {
             super::org_members::Model::add_member(db, invite.org_id, user_id, role).await?;
         }

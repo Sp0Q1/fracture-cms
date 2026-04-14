@@ -15,7 +15,7 @@ pub fn list(
     user_orgs: &[organizations::Model],
     items: &[projects::Model],
 ) -> Result<Response> {
-    let mut ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
+    let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
     ctx["items"] = serde_json::json!(items);
     format::render().view(v, "project/list.html", data!(ctx))
 }
@@ -33,7 +33,7 @@ pub fn show(
     item: &projects::Model,
     notes: &[notes::Model],
 ) -> Result<Response> {
-    let mut ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
+    let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
     ctx["item"] = serde_json::json!(item);
     ctx["notes"] = serde_json::json!(notes);
     format::render().view(v, "project/show.html", data!(ctx))
@@ -50,7 +50,7 @@ pub fn create(
     org_ctx: &OrgContext,
     user_orgs: &[organizations::Model],
 ) -> Result<Response> {
-    let ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
+    let ctx = super::base_context(user, Some(org_ctx), user_orgs);
     format::render().view(v, "project/create.html", data!(ctx))
 }
 
@@ -66,7 +66,7 @@ pub fn edit(
     user_orgs: &[organizations::Model],
     item: &projects::Model,
 ) -> Result<Response> {
-    let mut ctx = super::base_context(user, &Some(org_ctx.clone()), user_orgs);
+    let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
     ctx["item"] = serde_json::json!(item);
     format::render().view(v, "project/edit.html", data!(ctx))
 }

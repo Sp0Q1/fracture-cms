@@ -11,7 +11,7 @@ use crate::models::_entities::{organizations, users};
 pub fn index(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     project_count: usize,
 ) -> Result<Response> {
