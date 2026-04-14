@@ -205,12 +205,15 @@ async fn oidc_creates_personal_org_for_new_user() {
         .await
         .expect("Failed to create user from OIDC");
 
-    let orgs = organizations::Model::find_orgs_for_user(&boot.app_context.db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(&boot.app_context.db, user.id)
+        .await
+        .unwrap();
     assert_eq!(orgs.len(), 1, "New OIDC user should have one personal org");
     assert!(orgs[0].is_personal);
 
-    let membership =
-        org_members::Model::find_membership(&boot.app_context.db, orgs[0].id, user.id).await.unwrap();
+    let membership = org_members::Model::find_membership(&boot.app_context.db, orgs[0].id, user.id)
+        .await
+        .unwrap();
     assert!(membership.is_some());
     assert_eq!(membership.unwrap().role, "owner");
 }

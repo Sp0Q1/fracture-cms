@@ -30,7 +30,9 @@ async fn test_personal_org_auto_created_on_user_creation() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "personal").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
 
     assert_eq!(
         orgs.len(),
@@ -58,15 +60,20 @@ async fn test_find_by_pid() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "findpid").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
-    let found = organizations::Model::find_by_pid(db, &org.pid.to_string()).await.unwrap();
+    let found = organizations::Model::find_by_pid(db, &org.pid.to_string())
+        .await
+        .unwrap();
     assert!(found.is_some());
     assert_eq!(found.unwrap().id, org.id);
 
-    let not_found =
-        organizations::Model::find_by_pid(db, "00000000-0000-0000-0000-000000000000").await.unwrap();
+    let not_found = organizations::Model::find_by_pid(db, "00000000-0000-0000-0000-000000000000")
+        .await
+        .unwrap();
     assert!(not_found.is_none());
 }
 
@@ -77,10 +84,14 @@ async fn test_find_by_slug() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "slug").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
-    let found = organizations::Model::find_by_slug(db, &org.slug).await.unwrap();
+    let found = organizations::Model::find_by_slug(db, &org.slug)
+        .await
+        .unwrap();
     assert!(found.is_some());
     assert_eq!(found.unwrap().id, org.id);
 }
@@ -94,7 +105,9 @@ async fn test_find_orgs_for_user() {
     let user = create_test_user(db, "multiorg").await;
 
     // User has personal org from creation
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     assert_eq!(orgs.len(), 1);
 
     // Create a second org
@@ -114,6 +127,8 @@ async fn test_find_orgs_for_user() {
         .await
         .unwrap();
 
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     assert_eq!(orgs.len(), 2);
 }
