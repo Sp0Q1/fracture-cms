@@ -11,7 +11,7 @@
 <div class="admin-stats row">
     {% for stat in entity_stats %}
     {% if stat.url != "" %}
-    <a href="{{ stat.url }}" class="card stat-card" style="text-decoration:none;color:inherit">
+    <a href="{{ stat.url }}" class="card stat-card stat-card-link">
         <h3>{{ stat.count }}</h3>
         <p>{{ stat.name }}</p>
     </a>

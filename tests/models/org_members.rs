@@ -67,7 +67,9 @@ async fn test_add_and_find_membership() {
     let user2 = create_test_user(db, "add2").await;
 
     // user1 has a personal org from creation
-    let orgs = organizations::Model::find_orgs_for_user(db, user1.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     // Add user2 as member
@@ -75,7 +77,9 @@ async fn test_add_and_find_membership() {
         .await
         .unwrap();
 
-    let membership = org_members::Model::find_membership(db, org.id, user2.id).await.unwrap();
+    let membership = org_members::Model::find_membership(db, org.id, user2.id)
+        .await
+        .unwrap();
     assert!(membership.is_some());
     assert_eq!(membership.unwrap().role, "member");
 }
@@ -89,7 +93,9 @@ async fn test_update_role() {
     let user1 = create_test_user(db, "updrole1").await;
     let user2 = create_test_user(db, "updrole2").await;
 
-    let orgs = organizations::Model::find_orgs_for_user(db, user1.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     org_members::Model::add_member(db, org.id, user2.id, OrgRole::Member)
@@ -113,7 +119,9 @@ async fn test_cannot_remove_last_owner() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "lastowner").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     let membership = org_members::Model::find_membership(db, org.id, user.id)
@@ -137,7 +145,9 @@ async fn test_can_remove_non_last_owner() {
     let user1 = create_test_user(db, "rmowner1").await;
     let user2 = create_test_user(db, "rmowner2").await;
 
-    let orgs = organizations::Model::find_orgs_for_user(db, user1.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     // Add user2 as owner too
@@ -166,7 +176,9 @@ async fn test_find_members() {
     let user1 = create_test_user(db, "fm1").await;
     let user2 = create_test_user(db, "fm2").await;
 
-    let orgs = organizations::Model::find_orgs_for_user(db, user1.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     org_members::Model::add_member(db, org.id, user2.id, OrgRole::Viewer)
@@ -184,7 +196,9 @@ async fn test_cannot_demote_last_owner() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "demoteowner").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     let membership = org_members::Model::find_membership(db, org.id, user.id)
@@ -211,7 +225,9 @@ async fn test_add_duplicate_member_fails() {
     let user1 = create_test_user(db, "dup1").await;
     let user2 = create_test_user(db, "dup2").await;
 
-    let orgs = organizations::Model::find_orgs_for_user(db, user1.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     // First add succeeds
@@ -236,7 +252,9 @@ async fn test_remove_non_owner_member() {
     let user1 = create_test_user(db, "rmnotown1").await;
     let user2 = create_test_user(db, "rmnotown2").await;
 
-    let orgs = organizations::Model::find_orgs_for_user(db, user1.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     org_members::Model::add_member(db, org.id, user2.id, OrgRole::Member)
@@ -254,6 +272,8 @@ async fn test_remove_non_owner_member() {
     );
 
     // Verify membership is gone
-    let gone = org_members::Model::find_membership(db, org.id, user2.id).await.unwrap();
+    let gone = org_members::Model::find_membership(db, org.id, user2.id)
+        .await
+        .unwrap();
     assert!(gone.is_none());
 }

@@ -66,14 +66,18 @@ async fn test_find_by_project_and_org() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "notelist").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
     let project = create_project(db, "Note Project", org.id).await;
 
     create_note(db, "Note 1", project.id, org.id).await;
     create_note(db, "Note 2", project.id, org.id).await;
 
-    let notes = NoteModel::find_by_project_and_org(db, project.id, org.id).await.unwrap();
+    let notes = NoteModel::find_by_project_and_org(db, project.id, org.id)
+        .await
+        .unwrap();
     assert_eq!(notes.len(), 2);
     // Ordered by id DESC
     assert_eq!(notes[0].title, "Note 2");
@@ -87,17 +91,23 @@ async fn test_find_by_pid_and_org() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "notepid").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
     let project = create_project(db, "Note PID Project", org.id).await;
     let note = create_note(db, "Find Me", project.id, org.id).await;
 
-    let found = NoteModel::find_by_pid_and_org(db, &note.pid.to_string(), org.id).await.unwrap();
+    let found = NoteModel::find_by_pid_and_org(db, &note.pid.to_string(), org.id)
+        .await
+        .unwrap();
     assert!(found.is_some());
     assert_eq!(found.unwrap().title, "Find Me");
 
     // Wrong org
-    let not_found = NoteModel::find_by_pid_and_org(db, &note.pid.to_string(), org.id + 999).await.unwrap();
+    let not_found = NoteModel::find_by_pid_and_org(db, &note.pid.to_string(), org.id + 999)
+        .await
+        .unwrap();
     assert!(not_found.is_none());
 }
 
@@ -108,7 +118,9 @@ async fn test_note_sets_pid_on_insert() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "notepidset").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
     let project = create_project(db, "PID Note Project", org.id).await;
     let note = create_note(db, "PID Note", project.id, org.id).await;
@@ -125,9 +137,13 @@ async fn test_notes_cross_org_isolation() {
     let alice = create_test_user(db, "note-iso-alice").await;
     let bob = create_test_user(db, "note-iso-bob").await;
 
-    let alice_orgs = organizations::Model::find_orgs_for_user(db, alice.id).await.unwrap();
+    let alice_orgs = organizations::Model::find_orgs_for_user(db, alice.id)
+        .await
+        .unwrap();
     let alice_org = &alice_orgs[0];
-    let bob_orgs = organizations::Model::find_orgs_for_user(db, bob.id).await.unwrap();
+    let bob_orgs = organizations::Model::find_orgs_for_user(db, bob.id)
+        .await
+        .unwrap();
     let bob_org = &bob_orgs[0];
 
     let alice_project = create_project(db, "Alice's NP", alice_org.id).await;
@@ -145,7 +161,9 @@ async fn test_notes_cross_org_isolation() {
     );
 
     // Bob's project notes don't show up in Alice's org
-    let alice_notes = NoteModel::find_by_project_and_org(db, bob_project.id, alice_org.id).await.unwrap();
+    let alice_notes = NoteModel::find_by_project_and_org(db, bob_project.id, alice_org.id)
+        .await
+        .unwrap();
     assert!(alice_notes.is_empty());
 }
 
@@ -156,7 +174,9 @@ async fn test_notes_cross_project_isolation_within_same_org() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "note-crossproj").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     let project_a = create_project(db, "Project A", org.id).await;
@@ -166,11 +186,15 @@ async fn test_notes_cross_project_isolation_within_same_org() {
     create_note(db, "Note in B", project_b.id, org.id).await;
 
     // Each project should only see its own notes
-    let notes_a = NoteModel::find_by_project_and_org(db, project_a.id, org.id).await.unwrap();
+    let notes_a = NoteModel::find_by_project_and_org(db, project_a.id, org.id)
+        .await
+        .unwrap();
     assert_eq!(notes_a.len(), 1);
     assert_eq!(notes_a[0].title, "Note in A");
 
-    let notes_b = NoteModel::find_by_project_and_org(db, project_b.id, org.id).await.unwrap();
+    let notes_b = NoteModel::find_by_project_and_org(db, project_b.id, org.id)
+        .await
+        .unwrap();
     assert_eq!(notes_b.len(), 1);
     assert_eq!(notes_b[0].title, "Note in B");
 }
@@ -182,7 +206,9 @@ async fn test_note_requires_valid_project_id() {
     let db = &boot.app_context.db;
 
     let user = create_test_user(db, "note-badproj").await;
-    let orgs = organizations::Model::find_orgs_for_user(db, user.id).await.unwrap();
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
     let org = &orgs[0];
 
     // Create a note with a nonexistent project_id — should fail due to FK constraint
