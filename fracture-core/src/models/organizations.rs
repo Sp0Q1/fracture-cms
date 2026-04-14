@@ -60,35 +60,29 @@ impl Model {
     }
 
     /// Finds an organization by its public ID.
-    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
         // Try UUID (blob) first — standard SeaORM storage format
-        if let Some(org) = Entity::find()
-            .filter(Column::Pid.eq(uuid))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
-        {
-            return Some(org);
+        if let Some(org) = Entity::find().filter(Column::Pid.eq(uuid)).one(db).await? {
+            return Ok(Some(org));
         }
         // Fall back to text match — for records created via raw SQL or CLI tools
-        Entity::find()
-            .filter(Column::Pid.eq(pid))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
+        Entity::find().filter(Column::Pid.eq(pid)).one(db).await
     }
 
     /// Finds an organization by slug.
-    pub async fn find_by_slug(db: &DatabaseConnection, slug: &str) -> Option<Self> {
-        Entity::find()
-            .filter(Column::Slug.eq(slug))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_slug(db: &DatabaseConnection, slug: &str) -> Result<Option<Self>, DbErr> {
+        Entity::find().filter(Column::Slug.eq(slug)).one(db).await
     }
 
     /// Returns true if the user is a member of any org with `is_platform_admin`.
@@ -148,25 +142,34 @@ impl Model {
     }
 
     /// Finds all organizations a user belongs to.
-    pub async fn find_orgs_for_user(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_orgs_for_user(
+        db: &DatabaseConnection,
+        user_id: i32,
+    ) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .inner_join(org_members::Entity)
             .filter(org_members::Column::UserId.eq(user_id))
             .order_by_asc(Column::Name)
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Finds all organizations visible to a user.
     /// Platform admins see ALL orgs; regular users see only their memberships.
-    pub async fn find_visible_orgs(db: &DatabaseConnection, user_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_visible_orgs(
+        db: &DatabaseConnection,
+        user_id: i32,
+    ) -> Result<Vec<Self>, DbErr> {
         if Self::is_user_platform_admin(db, user_id).await {
-            Entity::find()
-                .order_by_asc(Column::Name)
-                .all(db)
-                .await
-                .unwrap_or_default()
+            Entity::find().order_by_asc(Column::Name).all(db).await
         } else {
             Self::find_orgs_for_user(db, user_id).await
         }

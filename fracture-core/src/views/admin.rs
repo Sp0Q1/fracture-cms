@@ -23,7 +23,7 @@ pub struct EntityStat {
 pub fn dashboard(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     stats: &[EntityStat],
 ) -> Result<Response> {
@@ -40,7 +40,7 @@ pub fn dashboard(
 pub fn orgs(
     v: &impl ViewRenderer,
     user: &users::Model,
-    org_ctx: &Option<OrgContext>,
+    org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     all_orgs: &[organizations::Model],
 ) -> Result<Response> {

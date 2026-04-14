@@ -23,7 +23,10 @@ pub struct BlogPostParams {
 /// Resolves the blog org from the config setting `settings.blog.org_slug`.
 async fn resolve_blog_org(ctx: &AppContext) -> Option<organizations::Model> {
     let slug = blog_model::Model::get_blog_org_slug(&ctx.config)?;
-    org_model::Model::find_by_slug(&ctx.db, &slug).await
+    org_model::Model::find_by_slug(&ctx.db, &slug)
+        .await
+        .ok()
+        .flatten()
 }
 
 /// GET /blog/ — public blog index (no auth required)
@@ -38,7 +41,7 @@ pub async fn public_index(
 ) -> Result<Response> {
     let org = resolve_blog_org(&ctx).await;
     let posts = match org {
-        Some(ref o) => blog_model::Model::find_published_by_org(&ctx.db, o.id).await,
+        Some(ref o) => blog_model::Model::find_published_by_org(&ctx.db, o.id).await?,
         None => vec![],
     };
     let base_url = ctx.config.server.host.clone();
@@ -60,7 +63,7 @@ pub async fn public_show(
         .await
         .ok_or_else(|| Error::NotFound)?;
     let post = blog_model::Model::find_published_by_slug(&ctx.db, org.id, &slug)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let author = users_entity::Entity::find_by_id(post.author_id)
         .one(&ctx.db)
@@ -87,14 +90,16 @@ pub async fn admin_index(
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let blog_org = resolve_blog_org(&ctx).await;
     let posts = match blog_org {
-        Some(ref o) => blog_model::Model::find_all_by_org(&ctx.db, o.id).await,
+        Some(ref o) => blog_model::Model::find_all_by_org(&ctx.db, o.id).await?,
         None => vec![],
     };
-    views::blog::admin_index(&v, &user, &org_ctx, &user_orgs, &posts)
+    views::blog::admin_index(&v, &user, org_ctx.as_ref(), &user_orgs, &posts)
 }
 
 /// GET /admin/blog/new — new blog post form
@@ -112,8 +117,10 @@ pub async fn admin_new(
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
-    views::blog::admin_new(&v, &user, &org_ctx, &user_orgs)
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+    views::blog::admin_new(&v, &user, org_ctx.as_ref(), &user_orgs)
 }
 
 /// POST /admin/blog/ — create a new blog post
@@ -195,12 +202,14 @@ pub async fn admin_edit(
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let post = blog_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
-    views::blog::admin_edit(&v, &user, &org_ctx, &user_orgs, &post)
+    views::blog::admin_edit(&v, &user, org_ctx.as_ref(), &user_orgs, &post)
 }
 
 /// POST /admin/blog/:pid — update a blog post
@@ -221,7 +230,7 @@ pub async fn admin_update(
     require_platform_admin!(org_ctx);
 
     let post = blog_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     let mut active: blog_posts::ActiveModel = post.into();
@@ -253,7 +262,7 @@ pub async fn admin_publish(
     require_platform_admin!(org_ctx);
 
     let post = blog_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     let mut active: blog_posts::ActiveModel = post.into();
@@ -281,7 +290,7 @@ pub async fn admin_unpublish(
     require_platform_admin!(org_ctx);
 
     let post = blog_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     let mut active: blog_posts::ActiveModel = post.into();

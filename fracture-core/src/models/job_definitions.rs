@@ -26,40 +26,48 @@ impl ActiveModelBehavior for ActiveModel {
 
 impl Model {
     /// Finds a job definition by its public ID.
-    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
-        Entity::find()
-            .filter(Column::Pid.eq(uuid))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
+        Entity::find().filter(Column::Pid.eq(uuid)).one(db).await
     }
 
     /// Returns all job definitions for an org, newest first.
-    pub async fn find_all_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_all_by_org(db: &DatabaseConnection, org_id: i32) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
             .order_by(Column::CreatedAt, Order::Desc)
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Finds a job definition by PID and verifies org ownership.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn find_by_pid_and_org(
         db: &DatabaseConnection,
         pid: &str,
         org_id: i32,
-    ) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
+    ) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
         Entity::find()
             .filter(Column::Pid.eq(uuid))
             .filter(Column::OrgId.eq(org_id))
             .one(db)
             .await
-            .ok()
-            .flatten()
     }
 }
 

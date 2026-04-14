@@ -48,24 +48,28 @@ impl ActiveModelBehavior for ActiveModel {
 
 impl Model {
     /// Finds an upload by its public ID (UUID).
-    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
-        Entity::find()
-            .filter(Column::Pid.eq(uuid))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
+        Entity::find().filter(Column::Pid.eq(uuid)).one(db).await
     }
 
     /// Returns all uploads for an organization, newest first.
-    pub async fn find_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_org(db: &DatabaseConnection, org_id: i32) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
             .order_by_desc(Column::CreatedAt)
             .all(db)
             .await
-            .unwrap_or_default()
     }
 }
 

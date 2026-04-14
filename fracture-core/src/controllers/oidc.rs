@@ -187,7 +187,9 @@ async fn callback(
         .build();
 
     // Set org_pid cookie to the user's first org
-    let orgs = crate::models::organizations::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let orgs = crate::models::organizations::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     let org_pid_cookie = orgs.first().map(|org| {
         Cookie::build(("org_pid", org.pid.to_string()))
             .path("/")

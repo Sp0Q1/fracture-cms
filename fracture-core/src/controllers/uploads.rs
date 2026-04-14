@@ -127,7 +127,7 @@ pub async fn show(
     jar: CookieJar,
 ) -> Result<Response> {
     let upload = upload_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     // Access control based on visibility
@@ -212,7 +212,7 @@ pub async fn destroy(
     let user = require_user!(user);
 
     let upload = upload_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     // Authorization: uploader, org admin, or platform admin

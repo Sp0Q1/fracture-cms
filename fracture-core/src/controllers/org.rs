@@ -47,8 +47,10 @@ pub async fn list(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id).await;
-    views::org::list(&v, &user, &org_ctx, &user_orgs)
+    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+    views::org::list(&v, &user, org_ctx.as_ref(), &user_orgs)
 }
 
 /// GET /orgs/new — new org form
@@ -65,8 +67,10 @@ pub async fn new(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id).await;
-    views::org::new(&v, &user, &org_ctx, &user_orgs)
+    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+    views::org::new(&v, &user, org_ctx.as_ref(), &user_orgs)
 }
 
 /// POST /orgs/ — create organization
@@ -124,15 +128,17 @@ pub async fn settings(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Admin);
-    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     views::org::settings(&v, &user, &org_ctx, &user_orgs, &org)
 }
 
@@ -151,10 +157,10 @@ pub async fn update_settings(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
@@ -182,16 +188,16 @@ pub async fn members(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Viewer);
 
-    let members_list = org_members::Model::find_members(&ctx.db, org.id).await;
+    let members_list = org_members::Model::find_members(&ctx.db, org.id).await?;
     let mut member_users: Vec<(org_members::Model, users_entity::Model)> = Vec::new();
     for m in members_list {
         if let Some(u) = users_entity::Entity::find_by_id(m.user_id)
@@ -203,8 +209,10 @@ pub async fn members(
             member_users.push((m, u));
         }
     }
-    let pending_invites = org_invites::Model::find_pending_by_org(&ctx.db, org.id).await;
-    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id).await;
+    let pending_invites = org_invites::Model::find_pending_by_org(&ctx.db, org.id).await?;
+    let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     let app_url = ctx.config.server.host.clone();
     views::org::members(
         &v,
@@ -235,10 +243,10 @@ pub async fn invite(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
@@ -283,10 +291,10 @@ pub async fn update_role(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
@@ -296,7 +304,7 @@ pub async fn update_role(
         .await
         .map_err(|_| Error::NotFound)?;
     let target_membership = org_members::Model::find_membership(&ctx.db, org.id, target_user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let new_role = OrgRole::from_str_role(&params.role).unwrap_or(OrgRole::Member);
     let target_current_role =
@@ -332,10 +340,10 @@ pub async fn remove_member(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
@@ -345,7 +353,7 @@ pub async fn remove_member(
         .await
         .map_err(|_| Error::NotFound)?;
     let target_membership = org_members::Model::find_membership(&ctx.db, org.id, target_user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     org_members::Model::remove_member(&ctx.db, target_membership)
         .await
@@ -375,10 +383,10 @@ pub async fn delete(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let org_ctx =
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
@@ -479,10 +487,10 @@ pub async fn switch(
 
     // Verify membership (admins can access any org)
     let org = org_model::Model::find_by_pid(&ctx.db, &pid)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let _membership = org_members::Model::find_membership_or_admin(&ctx.db, org.id, user.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     let cookie = Cookie::build(("org_pid", pid))
@@ -519,7 +527,7 @@ pub async fn accept_invite(
     let user = require_user!(user);
 
     let invite = org_invites::Model::find_by_pid(&ctx.db, &token)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
 
     // Verify the authenticated user's email matches the invite recipient

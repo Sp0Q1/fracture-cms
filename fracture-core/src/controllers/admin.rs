@@ -24,7 +24,9 @@ pub async fn dashboard(
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let registry = entity_registry();
     let mut stats = Vec::new();
@@ -39,7 +41,7 @@ pub async fn dashboard(
         });
     }
 
-    views::admin::dashboard(&v, &user, &org_ctx, &user_orgs, &stats)
+    views::admin::dashboard(&v, &user, org_ctx.as_ref(), &user_orgs, &stats)
 }
 
 /// `GET /admin/orgs` — list all organizations (platform admin).
@@ -57,7 +59,9 @@ pub async fn orgs(
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let all_orgs = org_model::Entity::find()
         .order_by_asc(org_model::Column::Name)
@@ -65,7 +69,7 @@ pub async fn orgs(
         .await
         .unwrap_or_default();
 
-    views::admin::orgs(&v, &user, &org_ctx, &user_orgs, &all_orgs)
+    views::admin::orgs(&v, &user, org_ctx.as_ref(), &user_orgs, &all_orgs)
 }
 
 pub fn routes() -> Routes {

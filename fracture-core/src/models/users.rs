@@ -205,8 +205,9 @@ impl Model {
             .map_err(|e| ModelError::Any(e.into()))?;
 
         // Auto-accept any pending invites for this email
-        let pending_invites =
-            super::org_invites::Model::find_pending_by_email(db, &info.email).await;
+        let pending_invites = super::org_invites::Model::find_pending_by_email(db, &info.email)
+            .await
+            .map_err(|e| ModelError::Any(e.into()))?;
         for invite in pending_invites {
             let _ = super::org_invites::Model::accept_invite(db, invite, user.id).await;
         }

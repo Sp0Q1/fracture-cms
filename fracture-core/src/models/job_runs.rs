@@ -25,39 +25,48 @@ impl ActiveModelBehavior for ActiveModel {
 
 impl Model {
     /// Finds a job run by its public ID.
-    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
-        Entity::find()
-            .filter(Column::Pid.eq(uuid))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
+        Entity::find().filter(Column::Pid.eq(uuid)).one(db).await
     }
 
     /// Returns all runs for a job definition, newest first.
-    pub async fn find_by_definition(db: &DatabaseConnection, definition_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_definition(
+        db: &DatabaseConnection,
+        definition_id: i32,
+    ) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(Column::JobDefinitionId.eq(definition_id))
             .order_by_desc(Column::CreatedAt)
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Returns the latest completed run for a job definition.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn find_latest_completed_by_definition(
         db: &DatabaseConnection,
         definition_id: i32,
-    ) -> Option<Self> {
+    ) -> Result<Option<Self>, DbErr> {
         Entity::find()
             .filter(Column::JobDefinitionId.eq(definition_id))
             .filter(Column::Status.eq("completed"))
             .order_by_desc(Column::CompletedAt)
             .one(db)
             .await
-            .ok()
-            .flatten()
     }
 
     /// Creates a new queued job run for the given definition and org.

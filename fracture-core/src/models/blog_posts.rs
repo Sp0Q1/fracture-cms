@@ -44,51 +44,63 @@ fn render_markdown(input: &str) -> String {
 
 impl Model {
     /// Finds a blog post by its public ID.
-    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Option<Self> {
-        let uuid = Uuid::parse_str(pid).ok()?;
-        Entity::find()
-            .filter(Column::Pid.eq(uuid))
-            .one(db)
-            .await
-            .ok()
-            .flatten()
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
+        Entity::find().filter(Column::Pid.eq(uuid)).one(db).await
     }
 
     /// Finds a published blog post by org and slug.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub async fn find_published_by_slug(
         db: &DatabaseConnection,
         org_id: i32,
         slug: &str,
-    ) -> Option<Self> {
+    ) -> Result<Option<Self>, DbErr> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
             .filter(Column::Slug.eq(slug))
             .filter(Column::Status.eq("published"))
             .one(db)
             .await
-            .ok()
-            .flatten()
     }
 
     /// Returns all published posts for an org, newest first.
-    pub async fn find_published_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_published_by_org(
+        db: &DatabaseConnection,
+        org_id: i32,
+    ) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
             .filter(Column::Status.eq("published"))
             .order_by_desc(Column::PublishedAt)
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Returns all posts for an org (any status), newest first.
-    pub async fn find_all_by_org(db: &DatabaseConnection, org_id: i32) -> Vec<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_all_by_org(db: &DatabaseConnection, org_id: i32) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(Column::OrgId.eq(org_id))
             .order_by_desc(Column::CreatedAt)
             .all(db)
             .await
-            .unwrap_or_default()
     }
 
     /// Reads the blog org slug from the application config.

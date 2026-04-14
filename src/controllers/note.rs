@@ -30,7 +30,7 @@ async fn resolve_project(
     org_id: i32,
 ) -> Result<projects::Model> {
     projects::Model::find_by_pid_and_org(db, project_pid, org_id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)
 }
 
@@ -53,7 +53,9 @@ pub async fn new(
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Member);
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     views::note::create(&v, &user, &org_ctx, &user_orgs, &project)
 }
 
@@ -107,9 +109,11 @@ pub async fn show(
     require_role!(org_ctx, OrgRole::Viewer);
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     views::note::show(&v, &user, &org_ctx, &user_orgs, &project, &item)
 }
 
@@ -133,9 +137,11 @@ pub async fn edit(
     require_role!(org_ctx, OrgRole::Member);
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
-    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id).await;
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
     views::note::edit(&v, &user, &org_ctx, &user_orgs, &project, &item)
 }
 
@@ -159,7 +165,7 @@ pub async fn update(
     require_role!(org_ctx, OrgRole::Member);
     let _project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let mut item = item.into_active_model();
     params.update(&mut item);
@@ -186,7 +192,7 @@ pub async fn remove(
     require_role!(org_ctx, OrgRole::Member);
     let _project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     item.delete(&ctx.db).await?;
     format::empty()
