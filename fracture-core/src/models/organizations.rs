@@ -68,12 +68,17 @@ impl Model {
         let Some(uuid) = Uuid::parse_str(pid).ok() else {
             return Ok(None);
         };
-        // Try UUID (blob) first — standard SeaORM storage format
-        if let Some(org) = Entity::find().filter(Column::Pid.eq(uuid)).one(db).await? {
-            return Ok(Some(org));
+        // Try UUID first — standard SeaORM storage format
+        if let found @ Some(_) = Entity::find().filter(Column::Pid.eq(uuid)).one(db).await? {
+            return Ok(found);
         }
-        // Fall back to text match — for records created via raw SQL or CLI tools
-        Entity::find().filter(Column::Pid.eq(pid)).one(db).await
+        // Fall back to text match for SQLite (stores UUIDs as text in some cases).
+        // On PostgreSQL this would be a type mismatch, so catch and ignore errors.
+        Entity::find()
+            .filter(Column::Pid.eq(pid))
+            .one(db)
+            .await
+            .map_or_else(|_| Ok(None), Ok)
     }
 
     /// Finds an organization by slug.
