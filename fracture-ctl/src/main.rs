@@ -850,7 +850,13 @@ fn container_name(service: &str) -> String {
     }
     // Try podman ps with filter — works even when compose ps doesn't
     let filter_output = Command::new("podman")
-        .args(["ps", "--format", "{{.Names}}", "--filter", &format!("name=.*{service}")])
+        .args([
+            "ps",
+            "--format",
+            "{{.Names}}",
+            "--filter",
+            &format!("name=.*{service}"),
+        ])
         .output();
     if let Ok(out) = filter_output {
         let names = String::from_utf8_lossy(&out.stdout).trim().to_string();
