@@ -574,12 +574,13 @@ fn detect_database() -> (String, String, String, String, String) {
             }
             if val.starts_with("sqlite") {
                 // sqlite:///path/to/db.sqlite?mode=rwc
+                // Three slashes = absolute path; strip "sqlite://" to keep the leading /
                 let path = val
-                    .strip_prefix("sqlite:///")
+                    .strip_prefix("sqlite://")
                     .unwrap_or(val)
                     .split('?')
                     .next()
-                    .unwrap_or("data/app.sqlite");
+                    .unwrap_or("/data/app.sqlite");
                 return (
                     "sqlite".into(),
                     path.to_string(),
