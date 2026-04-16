@@ -830,6 +830,7 @@ fn chrono_timestamp() -> String {
 
 /// Resolve the running container name for a compose service.
 fn container_name(service: &str) -> String {
+    // Try podman compose ps first
     let output = Command::new("podman")
         .args([
             "compose",
@@ -844,16 +845,35 @@ fn container_name(service: &str) -> String {
     if let Ok(out) = output {
         let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !name.is_empty() {
-            // podman-compose may return multiple lines; take the first
             return name.lines().next().unwrap_or(&name).to_string();
         }
     }
-    // Fallback: guess from common naming conventions
+    // Try podman ps with filter — works even when compose ps doesn't
+    let filter_output = Command::new("podman")
+        .args(["ps", "--format", "{{.Names}}", "--filter", &format!("name=.*{service}")])
+        .output();
+    if let Ok(out) = filter_output {
+        let names = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        // Find the best match — prefer exact service name suffix
+        for line in names.lines() {
+            if line.ends_with(&format!("_{service}_1")) || line.ends_with(&format!("-{service}-1"))
+            {
+                return line.to_string();
+            }
+        }
+        // Take first match if no exact suffix match
+        if let Some(first) = names.lines().next() {
+            if !first.is_empty() {
+                return first.to_string();
+            }
+        }
+    }
+    // Fallback: guess from directory name (replace hyphens with underscores,
+    // matching podman-compose convention)
     let dir = std::env::current_dir()
         .ok()
         .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-        .unwrap_or_else(|| "fracture".into())
-        .replace(['-', '_'], "");
+        .unwrap_or_else(|| "fracture".into());
     format!("{dir}_{service}_1")
 }
 
