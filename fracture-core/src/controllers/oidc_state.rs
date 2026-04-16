@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const TTL: Duration = Duration::from_secs(300);
+const TTL: Duration = Duration::from_mins(5);
 
 /// Type alias for a `CoreClient` after OIDC discovery + redirect URI set.
 pub type DiscoveredClient = CoreClient<
