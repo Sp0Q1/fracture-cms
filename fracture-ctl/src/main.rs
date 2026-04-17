@@ -29,8 +29,12 @@ enum Commands {
         #[arg(long)]
         dev: bool,
     },
-    /// Start production services
-    Up,
+    /// Start production services (pulls latest git, image, and deploys)
+    Up {
+        /// Update the app image tag in compose.prod.yaml (e.g. v0.14.0)
+        #[arg(long)]
+        tag: Option<String>,
+    },
     /// Stop all services
     Down,
     /// Run all CI checks (fmt, clippy, semgrep, tests) — run from project repo
@@ -395,11 +399,52 @@ volumes:
     eprintln!("  fracture-ctl up");
 }
 
-fn cmd_up() {
+fn cmd_up(tag: Option<String>) {
     if !std::path::Path::new("compose.prod.yaml").exists() {
         eprintln!("Error: compose.prod.yaml not found. Run: fracture-ctl init --image <image>");
         std::process::exit(1);
     }
+
+    // Pull latest assets, config, and compose file from git
+    if std::path::Path::new(".git").exists() {
+        eprintln!("Pulling latest assets and config...");
+        let status = Command::new("git").args(["pull", "--ff-only"]).status();
+        if status.is_err() || !status.unwrap().success() {
+            eprintln!("WARNING: git pull failed — continuing with existing files.");
+        }
+    }
+
+    // Update image tag in compose file if --tag is provided
+    if let Some(ref new_tag) = tag {
+        let compose_path = "compose.prod.yaml";
+        match fs::read_to_string(compose_path) {
+            Ok(content) => {
+                // Match image lines like: image: ghcr.io/sp0q1/fracture-pt:v0.13.0
+                let updated = content
+                    .lines()
+                    .map(|line| {
+                        if line.trim_start().starts_with("image:") && line.contains("ghcr.io") {
+                            if let Some(colon_pos) = line.rfind(':') {
+                                format!("{}:{new_tag}", &line[..colon_pos])
+                            } else {
+                                line.to_string()
+                            }
+                        } else {
+                            line.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if let Err(e) = fs::write(compose_path, &updated) {
+                    eprintln!("WARNING: could not update image tag: {e}");
+                } else {
+                    eprintln!("Updated image tag to {new_tag}");
+                }
+            }
+            Err(e) => eprintln!("WARNING: could not read compose file: {e}"),
+        }
+    }
+
     // Check for aardvark-dns
     if Command::new("which")
         .arg("aardvark-dns")
@@ -1115,7 +1160,7 @@ fn main() {
 
     match cli.command {
         Commands::Init { image, repo, dev } => cmd_init(image, repo, dev),
-        Commands::Up => cmd_up(),
+        Commands::Up { tag } => cmd_up(tag),
         Commands::Down => cmd_down(),
         Commands::Ci => cmd_ci(),
         Commands::Dev { setup } => cmd_dev(setup),
