@@ -1483,7 +1483,7 @@ fn cmd_setup() {
             .expect("failed to read password");
         let admin_pass = admin_pass.trim();
         let user_body = format!(
-            r#"{{"userName":"{admin_email}","profile":{{"firstName":"Admin","lastName":"User","displayName":"Admin"}},"email":{{"email":"{admin_email}","isEmailVerified":true}},"password":"{admin_pass}"}}"#
+            r#"{{"username":"{admin_email}","profile":{{"givenName":"Admin","familyName":"User"}},"email":{{"email":"{admin_email}","isVerified":true}},"password":{{"password":"{admin_pass}","changeRequired":false}}}}"#
         );
         let user_output = Command::new("curl")
             .args([
@@ -1496,7 +1496,7 @@ fn cmd_setup() {
                 "Content-Type: application/json",
                 "-d",
                 &user_body,
-                &format!("{zitadel_url}/management/v1/users/human"),
+                &format!("{zitadel_url}/v2/users/human"),
             ])
             .output();
         if user_output.is_ok_and(|o| o.status.success()) {
