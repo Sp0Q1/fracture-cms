@@ -357,8 +357,10 @@ services:
     image: ghcr.io/zitadel/zitadel-login:latest
     restart: unless-stopped
     environment:
-      ZITADEL_API_URL: http://zitadel:8080
+      ZITADEL_API_URL: https://${{ZITADEL_DOMAIN:-auth.localhost}}
       ZITADEL_SERVICE_USER_TOKEN: ${{ZITADEL_SERVICE_USER_TOKEN:-unset}}
+    extra_hosts:
+      - "${{ZITADEL_DOMAIN:-auth.localhost}}:host-gateway"
     depends_on:
       zitadel:
         condition: service_started
@@ -555,8 +557,7 @@ fn cmd_up(tag: Option<String>) {
         .args(["compose", "-f", "compose.prod.yaml", "pull", "app"])
         .status();
 
-    // Force recreate to use the new image
-    // auto_migrate: true in config ensures migrations run on boot
+    // Start all services, force-recreating to pick up new images/config
     let status = Command::new("podman")
         .args([
             "compose",
@@ -565,7 +566,6 @@ fn cmd_up(tag: Option<String>) {
             "up",
             "-d",
             "--force-recreate",
-            "app",
         ])
         .status()
         .expect("failed to run podman compose");
@@ -1464,10 +1464,50 @@ fn cmd_setup() {
         eprintln!("  OIDC credentials saved to .env");
     }
 
+    // Create an admin user so you can log in
     eprintln!();
-    eprintln!("OIDC_ISSUER_URL={zitadel_url}");
-    eprintln!("OIDC_CLIENT_ID={client_id}");
-    eprintln!("OIDC_CLIENT_SECRET={client_secret}");
+    eprintln!("Creating admin user...");
+    eprint!("  Admin email: ");
+    let mut admin_email = String::new();
+    std::io::stdin()
+        .read_line(&mut admin_email)
+        .expect("failed to read email");
+    let admin_email = admin_email.trim();
+    if admin_email.is_empty() {
+        eprintln!("  Skipping admin user creation.");
+    } else {
+        eprint!("  Admin password: ");
+        let mut admin_pass = String::new();
+        std::io::stdin()
+            .read_line(&mut admin_pass)
+            .expect("failed to read password");
+        let admin_pass = admin_pass.trim();
+        let user_body = format!(
+            r#"{{"userName":"{admin_email}","profile":{{"firstName":"Admin","lastName":"User","displayName":"Admin"}},"email":{{"email":"{admin_email}","isEmailVerified":true}},"password":"{admin_pass}"}}"#
+        );
+        let user_output = Command::new("curl")
+            .args([
+                "-sf",
+                "-X",
+                "POST",
+                "-H",
+                &format!("Authorization: Bearer {pat}"),
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                &user_body,
+                &format!("{zitadel_url}/management/v1/users/human"),
+            ])
+            .output();
+        if user_output.is_ok_and(|o| o.status.success()) {
+            eprintln!("  Admin user created: {admin_email}");
+        } else {
+            eprintln!(
+                "  WARNING: Could not create admin user. Create one manually in Zitadel console."
+            );
+        }
+    }
+
     eprintln!();
     eprintln!("Setup complete! Restart to apply: fracture-ctl up");
 }
