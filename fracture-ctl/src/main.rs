@@ -15,7 +15,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Generate production config (.env.prod + compose.prod.yaml)
+    /// Generate production config (.env + compose.prod.yaml)
     Init {
         /// Container image to deploy (e.g. ghcr.io/sp0q1/fracture-pt:latest)
         #[arg(long)]
@@ -252,7 +252,12 @@ OIDC_CLIENT_SECRET="#
     let jwt_secret = generate_secret(32);
     let db_password = generate_secret(24);
     let zitadel_db_password = generate_secret(24);
-    let zitadel_masterkey = generate_secret(32);
+    // Zitadel requires exactly 32 raw bytes — use hex encoding (16 random bytes = 32 hex chars)
+    let zitadel_masterkey = {
+        let mut buf = [0u8; 16];
+        rand::fill(&mut buf[..]);
+        buf.iter().map(|b| format!("{b:02x}")).collect::<String>()
+    };
     let image_name = image.unwrap_or_else(|| "ghcr.io/sp0q1/fracture-cms:latest".to_string());
 
     let env_content = format!(
@@ -350,7 +355,7 @@ services:
       - ./repo/assets:/app/assets:ro
       - ./repo/config:/app/config:ro
     env_file:
-      - .env.prod
+      - .env
     environment:
       LOCO_ENV: production
       SERVER_BINDING: 0.0.0.0
@@ -370,17 +375,17 @@ volumes:
 "#
     );
 
-    if std::path::Path::new(".env.prod").exists() {
-        eprintln!("Error: .env.prod already exists. Remove it first to regenerate.");
+    if std::path::Path::new(".env").exists() {
+        eprintln!("Error: .env already exists. Remove it first to regenerate.");
         std::process::exit(1);
     }
 
-    fs::write(".env.prod", &env_content).expect("failed to write .env.prod");
+    fs::write(".env", &env_content).expect("failed to write .env");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(".env.prod", fs::Permissions::from_mode(0o600))
-            .expect("failed to chmod .env.prod");
+        fs::set_permissions(".env", fs::Permissions::from_mode(0o600))
+            .expect("failed to chmod .env");
     }
 
     fs::write("compose.prod.yaml", &compose_content).expect("failed to write compose.prod.yaml");
@@ -402,7 +407,7 @@ volumes:
     }
 
     eprintln!("Created:");
-    eprintln!("  .env.prod          (chmod 600)");
+    eprintln!("  .env          (chmod 600)");
     eprintln!("  compose.prod.yaml");
     if !std::path::Path::new("repo/assets").exists() {
         eprintln!();
@@ -412,12 +417,10 @@ volumes:
     }
     eprintln!();
     eprintln!("Next:");
-    eprintln!(
-        "  1. vim .env.prod                    # set ZITADEL_DOMAIN, OIDC_REDIRECT_URI, SMTP"
-    );
+    eprintln!("  1. vim .env                    # set ZITADEL_DOMAIN, OIDC_REDIRECT_URI, SMTP");
     eprintln!("  2. fracture-ctl up                  # start everything");
     eprintln!("  3. fracture-ctl setup               # create OIDC app (interactive)");
-    eprintln!("  4. vim .env.prod                    # paste OIDC credentials");
+    eprintln!("  4. vim .env                    # paste OIDC credentials");
     eprintln!("  5. fracture-ctl up                  # restart with auth");
 }
 
@@ -607,11 +610,11 @@ fn cmd_dev(setup: bool) {
     std::process::exit(status.code().unwrap_or(1));
 }
 
-/// Detect the database type from .env.prod or compose config.
+/// Detect the database type from .env or compose config.
 /// Returns ("postgres", db_user, db_password, db_name, db_host) or ("sqlite", path, "", "", "").
 fn detect_database() -> (String, String, String, String, String) {
-    // Check .env.prod for DATABASE_URL
-    let env_content = fs::read_to_string(".env.prod")
+    // Check .env for DATABASE_URL
+    let env_content = fs::read_to_string(".env")
         .or_else(|_| fs::read_to_string(".env"))
         .unwrap_or_default();
 
@@ -1174,8 +1177,8 @@ fn cmd_admin(action: AdminAction) {
 }
 
 fn cmd_setup() {
-    // Read the Zitadel domain from .env.prod
-    let env_content = fs::read_to_string(".env.prod").unwrap_or_default();
+    // Read the Zitadel domain from .env
+    let env_content = fs::read_to_string(".env").unwrap_or_default();
     let zitadel_domain = env_content
         .lines()
         .find_map(|l| l.strip_prefix("ZITADEL_DOMAIN="))
@@ -1328,7 +1331,7 @@ fn cmd_setup() {
 
     eprintln!("  OIDC app created.");
     eprintln!();
-    eprintln!("=== Add these to .env.prod ===");
+    eprintln!("=== Add these to .env ===");
     eprintln!();
     eprintln!("OIDC_ISSUER_URL={zitadel_url}");
     eprintln!("OIDC_CLIENT_ID={client_id}");
