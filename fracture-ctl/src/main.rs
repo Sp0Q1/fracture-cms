@@ -259,6 +259,12 @@ OIDC_CLIENT_SECRET="#
         buf.iter().map(|b| format!("{b:02x}")).collect::<String>()
     };
     let image_name = image.unwrap_or_else(|| "ghcr.io/sp0q1/fracture-cms:latest".to_string());
+    // Strip v prefix from tag if present: ghcr.io/sp0q1/fracture-pt:v0.14.0 -> :0.14.0
+    let image_name = if let Some((base, tag)) = image_name.rsplit_once(':') {
+        format!("{}:{}", base, tag.strip_prefix('v').unwrap_or(tag))
+    } else {
+        image_name
+    };
 
     let env_content = format!(
         r#"# Production configuration
@@ -277,12 +283,18 @@ ZITADEL_DOMAIN=auth.example.com
 ZITADEL_DB_PASSWORD={zitadel_db_password}
 ZITADEL_MASTERKEY={zitadel_masterkey}
 
+# App database (SQLite)
+DATABASE_URL=sqlite:///app/data/gethacked.sqlite?mode=rwc
+
 # OIDC — filled by `fracture-ctl setup` after first deploy
 # OIDC_ISSUER_URL=https://auth.example.com
 # OIDC_CLIENT_ID=
 # OIDC_CLIENT_SECRET=
 # OIDC_REDIRECT_URI=https://example.com/api/auth/oidc/callback
 # OIDC_POST_LOGOUT_REDIRECT_URI=https://example.com
+
+# Zitadel login UI — filled by `fracture-ctl setup`
+ZITADEL_SERVICE_USER_TOKEN=
 
 # SMTP — optional. Invite emails fail silently if not configured.
 # MAILER_HOST=smtp.example.com
@@ -341,6 +353,18 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
 
+  zitadel-login:
+    image: ghcr.io/zitadel/zitadel-login:latest
+    restart: unless-stopped
+    environment:
+      ZITADEL_API_URL: http://zitadel:8080
+      ZITADEL_SERVICE_USER_TOKEN: ${{ZITADEL_SERVICE_USER_TOKEN:-unset}}
+    depends_on:
+      zitadel:
+        condition: service_started
+    ports:
+      - "127.0.0.1:3000:3000"
+
   app:
     image: ${{APP_IMAGE:-{image_name}}}
     restart: unless-stopped
@@ -348,6 +372,8 @@ services:
       - 9.9.9.9
       - 149.112.112.112
       - 2620:fe::fe
+    extra_hosts:
+      - "${{ZITADEL_DOMAIN:-auth.localhost}}:host-gateway"
     ports:
       - "127.0.0.1:${{APP_PORT:-5150}}:5150"
     volumes:
@@ -359,6 +385,7 @@ services:
     environment:
       LOCO_ENV: production
       SERVER_BINDING: 0.0.0.0
+      DATABASE_URL: sqlite:///app/data/gethacked.sqlite?mode=rwc
     depends_on:
       zitadel:
         condition: service_started
@@ -542,7 +569,29 @@ fn cmd_up(tag: Option<String>) {
         ])
         .status()
         .expect("failed to run podman compose");
-    std::process::exit(status.code().unwrap_or(1));
+
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    // Wait for app to initialize OIDC
+    eprintln!("Waiting for app to start...");
+    std::thread::sleep(std::time::Duration::from_secs(10));
+    let app_cname = container_name("app");
+    let logs = Command::new("podman")
+        .args(["logs", "--tail", "5", &app_cname])
+        .output();
+    if let Ok(out) = logs {
+        let output = String::from_utf8_lossy(&out.stdout).to_string()
+            + &String::from_utf8_lossy(&out.stderr);
+        if output.contains("Discovery failed") {
+            eprintln!();
+            eprintln!("WARNING: OIDC discovery failed. Zitadel may not be ready yet.");
+            eprintln!("  Wait a moment and restart: fracture-ctl up");
+        } else if output.contains("listening on") {
+            eprintln!("App is running.");
+        }
+    }
 }
 
 fn cmd_down() {
@@ -1219,23 +1268,54 @@ fn cmd_setup() {
     }
     eprintln!("  Zitadel is ready.");
 
-    // Get the PAT — it's printed in the Zitadel logs on first start
-    eprintln!();
-    eprintln!("To complete setup, you need the Zitadel service account PAT.");
-    eprintln!("Find it in the logs (long base64 string near 'machine key'):");
-    eprintln!();
-    eprintln!("  podman compose -f compose.prod.yaml logs zitadel 2>&1 | head -80");
-    eprintln!();
-    eprint!("Paste the PAT here: ");
-    let mut pat = String::new();
-    std::io::stdin()
-        .read_line(&mut pat)
-        .expect("failed to read PAT");
-    let pat = pat.trim();
-    if pat.is_empty() {
-        eprintln!("Error: no PAT provided");
-        std::process::exit(1);
-    }
+    // Extract PAT from Zitadel container logs
+    eprintln!("Extracting service account PAT from Zitadel logs...");
+    let zitadel_cname = container_name("zitadel");
+    let logs_output = Command::new("podman")
+        .args(["logs", &zitadel_cname])
+        .output();
+
+    let pat = if let Ok(out) = logs_output {
+        let logs = String::from_utf8_lossy(&out.stdout).to_string()
+            + &String::from_utf8_lossy(&out.stderr);
+        // The PAT is a long alphanumeric string on its own line in the early logs
+        // It appears after the machine user is created, typically 40+ chars
+        logs.lines()
+            .map(str::trim)
+            .find(|line| {
+                line.len() >= 40
+                    && line.len() <= 300
+                    && !line.contains(' ')
+                    && !line.contains('=')
+                    && line
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            })
+            .map(String::from)
+    } else {
+        None
+    };
+
+    let pat = match pat {
+        Some(p) => p,
+        None => {
+            // Fallback: ask the user
+            eprintln!("Could not extract PAT automatically.");
+            eprintln!("Find it in the logs: podman logs {zitadel_cname} 2>&1 | head -80");
+            eprintln!();
+            eprint!("Paste the PAT here: ");
+            let mut input = String::new();
+            std::io::stdin()
+                .read_line(&mut input)
+                .expect("failed to read PAT");
+            let input = input.trim().to_string();
+            if input.is_empty() {
+                eprintln!("Error: no PAT provided");
+                std::process::exit(1);
+            }
+            input
+        }
+    };
 
     // Verify the PAT works
     let verify = Command::new("curl")
@@ -1247,10 +1327,32 @@ fn cmd_setup() {
         ])
         .output();
     if !verify.is_ok_and(|o| o.status.success()) {
-        eprintln!("Error: PAT verification failed. Check the token.");
+        eprintln!("Error: PAT verification failed.");
         std::process::exit(1);
     }
     eprintln!("  PAT verified.");
+
+    // Save PAT to .env for the login container
+    let env_path = ".env";
+    if let Ok(content) = fs::read_to_string(env_path) {
+        let updated = if content.contains("ZITADEL_SERVICE_USER_TOKEN=") {
+            content
+                .lines()
+                .map(|line| {
+                    if line.starts_with("ZITADEL_SERVICE_USER_TOKEN=") {
+                        format!("ZITADEL_SERVICE_USER_TOKEN={pat}")
+                    } else {
+                        line.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            format!("{content}\nZITADEL_SERVICE_USER_TOKEN={pat}")
+        };
+        let _ = fs::write(env_path, updated);
+        eprintln!("  PAT saved to .env");
+    }
 
     // Create project
     eprintln!("Creating OIDC project...");
@@ -1330,16 +1432,44 @@ fn cmd_setup() {
     let client_secret = extract_field("clientSecret").unwrap_or_default();
 
     eprintln!("  OIDC app created.");
-    eprintln!();
-    eprintln!("=== Add these to .env ===");
+
+    // Update .env with OIDC credentials
+    if let Ok(content) = fs::read_to_string(env_path) {
+        let mut lines: Vec<String> = content.lines().map(String::from).collect();
+        let update_or_add = |lines: &mut Vec<String>, key: &str, value: &str| {
+            if let Some(pos) = lines.iter().position(|l| l.starts_with(&format!("{key}="))) {
+                lines[pos] = format!("{key}={value}");
+            } else {
+                // Also check for commented-out version
+                if let Some(pos) = lines
+                    .iter()
+                    .position(|l| l.starts_with(&format!("# {key}=")))
+                {
+                    lines[pos] = format!("{key}={value}");
+                } else {
+                    lines.push(format!("{key}={value}"));
+                }
+            }
+        };
+        update_or_add(&mut lines, "OIDC_ISSUER_URL", &zitadel_url);
+        update_or_add(&mut lines, "OIDC_CLIENT_ID", &client_id);
+        update_or_add(&mut lines, "OIDC_CLIENT_SECRET", &client_secret);
+        update_or_add(
+            &mut lines,
+            "OIDC_REDIRECT_URI",
+            &format!("{app_domain}/api/auth/oidc/callback"),
+        );
+        update_or_add(&mut lines, "OIDC_POST_LOGOUT_REDIRECT_URI", app_domain);
+        let _ = fs::write(env_path, lines.join("\n"));
+        eprintln!("  OIDC credentials saved to .env");
+    }
+
     eprintln!();
     eprintln!("OIDC_ISSUER_URL={zitadel_url}");
     eprintln!("OIDC_CLIENT_ID={client_id}");
     eprintln!("OIDC_CLIENT_SECRET={client_secret}");
-    eprintln!("OIDC_REDIRECT_URI={app_domain}/api/auth/oidc/callback");
-    eprintln!("OIDC_POST_LOGOUT_REDIRECT_URI={app_domain}");
     eprintln!();
-    eprintln!("Then restart: fracture-ctl up");
+    eprintln!("Setup complete! Restart to apply: fracture-ctl up");
 }
 
 fn main() {
