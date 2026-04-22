@@ -65,8 +65,6 @@ enum Commands {
         #[command(subcommand)]
         action: AdminAction,
     },
-    /// Create OIDC project and app in Zitadel (run once after first deploy)
-    Setup,
     /// Update fracture-ctl to the latest version
     Update,
 }
@@ -251,13 +249,6 @@ OIDC_CLIENT_SECRET="#
 
     let jwt_secret = generate_secret(32);
     let db_password = generate_secret(24);
-    let zitadel_db_password = generate_secret(24);
-    // Zitadel requires exactly 32 raw bytes — use hex encoding (16 random bytes = 32 hex chars)
-    let zitadel_masterkey = {
-        let mut buf = [0u8; 16];
-        rand::fill(&mut buf[..]);
-        buf.iter().map(|b| format!("{b:02x}")).collect::<String>()
-    };
     let image_name = image.unwrap_or_else(|| "ghcr.io/sp0q1/fracture-cms:latest".to_string());
     // Strip v prefix from tag if present: ghcr.io/sp0q1/fracture-pt:v0.14.0 -> :0.14.0
     let image_name = if let Some((base, tag)) = image_name.rsplit_once(':') {
@@ -277,24 +268,15 @@ JWT_SECRET={jwt_secret}
 # APP_DB_USER=fracture
 # APP_DB_PASSWORD={db_password}
 # DATABASE_URL=postgres://fracture:${{APP_DB_PASSWORD}}@db:5432/fracture
-
-# Zitadel IdP
-ZITADEL_DOMAIN=auth.example.com
-ZITADEL_DB_PASSWORD={zitadel_db_password}
-ZITADEL_MASTERKEY={zitadel_masterkey}
-
-# App database (SQLite)
 DATABASE_URL=sqlite:///app/data/gethacked.sqlite?mode=rwc
 
-# OIDC — filled by `fracture-ctl setup` after first deploy
-# OIDC_ISSUER_URL=https://auth.example.com
-# OIDC_CLIENT_ID=
-# OIDC_CLIENT_SECRET=
-# OIDC_REDIRECT_URI=https://example.com/api/auth/oidc/callback
-# OIDC_POST_LOGOUT_REDIRECT_URI=https://example.com
-
-# Zitadel login UI — filled by `fracture-ctl setup`
-ZITADEL_SERVICE_USER_TOKEN=
+# OIDC — configure with your identity provider (Zitadel, Keycloak, Authentik, etc.)
+# Create an OIDC app in your IdP, then fill in these values:
+OIDC_ISSUER_URL=
+OIDC_CLIENT_ID=
+OIDC_CLIENT_SECRET=
+OIDC_REDIRECT_URI=https://example.com/api/auth/oidc/callback
+OIDC_POST_LOGOUT_REDIRECT_URI=https://example.com
 
 # SMTP — optional. Invite emails fail silently if not configured.
 # MAILER_HOST=smtp.example.com
@@ -309,64 +291,6 @@ ZITADEL_SERVICE_USER_TOKEN=
 # Manage with: fracture-ctl up / fracture-ctl down
 
 services:
-  zitadel-db:
-    image: docker.io/library/postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: zitadel
-      POSTGRES_PASSWORD: ${{ZITADEL_DB_PASSWORD}}
-      POSTGRES_DB: zitadel
-    volumes:
-      - zitadel_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zitadel -d zitadel"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  zitadel:
-    image: ghcr.io/zitadel/zitadel:latest
-    restart: unless-stopped
-    command: start-from-init --masterkeyFromEnv --tlsMode external
-    environment:
-      ZITADEL_MASTERKEY: ${{ZITADEL_MASTERKEY}}
-      ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
-      ZITADEL_DATABASE_POSTGRES_PORT: 5432
-      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${{ZITADEL_DB_PASSWORD}}
-      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
-      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: zitadel
-      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${{ZITADEL_DB_PASSWORD}}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
-      ZITADEL_EXTERNALDOMAIN: ${{ZITADEL_DOMAIN:-auth.localhost}}
-      ZITADEL_EXTERNALPORT: 443
-      ZITADEL_EXTERNALSECURE: "true"
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: zitadel-admin-sa
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: Admin
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "2030-01-01T00:00:00Z"
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINEKEY_EXPIRATIONDATE: "2030-01-01T00:00:00Z"
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINEKEY_TYPE: 1
-    depends_on:
-      zitadel-db:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:8080:8080"
-
-  zitadel-login:
-    image: ghcr.io/zitadel/zitadel-login:latest
-    restart: unless-stopped
-    environment:
-      ZITADEL_API_URL: https://${{ZITADEL_DOMAIN:-auth.localhost}}
-      ZITADEL_SERVICE_USER_TOKEN: ${{ZITADEL_SERVICE_USER_TOKEN:-unset}}
-    extra_hosts:
-      - "${{ZITADEL_DOMAIN:-auth.localhost}}:host-gateway"
-    depends_on:
-      zitadel:
-        condition: service_started
-    ports:
-      - "127.0.0.1:3000:3000"
-
   app:
     image: ${{APP_IMAGE:-{image_name}}}
     restart: unless-stopped
@@ -374,8 +298,6 @@ services:
       - 9.9.9.9
       - 149.112.112.112
       - 2620:fe::fe
-    extra_hosts:
-      - "${{ZITADEL_DOMAIN:-auth.localhost}}:host-gateway"
     ports:
       - "127.0.0.1:${{APP_PORT:-5150}}:5150"
     volumes:
@@ -388,9 +310,6 @@ services:
       LOCO_ENV: production
       SERVER_BINDING: 0.0.0.0
       DATABASE_URL: sqlite:///app/data/gethacked.sqlite?mode=rwc
-    depends_on:
-      zitadel:
-        condition: service_started
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
@@ -399,7 +318,6 @@ networks:
     enable_ipv6: true
 
 volumes:
-  zitadel_db_data:
   app_data:
 "#
     );
@@ -446,11 +364,12 @@ volumes:
     }
     eprintln!();
     eprintln!("Next:");
-    eprintln!("  1. vim .env                    # set ZITADEL_DOMAIN, OIDC_REDIRECT_URI, SMTP");
-    eprintln!("  2. fracture-ctl up                  # start everything");
-    eprintln!("  3. fracture-ctl setup               # create OIDC app (interactive)");
-    eprintln!("  4. vim .env                    # paste OIDC credentials");
-    eprintln!("  5. fracture-ctl up                  # restart with auth");
+    eprintln!("  1. Set up an OIDC provider (Zitadel, Keycloak, Authentik, etc.)");
+    eprintln!("  2. Create an OIDC app in your IdP with redirect URI:");
+    eprintln!("       https://your-domain.com/api/auth/oidc/callback");
+    eprintln!("  3. vim .env                         # fill in OIDC_* and domain settings");
+    eprintln!("  4. fracture-ctl up                  # start the app");
+    eprintln!("  5. Log in, then promote yourself:   fracture-ctl admin set you@email.com");
 }
 
 fn cmd_up(tag: Option<String>) {
@@ -1225,7 +1144,8 @@ fn cmd_admin(action: AdminAction) {
     }
 }
 
-fn cmd_setup() {
+#[cfg(any())]
+fn _removed_cmd_setup() {
     // Read the Zitadel domain from .env
     let env_content = fs::read_to_string(".env").unwrap_or_default();
     let zitadel_domain = env_content
@@ -1529,7 +1449,6 @@ fn main() {
         Commands::Backup { output } => cmd_backup(output),
         Commands::Restore { file, yes } => cmd_restore(file, yes),
         Commands::Admin { action } => cmd_admin(action),
-        Commands::Setup => cmd_setup(),
         Commands::Update => cmd_update(),
     }
 }
