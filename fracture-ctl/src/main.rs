@@ -398,8 +398,16 @@ fn cmd_up(tag: Option<String>) {
                     .lines()
                     .map(|line| {
                         if line.trim_start().starts_with("image:") && line.contains("ghcr.io") {
+                            // Replace version tag after last colon, preserving any trailing }
                             if let Some(colon_pos) = line.rfind(':') {
-                                format!("{}:{new_tag}", &line[..colon_pos])
+                                let rest = &line[colon_pos + 1..];
+                                let suffix = if let Some(brace) = rest.find('}') {
+                                    &rest[brace..]
+                                } else {
+                                    ""
+                                };
+                                let new_tag_stripped = new_tag.strip_prefix('v').unwrap_or(new_tag);
+                                format!("{}:{new_tag_stripped}{suffix}", &line[..colon_pos])
                             } else {
                                 line.to_string()
                             }
