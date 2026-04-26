@@ -119,3 +119,9 @@ impl Model {
 impl ActiveModel {}
 
 impl Entity {}
+
+impl super::OrgScoped for Entity {
+    fn org_id_column() -> Self::Column {
+        Column::OrgId
+    }
+}

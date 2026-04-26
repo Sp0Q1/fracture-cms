@@ -1,6 +1,8 @@
 mod notes;
 mod org_invites;
 mod org_members;
+mod org_scoped;
 mod organizations;
 mod projects;
+mod resource_assignments;
 mod users;
