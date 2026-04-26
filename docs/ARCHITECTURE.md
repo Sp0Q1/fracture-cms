@@ -77,6 +77,45 @@ Entity::find()
 
 Cross-org data access is impossible through the standard query helpers.
 
+### `OrgScoped` trait — pinning the contract at the type level
+
+The `models::OrgScoped` trait declares that an entity has an `org_id` column. The blanket `OrgScopedQuery` impl gives those entities a safe `find_in_org(org_id)` helper. This makes "every query is org-scoped" the easy path:
+
+```rust
+use fracture_core::models::OrgScopedQuery;
+
+let posts = blog_posts::Entity::find_in_org(org_id).all(&db).await?;
+```
+
+Implementations live in each entity's domain module (e.g. `models/blog_posts.rs`). Implemented today on: `blog_posts`, `job_definitions`, `job_runs`, `org_invites`, `org_members`, `uploads`, `resource_assignments`. Add an impl for every new org-owned entity.
+
+### Generic per-resource role grants — `ResourceAssignment`
+
+Per-resource role grants (e.g. "this user is a pentester *on this engagement*") go through the `resource_assignments` table. fracture-core provides the **mechanism**; downstream crates own the **semantics** of each `role_key`:
+
+```rust
+use fracture_core::models::resource_assignments::{Model as ResourceAssignment, AssignParams};
+
+ResourceAssignment::assign(&db, AssignParams {
+    user_id: pentester.id,
+    org_id: customer_org.id,
+    resource_type: "engagement",   // PT-domain string
+    resource_id: engagement.id,
+    role_key: "pentester",         // PT-domain string
+    granted_by: Some(admin.id),
+    expires_at: Some(deadline),
+}).await?;
+
+// Authorization check — the canonical helper:
+if ResourceAssignment::has_assignment(&db, user.id, "engagement", id, "pentester").await? {
+    // proceed
+}
+```
+
+Active = `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())`.
+
+Downstream crates **must not** introduce parallel assignment tables; this is the single sanctioned mechanism. Adding a new role identifier (e.g. `"reviewer"`) is a one-line domain change in the consuming crate, not a CMS change.
+
 ## Request Lifecycle
 
 ```
@@ -103,6 +142,7 @@ Request → get_current_user(jwt cookie)
 | job_definitions | Job type + config + schedule     | belongs_to organizations, has_many job_runs |
 | job_runs       | Execution records for jobs        | belongs_to job_definitions, organizations, has_many job_run_diffs |
 | job_run_diffs  | Change diffs produced by a run    | belongs_to job_runs |
+| resource_assignments | Per-resource role grants    | belongs_to users, organizations |
 
 ## Upload Subsystem
 

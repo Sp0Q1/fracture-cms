@@ -50,6 +50,14 @@ impl Model {
     pub async fn find_by_org(db, org_id) -> Vec<Self> { /* scoped query */ }
     pub async fn find_by_pid_and_org(db, pid, org_id) -> Option<Self> { /* scoped lookup */ }
 }
+
+// Pin org-scoping at the type level — required for every org-owned entity.
+// Once this is implemented, `Entity::find_in_org(org_id)` works for free.
+impl super::OrgScoped for Entity {
+    fn org_id_column() -> Self::Column {
+        Column::OrgId
+    }
+}
 ```
 
 Register in `src/models/mod.rs`.
