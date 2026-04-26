@@ -37,8 +37,13 @@ mailer:
       password: {{ get_env(name="MAILER_PASSWORD", default="") }}
 
 # OIDC Single Sign-On Configuration
+#
+# `required: true` makes the app refuse to boot with OIDC misconfigured —
+# safer than silently falling back to no auth. Override via OIDC_REQUIRED=false
+# only for one-shot debug starts; never run a public deployment without it.
 settings:
   oidc:
+    required: {{ get_env(name="OIDC_REQUIRED", default="true") }}
     provider_name: {{ get_env(name="OIDC_PROVIDER_NAME", default="oidc") }}
     issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="http://localhost:8080") }}
     client_id: "{{ get_env(name='OIDC_CLIENT_ID', default='') }}"
