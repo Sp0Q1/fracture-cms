@@ -1628,6 +1628,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra 0.12.5",
+ "base64 0.22.1",
  "chrono",
  "comrak",
  "form_urlencoded",
