@@ -57,7 +57,12 @@ Never use `--no-verify` to skip hooks. Never bypass signing.
   - `require_role!(org_ctx, OrgRole::Admin)` to enforce role
   - `require_platform_admin!(org_ctx)` for platform-admin gates
 - **Return 404 (not 403) on unauthorized access** so endpoint existence is not leaked. Loco's `not_found()` is the standard exit.
-- **Roles live in `fracture-core/src/models/org_members.rs`.** Adding a generic per-resource role goes through the `ResourceAssignment` model (PR-4). Do not add new variants to `OrgRole` for engagement-scoped or per-resource purposes — those go through `ResourceAssignment`.
+- **`OrgRole` (Viewer/Member/Admin/Owner) is the org-wide role enum** in `fracture-core/src/models/org_members.rs`. It is stable. Do not add new variants for engagement-scoped or per-resource purposes — those go through `ResourceAssignment` (below).
+- **Per-resource roles are CMS infrastructure, not CMS domain.** The `ResourceAssignment` model in fracture-core stores `(user_id, resource_type, resource_id, role_key, granted_by, granted_at, expires_at?)` where `role_key` is an opaque string. CMS does not define what role strings mean — downstream crates (e.g., fracture-pt) own the semantics of values like `"pentester"` or `"reviewer"`. CMS only provides the assignment mechanism, the lookup helpers, and the IDOR-safe enforcement.
+- **The fundamental ownership architecture lives in CMS and must remain airtight.** Two contracts:
+  1. `OrgScoped` trait — every entity that belongs to an org implements it. Pins the `org_id` column at the type level and provides safe query helpers (`find_in_org`, `find_by_pid_in_org`). Controllers must use these; bypassing them is an IDOR risk.
+  2. `ResourceAssignment` model — the only sanctioned way for downstream crates to grant per-resource access. Downstream crates must NOT introduce parallel assignment tables.
+- **Cross-cutting middleware** uses `OrgScoped` + `ResourceAssignment` to make IDORs structurally hard to introduce. If a contributor has to write a manual `if user_id == ...` check in a controller, the design is wrong; surface a helper.
 
 ### Content Security Policy
 
