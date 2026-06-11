@@ -1,6 +1,7 @@
 use std::fmt;
 
 use sea_orm::entity::prelude::*;
+use sea_orm::{QuerySelect, TransactionTrait};
 
 pub use super::_entities::org_members::{ActiveModel, Column, Entity, Model};
 pub type OrgMembers = Entity;
@@ -145,21 +146,39 @@ impl Model {
         new_role: OrgRole,
     ) -> Result<Self, DbErr> {
         let current_role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
+        // Run the last-owner check and the write in one transaction with the
+        // owner rows locked, so two concurrent demotions can't both observe
+        // owner_count == 2 and leave the org ownerless (FOR UPDATE on Postgres;
+        // SQLite serializes writers).
+        let txn = db.begin().await?;
         if current_role == OrgRole::Owner && new_role != OrgRole::Owner {
-            let owner_count = Entity::find()
-                .filter(Column::OrgId.eq(membership.org_id))
-                .filter(Column::Role.eq("owner"))
-                .count(db)
-                .await?;
-            if owner_count <= 1 {
-                return Err(DbErr::Custom(
-                    "Cannot demote the last owner of an organization".to_string(),
-                ));
-            }
+            Self::guard_not_last_owner(&txn, membership.org_id, "demote").await?;
         }
         let mut active: ActiveModel = membership.into();
         active.role = sea_orm::ActiveValue::Set(new_role.to_string());
-        active.update(db).await
+        let updated = active.update(&txn).await?;
+        txn.commit().await?;
+        Ok(updated)
+    }
+
+    /// Errors with a "last owner" message if the org has one or fewer owners.
+    /// Locks the owner rows for the duration of the surrounding transaction.
+    async fn guard_not_last_owner<C>(conn: &C, org_id: i32, action: &str) -> Result<(), DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let owners = Entity::find()
+            .filter(Column::OrgId.eq(org_id))
+            .filter(Column::Role.eq("owner"))
+            .lock_exclusive()
+            .all(conn)
+            .await?;
+        if owners.len() <= 1 {
+            return Err(DbErr::Custom(format!(
+                "Cannot {action} the last owner of an organization"
+            )));
+        }
+        Ok(())
     }
 
     /// Removes a member from an organization.
@@ -170,19 +189,12 @@ impl Model {
     /// operation fails.
     pub async fn remove_member(db: &DatabaseConnection, membership: Self) -> Result<(), DbErr> {
         let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
+        let txn = db.begin().await?;
         if role == OrgRole::Owner {
-            let owner_count = Entity::find()
-                .filter(Column::OrgId.eq(membership.org_id))
-                .filter(Column::Role.eq("owner"))
-                .count(db)
-                .await?;
-            if owner_count <= 1 {
-                return Err(DbErr::Custom(
-                    "Cannot remove the last owner of an organization".to_string(),
-                ));
-            }
+            Self::guard_not_last_owner(&txn, membership.org_id, "remove").await?;
         }
-        membership.delete(db).await?;
+        membership.delete(&txn).await?;
+        txn.commit().await?;
         Ok(())
     }
 }

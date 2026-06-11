@@ -33,7 +33,26 @@ impl Model {
         user: &super::_entities::users::Model,
     ) -> Result<Self, DbErr> {
         let txn = db.begin().await?;
+        let org = Self::create_personal_org_in(&txn, user).await?;
+        txn.commit().await?;
+        Ok(org)
+    }
 
+    /// Creates a personal organization and owner membership using the provided
+    /// connection (which may be an open transaction). Callers that need the
+    /// operation to be atomic with surrounding writes pass their transaction
+    /// here; standalone callers use [`Self::create_personal_org`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either insert fails.
+    pub async fn create_personal_org_in<C>(
+        conn: &C,
+        user: &super::_entities::users::Model,
+    ) -> Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
         let slug = format!("personal-{}", user.pid);
         let org = ActiveModel {
             name: sea_orm::ActiveValue::Set(format!("{}'s Personal", user.name)),
@@ -43,7 +62,7 @@ impl Model {
             settings: sea_orm::ActiveValue::Set(None),
             ..Default::default()
         }
-        .insert(&txn)
+        .insert(conn)
         .await?;
 
         org_members::ActiveModel {
@@ -52,10 +71,9 @@ impl Model {
             role: sea_orm::ActiveValue::Set(OrgRole::Owner.to_string()),
             ..Default::default()
         }
-        .insert(&txn)
+        .insert(conn)
         .await?;
 
-        txn.commit().await?;
         Ok(org)
     }
 
@@ -65,20 +83,14 @@ impl Model {
     ///
     /// Returns an error if the database query fails.
     pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> Result<Option<Self>, DbErr> {
-        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+        let Ok(uuid) = Uuid::parse_str(pid) else {
             return Ok(None);
         };
-        // Try UUID first — standard SeaORM storage format
-        if let found @ Some(_) = Entity::find().filter(Column::Pid.eq(uuid)).one(db).await? {
-            return Ok(found);
-        }
-        // Fall back to text match for SQLite (stores UUIDs as text in some cases).
-        // On PostgreSQL this would be a type mismatch, so catch and ignore errors.
-        Entity::find()
-            .filter(Column::Pid.eq(pid))
-            .one(db)
-            .await
-            .map_or_else(|_| Ok(None), Ok)
+        // Query once by the parsed UUID — the portable pattern used by every
+        // other model. Real DB errors propagate instead of being masked as a
+        // not-found (the previous text fallback swallowed connection errors and
+        // failed on PostgreSQL's uuid/text type check).
+        Entity::find().filter(Column::Pid.eq(uuid)).one(db).await
     }
 
     /// Finds an organization by slug.

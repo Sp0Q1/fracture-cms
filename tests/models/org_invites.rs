@@ -18,6 +18,7 @@ async fn create_test_user(db: &sea_orm::DatabaseConnection, suffix: &str) -> use
             subject: format!("test-invite-{suffix}"),
             email: format!("invite-{suffix}@example.com"),
             name: Some(format!("Invite User {suffix}")),
+            email_verified: true,
         },
     )
     .await
@@ -179,6 +180,7 @@ async fn test_auto_accept_on_oidc_signup() {
             subject: "test-newcomer-auto".to_string(),
             email: "newcomer-auto@example.com".to_string(),
             name: Some("Auto Newcomer".to_string()),
+            email_verified: true,
         },
     )
     .await

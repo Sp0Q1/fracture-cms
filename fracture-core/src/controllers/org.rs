@@ -253,6 +253,11 @@ pub async fn invite(
     require_role!(org_ctx, OrgRole::Admin);
 
     let invite_role = OrgRole::from_str_role(&params.role).unwrap_or(OrgRole::Member);
+    // An inviter may not grant a role above their own — otherwise an Admin could
+    // invite a confederate as Owner and bypass the Owner guard in `update_role`.
+    if !org_ctx.role.at_least(invite_role) {
+        return Err(Error::NotFound);
+    }
     let invite =
         org_invites::Model::create_invite(&ctx.db, org.id, &params.email, invite_role, user.id)
             .await?;
@@ -310,15 +315,11 @@ pub async fn update_role(
     let target_current_role =
         OrgRole::from_str_role(&target_membership.role).unwrap_or(OrgRole::Viewer);
 
-    // Only Owners can grant/revoke the Owner role or modify other Owners
+    // Only Owners can grant/revoke the Owner role or modify other Owners.
     if (new_role == OrgRole::Owner || target_current_role == OrgRole::Owner)
         && !org_ctx.role.at_least(OrgRole::Owner)
     {
-        return Ok(axum::response::Response::builder()
-            .status(axum::http::StatusCode::FORBIDDEN)
-            .body(axum::body::Body::from("Forbidden"))
-            .unwrap()
-            .into_response());
+        return Err(Error::NotFound);
     }
 
     org_members::Model::update_role(&ctx.db, target_membership, new_role).await?;
@@ -355,6 +356,13 @@ pub async fn remove_member(
     let target_membership = org_members::Model::find_membership(&ctx.db, org.id, target_user.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
+    // Only Owners may remove other Owners — mirrors the guard in `update_role`
+    // so an Admin can't evict an Owner.
+    let target_current_role =
+        OrgRole::from_str_role(&target_membership.role).unwrap_or(OrgRole::Viewer);
+    if target_current_role == OrgRole::Owner && !org_ctx.role.at_least(OrgRole::Owner) {
+        return Err(Error::NotFound);
+    }
     org_members::Model::remove_member(&ctx.db, target_membership)
         .await
         .map_err(|e| Error::Message(e.to_string()))?;

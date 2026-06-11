@@ -72,6 +72,7 @@ async fn can_create_user_from_oidc() {
         subject: "google-subject-123".to_string(),
         email: "oidc-new@example.com".to_string(),
         name: Some("OIDC User".to_string()),
+        email_verified: true,
     };
 
     let user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
@@ -118,6 +119,7 @@ async fn oidc_links_to_existing_verified_email_user() {
         subject: "google-subject-456".to_string(),
         email: "user1@example.com".to_string(),
         name: Some("User One".to_string()),
+        email_verified: true,
     };
 
     let user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
@@ -153,12 +155,72 @@ async fn oidc_rejects_linking_to_unverified_email_user() {
         subject: "google-subject-456".to_string(),
         email: "user1@example.com".to_string(),
         name: Some("User One".to_string()),
+        email_verified: true,
     };
 
     let result = Model::find_or_create_from_oidc(&boot.app_context.db, &info).await;
     assert!(
         result.is_err(),
         "OIDC linking should be rejected for unverified email accounts"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn oidc_rejects_linking_when_incoming_claim_unverified() {
+    let boot = boot_test::<App>()
+        .await
+        .expect("Failed to boot test application");
+    seed::<App>(&boot.app_context)
+        .await
+        .expect("Failed to seed database");
+
+    // Verify the existing account so the account-side check passes...
+    let user = Model::find_by_email(&boot.app_context.db, "user1@example.com")
+        .await
+        .expect("Failed to find user1");
+    user.into_active_model()
+        .verified(&boot.app_context.db)
+        .await
+        .expect("Failed to verify user1 email");
+
+    // ...but the IdP does NOT assert the incoming email as verified.
+    let info = OidcUserInfo {
+        provider: "google".to_string(),
+        subject: "google-subject-attacker".to_string(),
+        email: "user1@example.com".to_string(),
+        name: Some("User One".to_string()),
+        email_verified: false,
+    };
+
+    let result = Model::find_or_create_from_oidc(&boot.app_context.db, &info).await;
+    assert!(
+        result.is_err(),
+        "linking must be refused when the IdP did not assert email_verified, even if the local account is verified"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn oidc_creates_unverified_user_without_verified_stamp() {
+    let boot = boot_test::<App>()
+        .await
+        .expect("Failed to boot test application");
+
+    let info = OidcUserInfo {
+        provider: "test".to_string(),
+        subject: "unverified-new".to_string(),
+        email: "unverified-new@example.com".to_string(),
+        name: Some("Unverified".to_string()),
+        email_verified: false,
+    };
+
+    let user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
+        .await
+        .expect("new account should still be created");
+    assert!(
+        user.email_verified_at.is_none(),
+        "an unverified OIDC claim must not stamp email_verified_at"
     );
 }
 
@@ -174,6 +236,7 @@ async fn oidc_creates_user_without_name_falls_back_to_email_prefix() {
         subject: "gh-subject-789".to_string(),
         email: "noname@example.com".to_string(),
         name: None,
+        email_verified: true,
     };
 
     let user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
@@ -199,6 +262,7 @@ async fn oidc_creates_personal_org_for_new_user() {
         subject: "test-personal-org".to_string(),
         email: "personal-org@example.com".to_string(),
         name: Some("Personal Org User".to_string()),
+        email_verified: true,
     };
 
     let user = Model::find_or_create_from_oidc(&boot.app_context.db, &info)
@@ -230,6 +294,7 @@ async fn oidc_clears_session_invalidation_on_relogin() {
         subject: "test-session-inv".to_string(),
         email: "session-inv@example.com".to_string(),
         name: Some("Session User".to_string()),
+        email_verified: true,
     };
 
     // Create user
@@ -240,7 +305,7 @@ async fn oidc_clears_session_invalidation_on_relogin() {
 
     // Simulate session invalidation (as backchannel logout would do)
     let mut active: users::ActiveModel = user.into();
-    active.session_invalidated_at = ActiveValue::Set(Some(chrono::offset::Local::now().into()));
+    active.session_invalidated_at = ActiveValue::Set(Some(chrono::Utc::now().into()));
     let invalidated = active
         .update(&boot.app_context.db)
         .await
