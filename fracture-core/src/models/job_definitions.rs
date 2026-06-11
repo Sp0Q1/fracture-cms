@@ -50,6 +50,20 @@ impl Model {
             .await
     }
 
+    /// Returns all enabled definitions that have a schedule, across orgs.
+    /// Used by the job runner to evaluate cron schedules.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_scheduled(db: &DatabaseConnection) -> Result<Vec<Self>, DbErr> {
+        Entity::find()
+            .filter(Column::Enabled.eq(true))
+            .filter(Column::Schedule.is_not_null())
+            .all(db)
+            .await
+    }
+
     /// Finds a job definition by PID and verifies org ownership.
     ///
     /// # Errors

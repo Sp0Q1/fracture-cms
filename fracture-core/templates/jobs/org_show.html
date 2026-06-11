@@ -2,6 +2,12 @@
 
 {% block title %}{{ definition.name }} — Jobs — Fracture CMS{% endblock title %}
 
+{% block head %}
+{% if has_active_run %}
+<meta http-equiv="refresh" content="5">
+{% endif %}
+{% endblock head %}
+
 {% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
@@ -17,11 +23,34 @@
             <h1>{{ definition.name }}</h1>
             <p class="page-subtitle">{{ definition.job_type }}{% if definition.schedule %} &middot; {{ definition.schedule }}{% endif %}</p>
         </div>
-        <form action="/jobs/{{ definition.pid }}/run" method="post" class="inline-form">
-            <button type="submit" class="button">Run Now</button>
-        </form>
+        <div class="hstack">
+            {% if can_trigger_jobs and definition.enabled %}
+                {% if has_active_run %}
+                    <span class="badge job-status-running">run in progress…</span>
+                {% else %}
+                    <form action="/jobs/{{ definition.pid }}/run" method="post" class="inline-form">
+                        <button type="submit" class="button">Run Now</button>
+                    </form>
+                {% endif %}
+            {% endif %}
+            {% if can_manage_jobs %}
+                <form action="/jobs/{{ definition.pid }}/toggle" method="post" class="inline-form">
+                    {% if definition.enabled %}
+                        <button type="submit" class="button outline">Disable</button>
+                    {% else %}
+                        <button type="submit" class="button outline">Enable</button>
+                    {% endif %}
+                </form>
+            {% endif %}
+        </div>
     </div>
 </div>
+
+{% if has_active_run %}
+<article class="card">
+    <p>A run is queued or executing — this page refreshes automatically every 5 seconds.</p>
+</article>
+{% endif %}
 
 <article class="card detail-card">
     <div class="detail-row">
@@ -38,7 +67,7 @@
             {% if definition.enabled %}
                 <span class="badge success">Yes</span>
             {% else %}
-                <span class="badge">No</span>
+                <span class="badge">No — runs cannot be triggered or scheduled</span>
             {% endif %}
         </span>
     </div>
@@ -66,8 +95,8 @@
             <tr>
                 <td><span class="badge job-status-{{ run.status }}">{{ run.status }}</span></td>
                 <td>{{ run.created_at | truncate(length=16, end="") }}</td>
-                <td>{{ run.started_at | default(value="—") }}</td>
-                <td>{{ run.completed_at | default(value="—") }}</td>
+                <td>{{ run.started_at | default(value="—") | truncate(length=16, end="") }}</td>
+                <td>{{ run.completed_at | default(value="—") | truncate(length=16, end="") }}</td>
                 <td>
                     <a href="/jobs/{{ definition.pid }}/runs/{{ run.pid }}" class="button outline small">Details</a>
                 </td>
@@ -78,7 +107,15 @@
 {% else %}
     <article class="card empty-state">
         <h3>No Runs</h3>
-        <p>This job has not been run yet. Click "Run Now" to trigger it.</p>
+        {% if definition.enabled %}
+            {% if can_trigger_jobs %}
+                <p>This job has not been run yet. Click "Run Now" to trigger it{% if definition.schedule %}, or wait for its schedule{% endif %}.</p>
+            {% else %}
+                <p>This job has not been run yet.</p>
+            {% endif %}
+        {% else %}
+            <p>This job is disabled. Enable it to allow runs.</p>
+        {% endif %}
     </article>
 {% endif %}
 {% endblock content %}

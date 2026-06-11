@@ -37,6 +37,48 @@ These may require code changes in your app:
 - New fields on entities (requires migration coordination)
 - Renamed or removed public types/functions
 
+## Recent Breaking Changes
+
+### The jobs system now has a runner — two wiring hooks are load-bearing
+
+Previously `JobExecutor`/`JobRegistry` existed but nothing executed queued
+runs. Now `fracture_core::jobs::runner::JobRunnerInitializer` polls for
+queued `job_runs`, executes them via the registry, evaluates cron
+`schedule`s, and persists outcomes. To adopt it:
+
+1. Call `fracture_core::jobs::init_job_registry(...)` in your `Hooks::routes()`.
+2. Add `Box::new(fracture_core::jobs::runner::JobRunnerInitializer)` to
+   `Hooks::initializers()`.
+3. Optionally configure `settings.jobs.{enabled, poll_interval_seconds}`;
+   set `enabled: false` in test configs.
+
+Without step 1, runs fail with "no executor registered"; without step 2,
+runs stay queued forever (the old behavior). Route changes: `POST /jobs`
+(create, Admin) and `POST /jobs/{pid}/toggle` (Admin) are new;
+`POST /jobs/{pid}/run` now requires Member+ (was: any authenticated user),
+refuses disabled definitions, and is a no-op while a run is already active.
+
+### `OidcUserInfo` gained a required `email_verified: bool` field
+
+If you construct `OidcUserInfo` yourself, you must now supply
+`email_verified`. **Pass the IdP's actual `email_verified` claim** (use
+`claims.email_verified().unwrap_or(assume_email_verified)` where
+`assume_email_verified` is an operator config opt-in, default `false`).
+Do **not** hardcode `true`: this flag gates linking OIDC logins to existing
+email-matched accounts and auto-accepting pending invites — hardcoding it
+reopens the account-takeover vector the field exists to close (an attacker
+registering an unverified victim@example.com at the IdP).
+
+### `org_members::Model::update_role` / `remove_member` signatures changed
+
+Both now take `(db, org_id, target_user_id, actor_role, ...)` instead of a
+pre-fetched membership row, return `MemberWriteError` instead of `DbErr`, and
+enforce the role ceiling (actor must outrank-or-equal the target's current
+role and the granted role) inside the write transaction. Map
+`MemberWriteError::NotFound`/`Forbidden` to your 404 path and surface
+`LastOwner` as a user-facing message — see `controllers/org.rs` for the
+canonical mapping.
+
 ### Migration changes
 
 If `fracture-core` adds new migrations, they are automatically picked up — your `migration/src/lib.rs` chains `fracture_core_migration::Migrator::migrations()` first, then appends your app-specific migrations.

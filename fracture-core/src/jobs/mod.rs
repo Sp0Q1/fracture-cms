@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::_entities::{job_definitions, job_runs};
 
+pub mod runner;
+
 /// The result of executing a job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobResult {
@@ -62,6 +64,15 @@ impl JobRegistry {
     pub fn get(&self, job_type: &str) -> Option<&dyn JobExecutor> {
         self.executors.get(job_type).map(AsRef::as_ref)
     }
+
+    /// Returns the registered job type identifiers, sorted. Used by the UI
+    /// to offer valid choices when creating a job definition.
+    #[must_use]
+    pub fn job_types(&self) -> Vec<&str> {
+        let mut types: Vec<&str> = self.executors.keys().map(String::as_str).collect();
+        types.sort_unstable();
+        types
+    }
 }
 
 impl Default for JobRegistry {
@@ -90,4 +101,10 @@ pub fn job_registry() -> &'static JobRegistry {
     JOB_REGISTRY
         .get()
         .expect("JobRegistry not initialised — call init_job_registry() first")
+}
+
+/// Returns the global job registry if it has been initialised.
+#[must_use]
+pub fn try_job_registry() -> Option<&'static JobRegistry> {
+    JOB_REGISTRY.get()
 }

@@ -2,6 +2,12 @@
 
 {% block title %}Run {{ run.pid }} — {{ definition.name }} — Fracture CMS{% endblock title %}
 
+{% block head %}
+{% if run_active %}
+<meta http-equiv="refresh" content="5">
+{% endif %}
+{% endblock head %}
+
 {% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
@@ -17,6 +23,19 @@
     <h1>Job Run</h1>
     <p class="page-subtitle">{{ definition.name }}</p>
 </div>
+
+{% if run_active %}
+<article class="card">
+    <p>
+        {% if run.status == "queued" %}
+            This run is waiting for the job runner to pick it up.
+        {% else %}
+            This run is executing.
+        {% endif %}
+        The page refreshes automatically every 5 seconds.
+    </p>
+</article>
+{% endif %}
 
 <article class="card detail-card">
     <div class="detail-row">
@@ -75,7 +94,11 @@
 {% else %}
     <article class="card empty-state">
         <h3>No Diffs</h3>
-        <p>No changes were recorded for this run.</p>
+        {% if run_active %}
+            <p>Diffs appear here once the run completes.</p>
+        {% else %}
+            <p>No changes were recorded for this run.</p>
+        {% endif %}
     </article>
 {% endif %}
 {% endblock content %}

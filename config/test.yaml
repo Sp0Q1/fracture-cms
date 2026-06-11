@@ -81,6 +81,10 @@ mailer:
 
 # Application settings
 settings:
+  # The background poll loop would race tests that drive the runner
+  # directly; tests call runner functions with their own registry instead.
+  jobs:
+    enabled: false
   auth:
     allowed_email_domains:
       - example.com

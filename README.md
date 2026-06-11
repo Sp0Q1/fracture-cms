@@ -15,7 +15,7 @@ The core infrastructure lives in the `fracture-core` library crate. Downstream p
 - **Back-channel logout** — The IdP can POST a signed `logout_token` to invalidate a user's session server-side. The app verifies the token signature via JWKS before acting on it.
 - **File uploads** — Org-scoped file upload API with configurable size limits, MIME type validation, SHA-256 checksums, and visibility control (`org` or `public`). Files stored on disk under a configurable storage root.
 - **Blog system** — Markdown-based blog with GFM support (tables, strikethrough, task lists). Posts tied to a configurable blog org. Public routes for readers, admin routes for platform admins. Markdown rendered to HTML on save via comrak.
-- **Generic jobs system** — Define job types, schedule runs, and track diffs. Apps implement the `JobExecutor` trait; fracture-core handles the execution lifecycle, run history, and diff storage. Includes both org-scoped and platform admin views.
+- **Generic jobs system** — Define job types, schedule runs (cron), and track diffs. Apps implement the `JobExecutor` trait and register it via `init_job_registry()`; fracture-core's `JobRunnerInitializer` polls for queued runs, executes them, and persists run history and diffs. Org admins create/enable jobs, members trigger runs, and both org-scoped and platform-admin views show live run status.
 - **Template overrides** — Core templates (org, blog, jobs) are embedded in the `fracture-core` binary. Place a same-named file in your `assets/views/` directory to override any of them.
 - **Markdown editor hook** — Blog admin templates use the `data-md-editor` attribute on textareas. Consuming apps provide their own `md-editor.js` to initialize a Markdown editor (toolbar, preview, etc.) for elements with this attribute. fracture-core does not bundle an editor implementation.
 - **i18n** — Fluent-based internationalization with locale files in `assets/i18n/`.
@@ -251,8 +251,10 @@ dev/
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/jobs` | Authenticated |
+| POST | `/jobs` | Org admin |
 | GET | `/jobs/{pid}` | Authenticated |
-| POST | `/jobs/{pid}/run` | Authenticated |
+| POST | `/jobs/{pid}/toggle` | Org admin |
+| POST | `/jobs/{pid}/run` | Org member |
 | GET | `/jobs/{pid}/runs/{run_pid}` | Authenticated |
 | GET | `/admin/jobs` | Platform admin |
 

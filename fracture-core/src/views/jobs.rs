@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use loco_rs::prelude::*;
 use serde_json::json;
 
 use crate::controllers::middleware::OrgContext;
 use crate::models::_entities::{job_definitions, job_run_diffs, job_runs, organizations, users};
+use crate::models::org_members::OrgRole;
 
 /// Helper to serialize a job definition into JSON for templates.
 fn definition_json(def: &job_definitions::Model) -> serde_json::Value {
@@ -17,6 +20,17 @@ fn definition_json(def: &job_definitions::Model) -> serde_json::Value {
         "created_at": def.created_at.to_string(),
         "updated_at": def.updated_at.to_string(),
     })
+}
+
+/// Serializes a definition together with its most recent run (if any), so
+/// list pages can show what each job is currently doing.
+fn definition_with_latest_json(
+    def: &job_definitions::Model,
+    latest_runs: &HashMap<i32, job_runs::Model>,
+) -> serde_json::Value {
+    let mut d = definition_json(def);
+    d["latest_run"] = latest_runs.get(&def.id).map_or(json!(null), run_json);
+    d
 }
 
 /// Helper to serialize a job run into JSON for templates.
@@ -46,20 +60,36 @@ fn diff_json(diff: &job_run_diffs::Model) -> serde_json::Value {
     })
 }
 
+/// Capability flags for the jobs pages, derived from the org role so
+/// templates never re-encode the role hierarchy in string comparisons.
+fn add_capabilities(ctx: &mut serde_json::Value, org_ctx: Option<&OrgContext>) {
+    let role = org_ctx.map(|oc| oc.role);
+    ctx["can_trigger_jobs"] = json!(role.is_some_and(|r| r.at_least(OrgRole::Member)));
+    ctx["can_manage_jobs"] = json!(role.is_some_and(|r| r.at_least(OrgRole::Admin)));
+}
+
 /// Renders the org job definitions list.
 ///
 /// # Errors
 ///
 /// Returns an error if template rendering fails.
+#[allow(clippy::implicit_hasher)] // Reason: view-layer map, never hashed generically
 pub fn org_index(
     v: &impl ViewRenderer,
     user: &users::Model,
     org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     definitions: &[job_definitions::Model],
+    latest_runs: &HashMap<i32, job_runs::Model>,
+    job_types: &[String],
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
-    ctx["definitions"] = json!(definitions.iter().map(definition_json).collect::<Vec<_>>());
+    ctx["definitions"] = json!(definitions
+        .iter()
+        .map(|d| definition_with_latest_json(d, latest_runs))
+        .collect::<Vec<_>>());
+    ctx["job_types"] = json!(job_types);
+    add_capabilities(&mut ctx, org_ctx);
     format::render().view(v, "jobs/org_index.html", data!(ctx))
 }
 
@@ -79,6 +109,11 @@ pub fn org_show(
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definition"] = definition_json(definition);
     ctx["runs"] = json!(runs.iter().map(run_json).collect::<Vec<_>>());
+    // Drives the page's auto-refresh and the trigger button state.
+    ctx["has_active_run"] = json!(runs
+        .iter()
+        .any(|r| r.status == "queued" || r.status == "running"));
+    add_capabilities(&mut ctx, org_ctx);
     format::render().view(v, "jobs/org_show.html", data!(ctx))
 }
 
@@ -99,7 +134,9 @@ pub fn org_run_show(
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definition"] = definition_json(definition);
     ctx["run"] = run_json(run);
+    ctx["run_active"] = json!(run.status == "queued" || run.status == "running");
     ctx["diffs"] = json!(diffs.iter().map(diff_json).collect::<Vec<_>>());
+    add_capabilities(&mut ctx, org_ctx);
     format::render().view(v, "jobs/org_run_show.html", data!(ctx))
 }
 
@@ -108,19 +145,21 @@ pub fn org_run_show(
 /// # Errors
 ///
 /// Returns an error if template rendering fails.
+#[allow(clippy::implicit_hasher)] // Reason: view-layer map, never hashed generically
 pub fn admin_index(
     v: &impl ViewRenderer,
     user: &users::Model,
     org_ctx: Option<&OrgContext>,
     user_orgs: &[organizations::Model],
     definitions: &[job_definitions::Model],
+    latest_runs: &HashMap<i32, job_runs::Model>,
     orgs: &[organizations::Model],
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definitions"] = json!(definitions
         .iter()
         .map(|def| {
-            let mut d = definition_json(def);
+            let mut d = definition_with_latest_json(def, latest_runs);
             let org_name = orgs
                 .iter()
                 .find(|o| o.id == def.org_id)

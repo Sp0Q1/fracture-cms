@@ -31,4 +31,7 @@ sha2 = "0.11"
 base64 = "0.22"
 tokio = { version = "1", features = ["fs"] }
 thiserror = "2"
+# Cron parsing for job_definitions.schedule; same version loco-rs already
+# pulls transitively, so this adds no new compiled code.
+cron = "0.12"
 fracture-core-migration = { path = "migration" }
