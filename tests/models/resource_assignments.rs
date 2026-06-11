@@ -1,7 +1,7 @@
 //! Tests for the generic `ResourceAssignment` model.
 //!
 //! These tests are the contract that downstream crates rely on: if any of
-//! them fail, IDOR prevention in fracture-pt (or any other consumer) breaks.
+//! them fail, IDOR prevention in downstream consumers breaks.
 
 use chrono::{Duration, Utc};
 use fracture_cms::{

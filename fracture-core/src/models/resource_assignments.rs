@@ -6,8 +6,8 @@
 //!
 //! `fracture-core` provides the *mechanism* (the table, the lookup helpers,
 //! the active/expired/revoked semantics). It does **not** define what role
-//! strings mean. Downstream crates own role semantics: e.g. `fracture-pt`
-//! defines `"pentester"` as "may view and edit findings on this engagement".
+//! strings mean. Downstream crates own role semantics: a consumer might
+//! define `"pentester"` as "may view and edit findings on this engagement".
 //!
 //! ## Active assignment
 //!
