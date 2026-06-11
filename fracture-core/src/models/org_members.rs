@@ -113,6 +113,32 @@ impl Model {
             .await
     }
 
+    /// Finds all members of an organization paired with their user records,
+    /// using a single batched user lookup instead of one query per member.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either query fails.
+    pub async fn find_members_with_users(
+        db: &DatabaseConnection,
+        org_id: i32,
+    ) -> Result<Vec<(Self, super::users::Model)>, DbErr> {
+        let members = Self::find_members(db, org_id).await?;
+        let user_ids: Vec<i32> = members.iter().map(|m| m.user_id).collect();
+        let mut users_by_id: std::collections::HashMap<i32, super::users::Model> =
+            super::_entities::users::Entity::find()
+                .filter(super::_entities::users::Column::Id.is_in(user_ids))
+                .all(db)
+                .await?
+                .into_iter()
+                .map(|u| (u.id, u))
+                .collect();
+        Ok(members
+            .into_iter()
+            .filter_map(|m| users_by_id.remove(&m.user_id).map(|u| (m, u)))
+            .collect())
+    }
+
     /// Adds a member to an organization.
     ///
     /// # Errors
@@ -167,12 +193,16 @@ impl Model {
     where
         C: ConnectionTrait,
     {
-        let owners = Entity::find()
+        let mut query = Entity::find()
             .filter(Column::OrgId.eq(org_id))
-            .filter(Column::Role.eq("owner"))
-            .lock_exclusive()
-            .all(conn)
-            .await?;
+            .filter(Column::Role.eq("owner"));
+        // `FOR UPDATE` row locking is only meaningful (and only valid SQL) on
+        // PostgreSQL. SQLite has no row locks — its single-writer transaction
+        // model already serializes the count-then-write within this txn.
+        if conn.get_database_backend() == sea_orm::DatabaseBackend::Postgres {
+            query = query.lock_exclusive();
+        }
+        let owners = query.all(conn).await?;
         if owners.len() <= 1 {
             return Err(DbErr::Custom(format!(
                 "Cannot {action} the last owner of an organization"

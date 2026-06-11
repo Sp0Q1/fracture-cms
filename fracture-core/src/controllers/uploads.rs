@@ -12,7 +12,7 @@ use axum_extra::extract::cookie::CookieJar;
 use loco_rs::prelude::*;
 
 /// Constructs an `UploadService` from the application settings.
-async fn get_upload_service(ctx: &AppContext) -> Result<UploadService> {
+pub(crate) async fn get_upload_service(ctx: &AppContext) -> Result<UploadService> {
     let config = UploadConfig::from_settings(ctx.config.settings.as_ref());
     UploadService::new(config)
         .await
