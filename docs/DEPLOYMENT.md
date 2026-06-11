@@ -15,7 +15,7 @@ Other platforms: `fracture-ctl-linux-arm64`, `fracture-ctl-macos-amd64`, `fractu
 
 | Command | Description |
 |---------|-------------|
-| `fracture-ctl init --image <img>` | Generate `.env.prod` and `compose.prod.yaml` for production |
+| `fracture-ctl init --image <img>` | Generate `.env` and `compose.prod.yaml` for production |
 | `fracture-ctl init --image <img> --repo <url>` | Same, plus clone `assets/` and `config/` from the repo |
 | `fracture-ctl init --dev` | Generate development `.env` (OIDC values filled by `setup.sh`) |
 | `fracture-ctl up` | Pull latest image, auto-backup, start production services |
@@ -41,7 +41,7 @@ fracture-ctl init --image ghcr.io/your-org/your-app:latest \
                   --repo https://github.com/your-org/your-app.git
 
 # 3. Configure OIDC, SMTP, database (all optional at first)
-vim .env.prod
+vim .env
 
 # 4. Start the app
 fracture-ctl up
@@ -50,13 +50,13 @@ fracture-ctl up
 fracture-ctl admin set you@example.com
 ```
 
-`fracture-ctl init` generates `.env.prod` (chmod 600) and `compose.prod.yaml`. If `--repo` is provided, it sparse-clones `assets/` and `config/` from the repository. The app boots immediately. OIDC and SMTP are optional -- edit `.env.prod` and run `fracture-ctl up` again when ready.
+`fracture-ctl init` generates `.env` (chmod 600) and `compose.prod.yaml`. If `--repo` is provided, it shallow-clones the repository (into `repo/`) so the app can mount its `assets/` and `config/`. The app boots immediately. OIDC and SMTP are optional -- edit `.env` and run `fracture-ctl up` again when ready.
 
 ## Configuration
 
 ### Environment Variables
 
-Generate `.env.prod` with `fracture-ctl init --image <image>`, then edit as needed:
+Generate `.env` with `fracture-ctl init --image <image>`, then edit as needed:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -86,7 +86,7 @@ Register your app as an OIDC client in any provider (Zitadel, Keycloak, Auth0, e
 | Post-logout redirect URI | `https://your-domain.com` |
 | Scopes | `openid`, `email`, `profile` |
 
-Add the client ID, secret, and issuer URL to `.env.prod`, then restart:
+Add the client ID, secret, and issuer URL to `.env`, then restart:
 
 ```bash
 fracture-ctl up
@@ -94,20 +94,25 @@ fracture-ctl up
 
 ### Using PostgreSQL
 
-By default, the app uses SQLite (zero config). To switch to PostgreSQL:
+By default, the app uses SQLite (zero config). The generated `compose.prod.yaml`
+contains only the `app` service; to switch to PostgreSQL you provide the
+database yourself:
 
-1. Uncomment the database lines in `.env.prod`:
+1. Uncomment the database lines in `.env` and comment out the SQLite
+   `DATABASE_URL` (the app reads `DATABASE_URL` from `.env`):
    ```
    APP_DB_USER=fracture
    APP_DB_PASSWORD=<generated-password>
    DATABASE_URL=postgres://fracture:${APP_DB_PASSWORD}@db:5432/fracture
    ```
-2. Start both services (the `db` service is defined in `compose.prod.yaml`):
+2. Add a `db` service to `compose.prod.yaml` (e.g. a `postgres:16-alpine`
+   container with a volume and health check) and a `depends_on` from `app`, then:
    ```bash
    fracture-ctl up
    ```
 
-The `db` service is a PostgreSQL 16 Alpine container with a health check. The app waits for it to be ready before connecting.
+A future `fracture-ctl init --database postgres` may generate the `db` service
+for you; today it must be added manually.
 
 ## Migrations
 
@@ -132,7 +137,7 @@ fracture-ctl backup                     # backup-<timestamp>.sqlite or .sql
 fracture-ctl backup -o my-backup.sqlite # custom filename
 ```
 
-`fracture-ctl backup` auto-detects the database type from `.env.prod`. For SQLite, it checkpoints the WAL and copies the file from the container. For PostgreSQL, it runs `pg_dump` inside the `db` container.
+`fracture-ctl backup` auto-detects the database type from `.env`. For SQLite, it checkpoints the WAL and copies the file from the container. For PostgreSQL, it runs `pg_dump` inside the `db` container.
 
 ### Restore
 
@@ -157,7 +162,7 @@ fracture-ctl admin set admin@example.com   # promote to platform admin
 fracture-ctl admin list                     # show all platform admins
 ```
 
-`admin set` finds the user by email, locates the platform admin organization (created on first app boot), and adds the user as an owner of that org.
+`admin set` finds the user by email, locates the platform admin organization (creating it if it does not exist yet), and adds the user as an owner of that org. The user must have logged in at least once so that their account exists.
 
 ## Updating
 
@@ -212,14 +217,14 @@ If the app logs "no such table" errors:
 
 ### Permission errors
 
-- `.env.prod` must be readable by the user running `podman compose` (chmod 600, owned by you).
+- `.env` must be readable by the user running `podman compose` (chmod 600, owned by you).
 - The `app_data` volume is managed by podman -- do not manually chmod files inside it.
 - If `fracture-ctl backup` fails with "could not access SQLite database", install `sqlite3` on the host: `sudo apt install sqlite3`.
 
 ## Security Checklist
 
 - [ ] `JWT_SECRET` is randomly generated (never reuse dev values)
-- [ ] `.env.prod` is `chmod 600` and not in version control
+- [ ] `.env` is `chmod 600` and not in version control
 - [ ] TLS via reverse proxy (HTTPS only)
 - [ ] Container binds to `127.0.0.1` (not `0.0.0.0`)
 - [ ] Firewall allows only 80, 443, SSH
