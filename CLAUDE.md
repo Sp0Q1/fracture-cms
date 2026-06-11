@@ -6,11 +6,11 @@ These rules are non-negotiable for any code change in this repo. They exist so t
 
 Rust + Loco (Axum) CMS framework. Three crates:
 
-- `fracture-core/` — library re-exported to downstream crates (notably `fracture-pt`). Owns auth, RBAC, OIDC, multi-tenancy, jobs, mailers, security headers.
+- `fracture-core/` — library re-exported to downstream crates. Owns auth, RBAC, OIDC, multi-tenancy, jobs, mailers, security headers.
 - `fracture-ctl/` — IdP-agnostic CLI for production deployment (config gen, container orchestration).
 - root crate — the demo/reference app (projects, notes) that exercises `fracture-core`.
 
-`fracture-pt` consumes `fracture-core` as a git dependency. **CMS must not depend on PT.** The dependency direction is one-way: PT → CMS.
+Downstream apps consume `fracture-core` as a git dependency. **CMS must not depend on, or reference by name, any downstream consumer** — not in code, comments, docs, examples, or CI. The dependency direction is one-way: downstream → CMS; this project has no knowledge of what is built on top of it.
 
 ## Build & test commands
 
@@ -58,7 +58,7 @@ Never use `--no-verify` to skip hooks. Never bypass signing.
   - `require_platform_admin!(org_ctx)` for platform-admin gates
 - **Return 404 (not 403) on unauthorized access** so endpoint existence is not leaked. Loco's `not_found()` is the standard exit.
 - **`OrgRole` (Viewer/Member/Admin/Owner) is the org-wide role enum** in `fracture-core/src/models/org_members.rs`. It is stable. Do not add new variants for engagement-scoped or per-resource purposes — those go through `ResourceAssignment` (below).
-- **Per-resource roles are CMS infrastructure, not CMS domain.** The `ResourceAssignment` model in fracture-core stores `(user_id, resource_type, resource_id, role_key, granted_by, granted_at, expires_at?)` where `role_key` is an opaque string. CMS does not define what role strings mean — downstream crates (e.g., fracture-pt) own the semantics of values like `"pentester"` or `"reviewer"`. CMS only provides the assignment mechanism, the lookup helpers, and the IDOR-safe enforcement.
+- **Per-resource roles are CMS infrastructure, not CMS domain.** The `ResourceAssignment` model in fracture-core stores `(user_id, resource_type, resource_id, role_key, granted_by, granted_at, expires_at?)` where `role_key` is an opaque string. CMS does not define what role strings mean — downstream crates own the semantics of values like `"pentester"` or `"reviewer"`. CMS only provides the assignment mechanism, the lookup helpers, and the IDOR-safe enforcement.
 - **The fundamental ownership architecture lives in CMS and must remain airtight.** Two contracts:
   1. `OrgScoped` trait — every entity that belongs to an org implements it. Pins the `org_id` column at the type level and provides safe query helpers (`find_in_org`, `find_by_pid_in_org`). Controllers must use these; bypassing them is an IDOR risk.
   2. `ResourceAssignment` model — the only sanctioned way for downstream crates to grant per-resource access. Downstream crates must NOT introduce parallel assignment tables.
@@ -84,7 +84,7 @@ If a feature genuinely needs an inline script, use a per-request CSP nonce; neve
 
 ### SRI (subresource integrity)
 
-All `<link rel="stylesheet">` and `<script>` tags loaded from `/static/` must include `integrity="sha384-..."` and `crossorigin="anonymous"`. Update the hash when the file changes. PT already enforces this; CMS templates must reach parity.
+All `<link rel="stylesheet">` and `<script>` tags loaded from `/static/` must include `integrity="sha384-..."` and `crossorigin="anonymous"`. Update the hash when the file changes. CMS templates must enforce this everywhere.
 
 ### Headers
 
