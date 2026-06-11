@@ -37,7 +37,7 @@ CI in `.github/workflows/ci.yaml` runs:
 2. `clippy` — strict lints (pedantic + nursery + rust-2018-idioms, warnings denied)
 3. `semgrep` — auto config, errors fail the job
 4. `cargo test --all-features --all`
-5. Audit (in `release-app.yaml` and `audit.yaml`)
+5. `cargo audit` — dependency vulnerability scan (the `audit` job in `ci.yaml`)
 
 If a clippy or semgrep finding cannot be fixed, justify it inline:
 
@@ -50,7 +50,7 @@ Never use `--no-verify` to skip hooks. Never bypass signing.
 
 ### Authorization (highest priority — IDOR prevention)
 
-- **Every resource that belongs to an organization must implement org-scoped lookups.** The pattern: `Model::find_by_pid_and_org(db, pid, org_id)`. After PR-3 lands, this becomes the `OrgScoped` trait — implement it for every new entity.
+- **Every resource that belongs to an organization must implement org-scoped lookups.** The pattern: `Model::find_by_pid_and_org(db, pid, org_id)`. The `OrgScoped` trait (in `fracture-core/src/models/org_scoped.rs`) is the sanctioned form — implement it for every new org-owned entity. (The demo `projects`/`notes` models still hand-roll `find_by_pid_and_org` and should be migrated to the trait.)
 - **`find_by_pid` (without org check) is internal-only.** Treat it as `find_by_pid_unchecked`. If you call it from a controller, you must independently verify authorization in that handler. Prefer the org-scoped helper in 99% of cases.
 - **Use the auth macros, never inline checks:**
   - `require_user!(user)` to ensure authentication
@@ -111,7 +111,7 @@ Do not weaken any of: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`
 ### OIDC
 
 - PKCE, nonce, JWKS verification, audience-claim check stay enabled. Do not remove.
-- If `auth.oidc.client_id` / `issuer` / `client_secret` is missing in production, fail loudly — do not silently disable. (Pending PR-12.)
+- If `auth.oidc.client_id` / `issuer` / `client_secret` is missing in production, fail loudly — do not silently disable. (Enforced by the OIDC initializer's `required`/`skip_or_fail` logic; production defaults `OIDC_REQUIRED` to true.)
 
 ### Sessions / cookies
 

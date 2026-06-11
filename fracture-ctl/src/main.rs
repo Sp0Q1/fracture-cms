@@ -353,6 +353,8 @@ OIDC_REDIRECT_URI=https://example.com/api/auth/oidc/callback
 OIDC_POST_LOGOUT_REDIRECT_URI=https://example.com
 
 # SMTP — optional. Invite emails fail silently if not configured.
+# Mail is OFF unless MAILER_ENABLED=true, even if MAILER_HOST is set.
+# MAILER_ENABLED=true
 # MAILER_HOST=smtp.example.com
 # MAILER_PORT=587
 # MAILER_USER=
@@ -383,7 +385,9 @@ services:
     environment:
       LOCO_ENV: production
       SERVER_BINDING: 0.0.0.0
-      DATABASE_URL: sqlite:///app/data/gethacked.sqlite?mode=rwc
+      # DATABASE_URL intentionally comes from .env (env_file) so the documented
+      # "uncomment for PostgreSQL" switch works. Hardcoding it here would
+      # override .env and silently pin the app to SQLite.
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
@@ -664,9 +668,7 @@ fn cmd_dev(setup: bool) {
 /// Returns ("postgres", db_user, db_password, db_name, db_host) or ("sqlite", path, "", "", "").
 fn detect_database() -> (String, String, String, String, String) {
     // Check .env for DATABASE_URL
-    let env_content = fs::read_to_string(".env")
-        .or_else(|_| fs::read_to_string(".env"))
-        .unwrap_or_default();
+    let env_content = fs::read_to_string(".env").unwrap_or_default();
 
     for line in env_content.lines() {
         let line = line.trim();

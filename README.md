@@ -11,7 +11,7 @@ The core infrastructure lives in the `fracture-core` library crate. Downstream p
 - **Role-based access control** — Four roles (Owner > Admin > Member > Viewer) enforced at the controller level via `require_role!` macro. All database queries scoped by `org_id`.
 - **Email invites** — Admins invite users by email. Invites expire after 7 days. If the invitee doesn't have an account yet, the invite is auto-accepted when they sign in with a matching email.
 - **Session management** — JWT stored in HTTP-only cookies. The frontend refreshes the token every 12 minutes; on failure, the user sees a "session expired" message with a re-login link.
-- **Security headers** — Content-Security-Policy (`default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'`), plus X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and X-Permitted-Cross-Domain-Policies.
+- **Security headers** — Content-Security-Policy (`default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'`), plus X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-Permitted-Cross-Domain-Policies, Strict-Transport-Security, and Permissions-Policy.
 - **Back-channel logout** — The IdP can POST a signed `logout_token` to invalidate a user's session server-side. The app verifies the token signature via JWKS before acting on it.
 - **File uploads** — Org-scoped file upload API with configurable size limits, MIME type validation, SHA-256 checksums, and visibility control (`org` or `public`). Files stored on disk under a configurable storage root.
 - **Blog system** — Markdown-based blog with GFM support (tables, strikethrough, task lists). Posts tied to a configurable blog org. Public routes for readers, admin routes for platform admins. Markdown rendered to HTML on save via comrak.
@@ -215,7 +215,8 @@ dev/
 | POST | `/projects` | Member |
 | GET | `/projects/new` | Member |
 | GET | `/projects/{pid}` | Viewer |
-| GET/POST | `/projects/{pid}/edit` | Member |
+| GET | `/projects/{pid}/edit` | Member |
+| POST | `/projects/{pid}` | Member |
 | DELETE | `/projects/{pid}` | Member |
 
 ### Notes (project-scoped example)
@@ -225,7 +226,8 @@ dev/
 | POST | `/projects/{pid}/notes` | Member |
 | GET | `/projects/{pid}/notes/new` | Member |
 | GET | `/projects/{pid}/notes/{note_pid}` | Viewer |
-| GET/POST | `/projects/{pid}/notes/{note_pid}/edit` | Member |
+| GET | `/projects/{pid}/notes/{note_pid}/edit` | Member |
+| POST | `/projects/{pid}/notes/{note_pid}` | Member |
 | DELETE | `/projects/{pid}/notes/{note_pid}` | Member |
 
 ### Uploads
@@ -260,7 +262,7 @@ CLI tool for managing deployments. Install from [GitHub Releases](https://github
 
 | Command | Description |
 |---------|-------------|
-| `init --image <img> [--repo <url>]` | Generate production config (`.env.prod` + `compose.prod.yaml`) |
+| `init --image <img> [--repo <url>]` | Generate production config (`.env` + `compose.prod.yaml`) |
 | `up` | Pull latest image, auto-backup, start services |
 | `down` | Stop all services |
 | `backup [-o file]` | Back up the database |
