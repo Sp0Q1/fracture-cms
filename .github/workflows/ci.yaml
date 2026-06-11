@@ -6,6 +6,11 @@ on:
       - main
   pull_request:
   workflow_call:
+  schedule:
+    # Daily audit-only run: new RUSTSEC advisories land independently of
+    # commits, so a cron catches what per-PR runs cannot. The other jobs
+    # skip scheduled events.
+    - cron: '17 4 * * *'
 
 env:
   RUST_TOOLCHAIN: stable
@@ -15,6 +20,7 @@ jobs:
   rustfmt:
     name: Check Style
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
 
     permissions:
       contents: read
@@ -32,6 +38,7 @@ jobs:
   clippy:
     name: Run Clippy
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
 
     permissions:
       contents: read
@@ -50,6 +57,7 @@ jobs:
   semgrep:
     name: Semgrep SAST
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
 
     permissions:
       contents: read
@@ -66,20 +74,12 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
 
     permissions:
       contents: read
-    
+
     services:
-      redis:
-        image: redis
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - "6379:6379"
       postgres:
         image: postgres
         env:
@@ -105,7 +105,6 @@ jobs:
       - name: Run cargo test
         run: cargo test --all-features --all
         env:
-          REDIS_URL: redis://localhost:${{job.services.redis.ports[6379]}}
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres_test
 
   audit:
@@ -122,7 +121,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        # Prebuilt binary: `cargo install` compiled it from source on every
+        # run (~minutes); this is seconds.
+        uses: taiki-e/install-action@cargo-audit
       - name: Run cargo audit
         run: cargo audit
           

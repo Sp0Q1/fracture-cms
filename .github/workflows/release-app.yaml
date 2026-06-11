@@ -22,7 +22,7 @@ on:
   workflow_call:
     inputs:
       image_name:
-        description: 'Full image name (e.g. ghcr.io/sp0q1/fracture-pt)'
+        description: 'Full image name (e.g. ghcr.io/your-org/your-app)'
         required: true
         type: string
       containerfile:
@@ -57,21 +57,25 @@ jobs:
           echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           echo "image=$(echo "$RAW_IMAGE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push
-        env:
-          CONTAINERFILE: ${{ inputs.containerfile }}
-          IMAGE: ${{ steps.meta.outputs.image }}
-          VERSION: ${{ steps.meta.outputs.version }}
-          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
-          REVISION: ${{ github.sha }}
-        run: |
-          docker build \
-            -f "$CONTAINERFILE" \
-            -t "$IMAGE:$VERSION" \
-            -t "$IMAGE:latest" \
-            --label "org.opencontainers.image.source=$SOURCE_URL" \
-            --label "org.opencontainers.image.version=$VERSION" \
-            --label "org.opencontainers.image.revision=$REVISION" \
-            .
-          docker push "$IMAGE:$VERSION"
-          docker push "$IMAGE:latest"
+        # BuildKit + GHA layer cache: the Containerfile's cargo-chef stage
+        # makes the dependency build its own layer, so with mode=max a tag
+        # whose dependencies are unchanged only recompiles the app crates
+        # instead of the whole workspace from scratch.
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ inputs.containerfile }}
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
