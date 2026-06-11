@@ -17,6 +17,7 @@ async fn create_test_user(db: &sea_orm::DatabaseConnection, suffix: &str) -> use
             subject: format!("test-org-user-{suffix}"),
             email: format!("orguser-{suffix}@example.com"),
             name: Some(format!("Org User {suffix}")),
+            email_verified: true,
         },
     )
     .await

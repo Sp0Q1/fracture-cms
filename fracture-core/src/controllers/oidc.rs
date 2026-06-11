@@ -155,11 +155,17 @@ async fn callback(
         .and_then(|localized: &LocalizedClaim<EndUserName>| localized.get(None))
         .map(|n: &EndUserName| n.as_str().to_string());
 
+    // Whether the `IdP` asserts this email as verified. Only a `true` is trusted;
+    // a missing claim is treated as unverified. This gates account linking and
+    // invite auto-acceptance to prevent takeover via an attacker-chosen email.
+    let email_verified = claims.email_verified() == Some(true);
+
     let info = OidcUserInfo {
         provider: oidc.provider_name.clone(),
         subject,
         email,
         name,
+        email_verified,
     };
 
     let user = users::Model::find_or_create_from_oidc(&ctx.db, &info).await?;
@@ -263,8 +269,8 @@ async fn logout(
         .max_age(time::Duration::ZERO)
         .build();
 
-    // Redirect to the IdP's end_session endpoint so the browser session is
-    // terminated there as well.  Falls back to "/" if the IdP didn't advertise
+    // Redirect to the `IdP`'s end_session endpoint so the browser session is
+    // terminated there as well.  Falls back to "/" if the `IdP` didn't advertise
     // an end_session_endpoint.
     let redirect_url = if let Some(end_session) = &oidc.end_session_url {
         let mut params: Vec<(&str, String)> = Vec::new();
@@ -379,7 +385,7 @@ async fn backchannel_logout(
     let header = jsonwebtoken::decode_header(&form.logout_token)
         .map_err(|e| loco_rs::Error::Message(format!("Invalid logout_token header: {e}")))?;
 
-    // Fetch the IdP's signing key and verify the JWT signature
+    // Fetch the `IdP`'s signing key and verify the JWT signature
     let decoding_key = fetch_decoding_key(&oidc.jwks_uri, &header).await?;
 
     let mut validation = jsonwebtoken::Validation::new(header.alg);
@@ -433,7 +439,7 @@ async fn backchannel_logout(
         .await?
     {
         let mut active: users::ActiveModel = user.into();
-        active.session_invalidated_at = ActiveValue::Set(Some(chrono::offset::Local::now().into()));
+        active.session_invalidated_at = ActiveValue::Set(Some(chrono::Utc::now().into()));
         active.update(&ctx.db).await?;
     }
 
