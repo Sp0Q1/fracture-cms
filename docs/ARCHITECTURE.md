@@ -231,9 +231,15 @@ Set `settings.blog.org_slug` in the Loco YAML config to the slug of the organiza
 - **Views (`views/blog.rs`)**: Tera view helpers plus the Atom feed builder (hand-escaped XML).
 - **Templates**: `fracture-core/templates/blog/` contains both the public templates (which extend the public layout, see below) and the admin templates (which extend the app layout). All are overridable by the consuming app.
 
-### Public vs. app layout
+### Public vs. app surface
 
-Public pages (blog, landing/sales pages) render with `public_base.html` — a marketing layout with no session state, no org chrome, and no JavaScript; every visitor gets identical bytes, which is what makes the cache headers safe. Authenticated pages render with `base.html` (app chrome: org switcher, account menu, session refresh). fracture-core embeds a default `public_base.html`; apps override it by shipping their own at `assets/views/public_base.html` — note that app-side templates which extend it (e.g. a landing page) *require* the app-side copy, because the app's Tera instance loads `assets/views` before core templates register.
+The project is a B2B application first: the authenticated product renders with `base.html` (org switcher, account menu, session refresh). The supporting public surface — landing page, blog, static pages — is owned by fracture-core so downstream repos carry **zero files** for it, and every piece is template-overridable:
+
+- **`public_base.html`** — the marketing layout: no org chrome, no JavaScript. Its only session awareness is the nav CTA (Dashboard when signed in, Sign in otherwise), driven by `user_name` in the context; handlers set `Cache-Control: public` only on the guest variant, which is identical for every visitor.
+- **`site/landing.html`** — the default sales page, served to guests at `/` via `views::site::landing()` (the app's home controller delegates its guest branch). Override it with your own design.
+- **Static pages** — `GET /pages/{slug}` renders `site/pages/{slug}.html` wrapped in the public layout via `site/page_frame.html`. Fragments are plain HTML with **no `extends`** — that is deliberate: the app's Tera loads `assets/views` before core templates register (and re-loads on hot reload), so app-side templates cannot extend core-embedded layouts. The frame wraps the rendered fragment instead, so adding a marketing page is literally dropping one file into `assets/views/site/pages/`. Unknown/invalid slugs 404.
+
+To replace the whole public look, override `public_base.html` itself (app-side overrides of the *layout* are standalone files, so they have no inheritance constraint).
 
 ### Routes
 

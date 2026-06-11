@@ -2,6 +2,7 @@ pub mod admin;
 pub mod blog;
 pub mod jobs;
 pub mod org;
+pub mod site;
 pub mod sri;
 
 use serde_json::{json, Value};

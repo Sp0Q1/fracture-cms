@@ -37,16 +37,6 @@ async fn require_blog_org(ctx: &AppContext) -> Result<organizations::Model> {
         .ok_or_else(|| Error::Message("Blog org not configured".to_string()))
 }
 
-/// Marks a public response cacheable: these pages carry no session state and
-/// are identical for every visitor.
-fn cache_public(mut res: Response, max_age_secs: u32) -> Response {
-    if let Ok(value) = format!("public, max-age={max_age_secs}").parse() {
-        res.headers_mut()
-            .insert(axum::http::header::CACHE_CONTROL, value);
-    }
-    res
-}
-
 /// GET /blog/ — public blog index (no auth required)
 ///
 /// # Errors
@@ -56,6 +46,7 @@ fn cache_public(mut res: Response, max_age_secs: u32) -> Response {
 pub async fn public_index(
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
     let org = resolve_blog_org(&ctx).await?;
     let posts = match org {
@@ -63,7 +54,17 @@ pub async fn public_index(
         None => vec![],
     };
     let base_url = ctx.config.server.host.clone();
-    views::blog::public_index(&v, &posts, &base_url).map(|res| cache_public(res, 60))
+    // Signed-in visitors get the Dashboard CTA in the nav; only the guest
+    // variant (identical for everyone) is cacheable.
+    let user_name = middleware::get_current_user(&jar, &ctx)
+        .await
+        .map(|u| u.name);
+    let res = views::blog::public_index(&v, &posts, &base_url, user_name.as_deref())?;
+    Ok(if user_name.is_none() {
+        super::cache_public(res, 60)
+    } else {
+        res
+    })
 }
 
 /// GET /blog/feed.xml — Atom feed of published posts (no auth required)
@@ -84,7 +85,7 @@ pub async fn public_feed(State(ctx): State<AppContext>) -> Result<Response> {
         .header("content-type", "application/atom+xml; charset=utf-8")
         .body(axum::body::Body::from(xml))
         .map_err(|e| Error::Message(format!("feed response: {e}")))?;
-    Ok(cache_public(res.into_response(), 300))
+    Ok(super::cache_public(res.into_response(), 300))
 }
 
 /// GET /blog/:slug — public blog post (no auth required)
@@ -97,6 +98,7 @@ pub async fn public_show(
     Path(slug): Path<String>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    jar: CookieJar,
 ) -> Result<Response> {
     let org = resolve_blog_org(&ctx)
         .await?
@@ -109,8 +111,22 @@ pub async fn public_show(
         .await?;
     let author_name = author.map_or_else(|| "Unknown".to_string(), |a| a.name);
     let base_url = ctx.config.server.host.clone();
-    views::blog::public_show(&v, &post, &author_name, &base_url, false)
-        .map(|res| cache_public(res, 60))
+    let user_name = middleware::get_current_user(&jar, &ctx)
+        .await
+        .map(|u| u.name);
+    let res = views::blog::public_show(
+        &v,
+        &post,
+        &author_name,
+        &base_url,
+        false,
+        user_name.as_deref(),
+    )?;
+    Ok(if user_name.is_none() {
+        super::cache_public(res, 60)
+    } else {
+        res
+    })
 }
 
 /// GET /admin/blog/ — admin blog post list
@@ -374,7 +390,7 @@ pub async fn admin_preview(
         .await?;
     let author_name = author.map_or_else(|| "Unknown".to_string(), |a| a.name);
     let base_url = ctx.config.server.host.clone();
-    views::blog::public_show(&v, &post, &author_name, &base_url, true)
+    views::blog::public_show(&v, &post, &author_name, &base_url, true, Some(&user.name))
 }
 
 /// POST /admin/blog/:pid/delete — permanently delete a blog post.

@@ -34,6 +34,7 @@ pub fn public_index(
     v: &impl ViewRenderer,
     posts: &[blog_posts::Model],
     base_url: &str,
+    user_name: Option<&str>,
 ) -> Result<Response> {
     let posts_json: Vec<_> = posts.iter().map(post_json).collect();
     format::render().view(
@@ -42,6 +43,7 @@ pub fn public_index(
         data!({
             "posts": posts_json,
             "base_url": base_url,
+            "user_name": user_name,
         }),
     )
 }
@@ -58,6 +60,7 @@ pub fn public_show(
     author_name: &str,
     base_url: &str,
     preview: bool,
+    user_name: Option<&str>,
 ) -> Result<Response> {
     let post_data = post_json(post);
     format::render().view(
@@ -68,6 +71,7 @@ pub fn public_show(
             "author_name": author_name,
             "base_url": base_url,
             "preview": preview,
+            "user_name": user_name,
         }),
     )
 }

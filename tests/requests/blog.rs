@@ -230,3 +230,58 @@ async fn preview_and_delete_are_platform_admin_only() {
     })
     .await;
 }
+
+#[tokio::test]
+#[serial]
+async fn public_pages_show_dashboard_cta_when_authenticated() {
+    request::<App, _, _>(|request, ctx| async move {
+        let admin = mk_user(&ctx.db, "nav-admin").await;
+        mk_blog_org(&ctx.db, &admin).await;
+
+        // Guest: Sign in CTA, cacheable.
+        let response = request.get("/blog").await;
+        let body = response.text();
+        assert!(body.contains("Sign in"));
+        assert!(!body.contains(">Dashboard<"));
+        assert!(response.headers().get("cache-control").is_some());
+
+        // Authenticated: Dashboard CTA, NOT cacheable.
+        let response = request
+            .get("/blog")
+            .add_cookie(jwt_cookie(&ctx, &admin))
+            .await;
+        assert_eq!(response.status_code(), 200);
+        let body = response.text();
+        assert!(body.contains(">Dashboard<"), "authed nav must link the app");
+        assert!(!body.contains("Sign in"));
+        assert!(
+            response.headers().get("cache-control").is_none(),
+            "session-aware variant must not be publicly cacheable"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn static_pages_render_fragments_in_public_layout() {
+    request::<App, _, _>(|request, ctx| async move {
+        let _ctx = ctx; // request-only test
+
+        // The demo ships assets/views/site/pages/about.html.
+        let response = request.get("/pages/about").await;
+        assert_eq!(response.status_code(), 200);
+        let body = response.text();
+        assert!(body.contains("What this platform is"), "fragment content");
+        assert!(body.contains("Sign in"), "wrapped in the public layout");
+        assert!(response
+            .headers()
+            .get("cache-control")
+            .is_some_and(|v| v.to_str().unwrap_or("").contains("public")));
+
+        // Unknown and invalid slugs are 404.
+        assert_eq!(request.get("/pages/no-such-page").await.status_code(), 404);
+        assert_eq!(request.get("/pages/Nope_Bad").await.status_code(), 404);
+    })
+    .await;
+}

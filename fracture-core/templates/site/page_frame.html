@@ -1,0 +1,11 @@
+{% extends "public_base.html" %}
+
+{% block title %}{{ title }} — Fracture CMS{% endblock title %}
+
+{% block canonical %}<link rel="canonical" href="{{ base_url }}/pages/{{ slug }}">{% endblock canonical %}
+
+{% block content %}
+{# `body` is the pre-rendered site/pages/{slug}.html fragment — trusted
+   app-authored template output, never user input. #}
+{{ body | safe }}
+{% endblock content %}

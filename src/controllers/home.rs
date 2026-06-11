@@ -33,7 +33,7 @@ pub async fn index(
             };
             views::home::index(&v, &user, org_ctx.as_ref(), &user_orgs, project_count)
         }
-        None => views::home::index_guest(&v),
+        None => fracture_core::views::site::landing(&v, None),
     }
 }
 

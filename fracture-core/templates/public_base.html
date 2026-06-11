@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-{# Marketing/public layout: no session state, no org chrome, no JavaScript.
-   Pages rendered with this layout are identical for every visitor, so they
-   are safe to cache. Apps override it by placing their own
-   assets/views/public_base.html. #}
+{# Marketing/public layout: no org chrome, no JavaScript. The only session
+   awareness is the nav CTA (Dashboard for signed-in visitors, Sign in
+   otherwise), driven by `user_name` in the render context — handlers only
+   set Cache-Control: public on the guest variant. Apps override this file
+   by placing their own assets/views/public_base.html. #}
 <html lang="en" data-theme="dark">
 
 <head>
@@ -39,7 +40,11 @@
         {% endblock nav_public %}
         <span class="nav-end">
             {% block nav_cta %}
+            {% if user_name %}
+            <a href="/" class="button small">Dashboard</a>
+            {% else %}
             <a href="/api/auth/oidc/authorize" class="button small">Sign in</a>
+            {% endif %}
             {% endblock nav_cta %}
         </span>
     </nav>
