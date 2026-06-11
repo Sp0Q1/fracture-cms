@@ -7,6 +7,9 @@ SRC="$(cd "$(dirname "$0")/.." && pwd)"
 RUST_IMAGE="localhost/fracture-ci:latest"
 SEMGREP_IMAGE="docker.io/semgrep/semgrep:latest"
 CARGO_CACHE="fracture-ci-cargo"
+# Persistent target dir: without it every check did a full cold build of the
+# workspace (the registry cache only saves downloads, not compilation).
+TARGET_CACHE="fracture-ci-target"
 
 # Build the CI image if it doesn't exist (bundles rust + sqlite + clippy + rustfmt)
 if ! podman image exists "$RUST_IMAGE" 2>/dev/null; then
@@ -22,8 +25,9 @@ if [ -d "$SRC/.git" ] && ! git -C "$SRC" diff --quiet 2>/dev/null; then
     echo ""
 fi
 
-# Named volume for cargo registry cache (speeds up repeat runs)
+# Named volumes for cargo registry + build artifacts (speed up repeat runs)
 podman volume exists "$CARGO_CACHE" 2>/dev/null || podman volume create "$CARGO_CACHE" > /dev/null
+podman volume exists "$TARGET_CACHE" 2>/dev/null || podman volume create "$TARGET_CACHE" > /dev/null
 
 # Ensure Cargo.lock is up-to-date before read-only CI checks.
 # Mounts only Cargo.toml files writable to regenerate the lockfile.
@@ -31,6 +35,7 @@ echo "Updating Cargo.lock..."
 podman run --rm \
     -v "$SRC:/src" \
     -v "$CARGO_CACHE:/usr/local/cargo/registry" \
+    -v "$TARGET_CACHE:/tmp/target" \
     -e CARGO_TARGET_DIR=/tmp/target \
     -w /src \
     "$RUST_IMAGE" \
@@ -59,6 +64,7 @@ rust_run() {
     podman run --rm \
         -v "$SRC:/src:ro" \
         -v "$CARGO_CACHE:/usr/local/cargo/registry" \
+        -v "$TARGET_CACHE:/tmp/target" \
         -e CARGO_TARGET_DIR=/tmp/target \
         -w /src \
         "$RUST_IMAGE" \

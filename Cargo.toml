@@ -19,6 +19,12 @@ sea-orm = { version = "1.1", features = [
   "macros",
 ] }
 
+# Skip debuginfo for dependency crates in dev/test builds: it bloats the
+# target dir by gigabytes and is only useful when stepping into dep sources.
+# Workspace crates keep full debuginfo.
+[profile.dev.package."*"]
+debug = false
+
 [dependencies]
 loco-rs = { workspace = true  }
 serde = { version = "1", features = ["derive"] }
