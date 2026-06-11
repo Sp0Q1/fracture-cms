@@ -111,6 +111,10 @@ zapi POST /management/v1/users/human \
 # --- 7. Write .env ---
 echo "==> Writing .env..."
 JWT_SECRET=$(openssl rand -base64 32)
+# Create the file with restrictive permissions before writing secrets into it,
+# so JWT_SECRET / OIDC_CLIENT_SECRET are never world-readable (matches the 0600
+# that `fracture-ctl init` sets for the prod .env).
+install -m 600 /dev/null .env
 cat > .env <<EOF
 JWT_SECRET=$JWT_SECRET
 OIDC_PROJECT_ID=$PROJECT_ID
