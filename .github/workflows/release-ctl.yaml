@@ -5,13 +5,16 @@ on:
     tags:
       - 'ctl-v*'
 
+# Least privilege: only the release job needs write; the build matrix is read-only.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
         include:
@@ -65,10 +68,17 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
+
+      - name: Generate checksums
+        # `fracture-ctl update` downloads SHA256SUMS and refuses to install a
+        # binary that doesn't match, so this file must ship with every release.
+        run: sha256sum fracture-ctl-*.tar.gz > SHA256SUMS
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -79,3 +89,4 @@ jobs:
             fracture-ctl-linux-arm64.tar.gz
             fracture-ctl-macos-amd64.tar.gz
             fracture-ctl-macos-arm64.tar.gz
+            SHA256SUMS

@@ -176,59 +176,133 @@ fn cmd_update() {
     };
 
     let asset = format!("fracture-ctl-{os}-{arch}.tar.gz");
-    let download_url = format!("https://github.com/{REPO}/releases/download/{latest_tag}/{asset}");
+    let base_url = format!("https://github.com/{REPO}/releases/download/{latest_tag}");
 
-    // Download to temp file
-    let tmp = "/tmp/fracture-ctl-update.tar.gz";
-    let status = Command::new("curl")
-        .args(["-sfL", "-o", tmp, &download_url])
-        .status()
-        .expect("failed to download");
-
-    if !status.success() {
-        eprintln!("Error: download failed from {download_url}");
+    // Work in a private temp directory so another local user can't pre-create or
+    // swap our files between steps (the old fixed /tmp paths were a TOCTOU risk).
+    let workdir = run_capture("mktemp", &["-d", "/tmp/fracture-ctl-update.XXXXXX"]);
+    let workdir = workdir.trim();
+    if workdir.is_empty() {
+        eprintln!("Error: could not create a temporary directory");
         std::process::exit(1);
     }
 
-    // Find current binary path
+    let tarball = format!("{workdir}/{asset}");
+    let download = |url: &str, out: &str| -> bool {
+        Command::new("curl")
+            .args(["-sfL", "-o", out, url])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+
+    if !download(&format!("{base_url}/{asset}"), &tarball) {
+        eprintln!("Error: download failed from {base_url}/{asset}");
+        let _ = fs::remove_dir_all(workdir);
+        std::process::exit(1);
+    }
+
+    // Verify the download against the release checksums before trusting it.
+    // Without this, a tampered release asset would be executed as the operator.
+    let sums = format!("{workdir}/SHA256SUMS");
+    if !download(&format!("{base_url}/SHA256SUMS"), &sums) {
+        eprintln!("Error: could not download SHA256SUMS for release {latest_tag}.");
+        eprintln!("Refusing to install an unverified binary.");
+        let _ = fs::remove_dir_all(workdir);
+        std::process::exit(1);
+    }
+    if !verify_checksum(workdir, &asset) {
+        eprintln!("Error: checksum verification FAILED for {asset}.");
+        eprintln!("The download does not match the published SHA256SUMS — aborting.");
+        let _ = fs::remove_dir_all(workdir);
+        std::process::exit(1);
+    }
+    eprintln!("  Checksum verified.");
+
     let current_exe = std::env::current_exe().expect("cannot determine executable path");
 
-    // Extract to a temp location first
-    let tmp_bin = "/tmp/fracture-ctl-new";
+    // Extract the binary into the work dir.
     let status = Command::new("tar")
-        .args([
-            "xzf",
-            tmp,
-            "-C",
-            "/tmp",
-            "--transform",
-            "s/fracture-ctl/fracture-ctl-new/",
-        ])
+        .args(["xzf", &tarball, "-C", workdir])
         .status();
-
-    // Fallback if --transform isn't supported (macOS)
-    if status.is_err() || !status.unwrap().success() {
-        let _ = Command::new("tar")
-            .args(["xzf", tmp, "-C", "/tmp"])
-            .status();
-        let _ = fs::rename("/tmp/fracture-ctl", tmp_bin);
+    if status.map(|s| !s.success()).unwrap_or(true) {
+        eprintln!("Error: failed to extract {asset}");
+        let _ = fs::remove_dir_all(workdir);
+        std::process::exit(1);
     }
+    let extracted = format!("{workdir}/fracture-ctl");
 
-    // Replace current binary
-    if let Err(e) = fs::copy(tmp_bin, &current_exe) {
+    // Replace the running binary atomically. Copy the new binary alongside the
+    // current one (same filesystem) then rename over it: on Linux you cannot
+    // write into a running executable (ETXTBSY), but you CAN replace its
+    // directory entry, and rename is atomic.
+    let staged = current_exe.with_file_name(".fracture-ctl.new");
+    if let Err(e) = fs::copy(&extracted, &staged) {
         eprintln!(
-            "Error: could not replace binary at {}: {e}",
+            "Error: could not stage new binary next to {} : {e}",
             current_exe.display()
         );
-        eprintln!("Try: sudo cp {tmp_bin} {}", current_exe.display());
+        eprintln!("Try re-running with sufficient permissions (e.g. sudo).");
+        let _ = fs::remove_dir_all(workdir);
+        std::process::exit(1);
+    }
+    let _ = Command::new("chmod")
+        .args(["755", &staged.to_string_lossy()])
+        .status();
+    if let Err(e) = fs::rename(&staged, &current_exe) {
+        eprintln!(
+            "Error: could not replace binary at {} : {e}",
+            current_exe.display()
+        );
+        let _ = fs::remove_file(&staged);
+        let _ = fs::remove_dir_all(workdir);
         std::process::exit(1);
     }
 
-    // Cleanup
-    let _ = fs::remove_file(tmp);
-    let _ = fs::remove_file(tmp_bin);
-
+    let _ = fs::remove_dir_all(workdir);
     eprintln!("Updated to {latest_version}");
+}
+
+/// Verifies `asset` in `dir` against the `SHA256SUMS` file in the same dir.
+/// Uses `sha256sum` (Linux) or `shasum -a 256` (macOS).
+fn verify_checksum(dir: &str, asset: &str) -> bool {
+    let run = |prog: &str, args: &[&str]| -> bool {
+        Command::new(prog)
+            .current_dir(dir)
+            .args(args)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+    // `--ignore-missing` so only the asset we downloaded is checked, not every
+    // entry in SHA256SUMS.
+    if run(
+        "sha256sum",
+        &["--ignore-missing", "--quiet", "-c", "SHA256SUMS"],
+    ) {
+        return true;
+    }
+    // macOS fallback: compute and compare against the recorded line.
+    let expected = run_capture("grep", &[asset, &format!("{dir}/SHA256SUMS")]);
+    let expected = expected.split_whitespace().next().unwrap_or("").to_string();
+    if expected.is_empty() {
+        return false;
+    }
+    let actual = {
+        let out = Command::new("shasum")
+            .current_dir(dir)
+            .args(["-a", "256", asset])
+            .output();
+        match out {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_string(),
+            _ => String::new(),
+        }
+    };
+    !actual.is_empty() && actual == expected
 }
 
 fn cmd_init(image: Option<String>, repo: Option<String>, dev: bool) {
@@ -943,6 +1017,38 @@ fn compose_file() -> &'static str {
     }
 }
 
+/// Runs a command and returns its stdout (empty string on failure).
+fn run_capture(prog: &str, args: &[&str]) -> String {
+    Command::new(prog)
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default()
+}
+
+/// Generates a random UUID without pulling in a crate dependency.
+/// Reads the kernel UUID source on Linux, falling back to `uuidgen`.
+fn generate_uuid() -> String {
+    if let Ok(s) = fs::read_to_string("/proc/sys/kernel/random/uuid") {
+        let s = s.trim();
+        if !s.is_empty() {
+            return s.to_string();
+        }
+    }
+    if let Ok(o) = Command::new("uuidgen").output() {
+        if o.status.success() {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_lowercase();
+            if !s.is_empty() {
+                return s;
+            }
+        }
+    }
+    eprintln!("Error: could not generate a UUID (need /proc/sys/kernel/random/uuid or uuidgen).");
+    std::process::exit(1);
+}
+
 /// Run a SQL query against the database and return stdout.
 /// Uses sqlite3 on the host (via volume path) or psql via podman exec.
 fn run_db_query(sql: &str) -> String {
@@ -1089,17 +1195,29 @@ fn cmd_admin(action: AdminAction) {
             let user_name = parts.get(1).unwrap_or(&"");
             eprintln!("  Found user: {user_name} (id={user_id})");
 
-            // Find the platform admin org
-            let org_result = run_db_query(
-                "SELECT id, name FROM organizations WHERE is_platform_admin = 1 LIMIT 1",
-            );
-            let org_result = org_result.trim();
+            // Find the platform admin org. `= true` is portable across SQLite
+            // (>= 3.23 maps true to 1) and PostgreSQL (native boolean); the old
+            // `= 1` failed against a PostgreSQL boolean column.
+            let org_query =
+                "SELECT id, name FROM organizations WHERE is_platform_admin = true LIMIT 1";
+            let mut org_result = run_db_query(org_query).trim().to_string();
             if org_result.is_empty() {
-                eprintln!("Error: no platform admin organization found.");
-                eprintln!(
-                    "The app may not have been seeded. Start it once to create the admin org."
-                );
-                std::process::exit(1);
+                // Bootstrap: no platform admin org exists yet, so create one.
+                // (Nothing else in the system seeds it, which previously made
+                // every platform-admin feature unreachable on a fresh install.)
+                eprintln!("  No platform admin organization yet — creating it...");
+                let pid = generate_uuid();
+                run_db_query(&format!(
+                    "INSERT INTO organizations \
+                     (pid, name, slug, is_personal, is_platform_admin, created_at, updated_at) \
+                     VALUES ('{pid}', 'Platform Admin', 'platform-admin', false, true, \
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ));
+                org_result = run_db_query(org_query).trim().to_string();
+                if org_result.is_empty() {
+                    eprintln!("Error: failed to create the platform admin organization.");
+                    std::process::exit(1);
+                }
             }
             let org_parts: Vec<&str> = org_result.split('|').collect();
             let org_id = org_parts[0];
@@ -1116,9 +1234,10 @@ fn cmd_admin(action: AdminAction) {
                     "UPDATE org_members SET role = 'owner' WHERE org_id = {org_id} AND user_id = {user_id}"
                 ));
             } else {
+                // CURRENT_TIMESTAMP is portable; datetime('now') is SQLite-only.
                 run_db_query(&format!(
                     "INSERT INTO org_members (org_id, user_id, role, created_at, updated_at) \
-                     VALUES ({org_id}, {user_id}, 'owner', datetime('now'), datetime('now'))"
+                     VALUES ({org_id}, {user_id}, 'owner', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
                 ));
             }
 
@@ -1131,7 +1250,7 @@ fn cmd_admin(action: AdminAction) {
                  FROM users u \
                  JOIN org_members om ON om.user_id = u.id \
                  JOIN organizations o ON o.id = om.org_id \
-                 WHERE o.is_platform_admin = 1 \
+                 WHERE o.is_platform_admin = true \
                  ORDER BY om.role, u.name",
             );
             let result = result.trim();

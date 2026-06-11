@@ -81,7 +81,10 @@ services:
       - OIDC_REDIRECT_URI=http://localhost:5150/api/auth/oidc/callback
       - MAILER_HOST=localhost
       - MAILER_ENABLED=true
-      - SERVER_BINDING=0.0.0.0
+      # Bind to loopback only. With network_mode: host this listener is on the
+      # host directly, so 0.0.0.0 would expose the dev app (and its devMode OIDC
+      # client) on every interface, unlike every other service here.
+      - SERVER_BINDING=127.0.0.1
     entrypoint: ["/entrypoint.sh"]
 
 volumes:
