@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::TransactionTrait;
 
 pub use super::_entities::org_invites::{ActiveModel, Column, Entity, Model};
+use super::_entities::org_members;
 use super::org_members::OrgRole;
 pub type OrgInvites = Entity;
 
@@ -115,17 +117,32 @@ impl Model {
 
         let role = OrgRole::from_str_role(&invite.role).unwrap_or(OrgRole::Member);
 
-        // Check if already a member
-        let existing =
-            super::org_members::Model::find_membership(db, invite.org_id, user_id).await?;
+        // Create the membership and mark the invite accepted in one transaction
+        // so a failure between the two steps can't leave a member with a still
+        // "pending" invite (or vice versa).
+        let txn = db.begin().await?;
+
+        let existing = org_members::Entity::find()
+            .filter(org_members::Column::OrgId.eq(invite.org_id))
+            .filter(org_members::Column::UserId.eq(user_id))
+            .one(&txn)
+            .await?;
         if existing.is_none() {
-            super::org_members::Model::add_member(db, invite.org_id, user_id, role).await?;
+            org_members::ActiveModel {
+                org_id: sea_orm::ActiveValue::Set(invite.org_id),
+                user_id: sea_orm::ActiveValue::Set(user_id),
+                role: sea_orm::ActiveValue::Set(role.to_string()),
+                ..Default::default()
+            }
+            .insert(&txn)
+            .await?;
         }
 
-        // Mark invite as accepted
         let mut active: ActiveModel = invite.into();
         active.accepted_at = sea_orm::ActiveValue::Set(Some(now.into()));
-        active.update(db).await?;
+        active.update(&txn).await?;
+
+        txn.commit().await?;
         Ok(())
     }
 }

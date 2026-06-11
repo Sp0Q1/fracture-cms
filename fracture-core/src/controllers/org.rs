@@ -4,11 +4,13 @@ use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use sea_orm::TransactionTrait;
+
 use crate::controllers::middleware;
 use crate::mailers::invite::InviteMailer;
 use crate::models::_entities::{org_members, organizations, users as users_entity};
 use crate::models::org_members::OrgRole;
-use crate::models::{org_invites, organizations as org_model};
+use crate::models::{org_invites, organizations as org_model, uploads as upload_model};
 use crate::views;
 use crate::{require_role, require_user};
 
@@ -197,18 +199,7 @@ pub async fn members(
         middleware::OrgContext::from_membership(&ctx.db, org.clone(), membership, user.id).await;
     require_role!(org_ctx, OrgRole::Viewer);
 
-    let members_list = org_members::Model::find_members(&ctx.db, org.id).await?;
-    let mut member_users: Vec<(org_members::Model, users_entity::Model)> = Vec::new();
-    for m in members_list {
-        if let Some(u) = users_entity::Entity::find_by_id(m.user_id)
-            .one(&ctx.db)
-            .await
-            .ok()
-            .flatten()
-        {
-            member_users.push((m, u));
-        }
-    }
+    let member_users = org_members::Model::find_members_with_users(&ctx.db, org.id).await?;
     let pending_invites = org_invites::Model::find_pending_by_org(&ctx.db, org.id).await?;
     let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
         .await
@@ -442,33 +433,51 @@ pub async fn delete(
             .into_response());
     }
 
-    // Delete all org members
+    let org_id = org.id;
+
+    // Capture the org's uploads up front so we can remove the on-disk files
+    // after the DB rows are gone (the rows themselves cascade with the org).
+    let org_uploads = upload_model::Model::find_by_org(&ctx.db, org_id)
+        .await
+        .unwrap_or_default();
+
+    // Perform all deletions atomically so a mid-way failure can't leave the org
+    // half-deleted (orphaned members/invites or a dangling user).
+    let txn = ctx.db.begin().await?;
+
     org_members::Entity::delete_many()
-        .filter(org_members::Column::OrgId.eq(org.id))
-        .exec(&ctx.db)
+        .filter(org_members::Column::OrgId.eq(org_id))
+        .exec(&txn)
         .await?;
-
-    // Delete all org invites
     crate::models::_entities::org_invites::Entity::delete_many()
-        .filter(crate::models::_entities::org_invites::Column::OrgId.eq(org.id))
-        .exec(&ctx.db)
+        .filter(crate::models::_entities::org_invites::Column::OrgId.eq(org_id))
+        .exec(&txn)
         .await?;
 
-    // Delete the organization itself
     let org_active: organizations::ActiveModel = org.into();
-    org_active.delete(&ctx.db).await?;
+    org_active.delete(&txn).await?;
 
-    // If personal org, also delete the user and their other memberships
+    // If personal org, also delete the user and their other memberships.
     if let Some(uid) = delete_user_id {
-        // Remove from all other orgs
         org_members::Entity::delete_many()
             .filter(org_members::Column::UserId.eq(uid))
-            .exec(&ctx.db)
+            .exec(&txn)
             .await?;
-        // Delete the user
-        if let Some(u) = users_entity::Entity::find_by_id(uid).one(&ctx.db).await? {
+        if let Some(u) = users_entity::Entity::find_by_id(uid).one(&txn).await? {
             let u_active: users_entity::ActiveModel = u.into();
-            u_active.delete(&ctx.db).await?;
+            u_active.delete(&txn).await?;
+        }
+    }
+
+    txn.commit().await?;
+
+    // Best-effort: remove the org's upload files from disk now that the rows are
+    // gone. A failure here only leaves orphaned files, never inconsistent data.
+    if !org_uploads.is_empty() {
+        if let Ok(service) = crate::controllers::uploads::get_upload_service(&ctx).await {
+            for upload in &org_uploads {
+                let _ = service.delete_file(upload).await;
+            }
         }
     }
 
