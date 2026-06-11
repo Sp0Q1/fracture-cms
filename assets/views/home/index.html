@@ -13,7 +13,9 @@
                 <h1>Welcome back, {{ user_name }}</h1>
                 <p class="page-subtitle">{% if org_name %}{{ org_name }}{% else %}Select an organization{% endif %}</p>
             </div>
+            {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
             <a href="/projects/new" class="button">New Project</a>
+            {% endif %}
         </div>
     </div>
 

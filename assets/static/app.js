@@ -9,11 +9,32 @@ document.addEventListener("DOMContentLoaded", function () {
                 var xhr = new XMLHttpRequest();
                 xhr.open("DELETE", deleteUrl, true);
                 xhr.onreadystatechange = function () {
-                    if (xhr.readyState === 4 && xhr.status === 200) {
+                    if (xhr.readyState !== 4) {
+                        return;
+                    }
+                    if (xhr.status === 200 || xhr.status === 204) {
                         window.location.href = redirectTo;
+                    } else {
+                        // Surface failures instead of silently doing nothing.
+                        alert(
+                            "Could not delete this item (error " +
+                                xhr.status +
+                                "). Please try again."
+                        );
                     }
                 };
                 xhr.send();
+            }
+        });
+    });
+
+    // Confirm before submitting a form that carries data-confirm. Without this
+    // handler such forms (e.g. the org "Danger Zone" delete) submitted with no
+    // confirmation at all.
+    document.querySelectorAll("form[data-confirm]").forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+            if (!confirm(form.getAttribute("data-confirm"))) {
+                event.preventDefault();
             }
         });
     });
@@ -32,10 +53,29 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // Clickable rows/cards: navigates to data-href on click
+    // Clickable rows/cards: navigates to data-href on click. Clicks that land on
+    // a nested interactive element (link, button, form control) are ignored so
+    // those controls keep working; rows are also keyboard-activatable.
     document.querySelectorAll("[data-href]").forEach(function (el) {
-        el.addEventListener("click", function () {
+        function navigateUnlessNested(event) {
+            if (event.target.closest("a, button, input, select, textarea, label")) {
+                return;
+            }
             window.location.href = el.getAttribute("data-href");
+        }
+        el.addEventListener("click", navigateUnlessNested);
+        // Make the row reachable and operable by keyboard.
+        if (!el.hasAttribute("tabindex")) {
+            el.setAttribute("tabindex", "0");
+        }
+        if (!el.hasAttribute("role")) {
+            el.setAttribute("role", "link");
+        }
+        el.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                window.location.href = el.getAttribute("data-href");
+            }
         });
     });
 
