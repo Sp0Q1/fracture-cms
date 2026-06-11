@@ -106,6 +106,10 @@ pub struct OidcContext {
     pub issuer_url: String,
     pub client_id: String,
     pub jwks_uri: String,
+    /// Treat a missing `email_verified` claim as verified (config opt-in for
+    /// `IdP`s that never emit the claim). An explicit `false` is still
+    /// honored.
+    pub assume_email_verified: bool,
 }
 
 #[cfg(test)]

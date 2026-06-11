@@ -46,6 +46,22 @@ impl fmt::Display for OrgRole {
     }
 }
 
+/// Why a membership write was refused (or failed).
+///
+/// Controllers map [`Self::NotFound`] and [`Self::Forbidden`] to 404 (never
+/// 403 — see the IDOR policy) and surface [`Self::LastOwner`] as a message.
+#[derive(Debug, thiserror::Error)]
+pub enum MemberWriteError {
+    #[error("membership not found")]
+    NotFound,
+    #[error("the acting role may not modify this membership")]
+    Forbidden,
+    #[error("Cannot {0} the last owner of an organization")]
+    LastOwner(&'static str),
+    #[error(transparent)]
+    Db(#[from] DbErr),
+}
+
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {}
 
@@ -80,11 +96,28 @@ impl Model {
         org_id: i32,
         user_id: i32,
     ) -> Result<Option<Self>, DbErr> {
-        Entity::find()
+        Self::find_membership_in(db, org_id, user_id, false).await
+    }
+
+    /// Finds a membership on any connection (including an open transaction).
+    /// With `lock` set, the row is locked `FOR UPDATE` on `PostgreSQL` so it
+    /// cannot change for the duration of the surrounding transaction.
+    async fn find_membership_in<C>(
+        conn: &C,
+        org_id: i32,
+        user_id: i32,
+        lock: bool,
+    ) -> Result<Option<Self>, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut query = Entity::find()
             .filter(Column::OrgId.eq(org_id))
-            .filter(Column::UserId.eq(user_id))
-            .one(db)
-            .await
+            .filter(Column::UserId.eq(user_id));
+        if lock && conn.get_database_backend() == sea_orm::DatabaseBackend::Postgres {
+            query = query.lock_exclusive();
+        }
+        query.one(conn).await
     }
 
     /// Creates a virtual (non-persisted) admin membership for platform admins
@@ -160,25 +193,37 @@ impl Model {
         .await
     }
 
-    /// Updates the role of a membership.
+    /// Updates the role of the target user's membership, on behalf of an
+    /// actor holding `actor_role`.
+    ///
+    /// The target row is re-fetched (and locked, on `PostgreSQL`) inside the
+    /// transaction, and the role ceiling — the actor must outrank or equal
+    /// both the target's current role and the granted role — is enforced
+    /// against that row. Checking against a row the controller read earlier
+    /// would race a concurrent promotion of the target.
     ///
     /// # Errors
     ///
-    /// Returns an error if demoting the last owner or if the database
-    /// operation fails.
+    /// [`MemberWriteError::NotFound`] if the membership does not exist,
+    /// [`MemberWriteError::Forbidden`] if `actor_role` is outranked, and
+    /// [`MemberWriteError::LastOwner`] when demoting the last owner.
     pub async fn update_role(
         db: &DatabaseConnection,
-        membership: Self,
+        org_id: i32,
+        target_user_id: i32,
+        actor_role: OrgRole,
         new_role: OrgRole,
-    ) -> Result<Self, DbErr> {
-        let current_role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
-        // Run the last-owner check and the write in one transaction with the
-        // owner rows locked, so two concurrent demotions can't both observe
-        // owner_count == 2 and leave the org ownerless (FOR UPDATE on Postgres;
-        // SQLite serializes writers).
+    ) -> Result<Self, MemberWriteError> {
         let txn = db.begin().await?;
+        let membership = Self::find_membership_in(&txn, org_id, target_user_id, true)
+            .await?
+            .ok_or(MemberWriteError::NotFound)?;
+        let current_role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
+        if !actor_role.at_least(current_role) || !actor_role.at_least(new_role) {
+            return Err(MemberWriteError::Forbidden);
+        }
         if current_role == OrgRole::Owner && new_role != OrgRole::Owner {
-            Self::guard_not_last_owner(&txn, membership.org_id, "demote").await?;
+            Self::guard_not_last_owner(&txn, org_id, "demote").await?;
         }
         let mut active: ActiveModel = membership.into();
         active.role = sea_orm::ActiveValue::Set(new_role.to_string());
@@ -187,9 +232,14 @@ impl Model {
         Ok(updated)
     }
 
-    /// Errors with a "last owner" message if the org has one or fewer owners.
-    /// Locks the owner rows for the duration of the surrounding transaction.
-    async fn guard_not_last_owner<C>(conn: &C, org_id: i32, action: &str) -> Result<(), DbErr>
+    /// Errors with [`MemberWriteError::LastOwner`] if the org has one or
+    /// fewer owners. Locks the owner rows for the duration of the
+    /// surrounding transaction.
+    async fn guard_not_last_owner<C>(
+        conn: &C,
+        org_id: i32,
+        action: &'static str,
+    ) -> Result<(), MemberWriteError>
     where
         C: ConnectionTrait,
     {
@@ -197,31 +247,46 @@ impl Model {
             .filter(Column::OrgId.eq(org_id))
             .filter(Column::Role.eq("owner"));
         // `FOR UPDATE` row locking is only meaningful (and only valid SQL) on
-        // PostgreSQL. SQLite has no row locks — its single-writer transaction
-        // model already serializes the count-then-write within this txn.
+        // PostgreSQL — racing demotions block here and re-read committed
+        // state. On SQLite, WAL snapshot isolation makes the second of two
+        // racing demotions fail its first write with SQLITE_BUSY_SNAPSHOT
+        // instead of committing: a spurious error for that request, but the
+        // org can never be left ownerless.
         if conn.get_database_backend() == sea_orm::DatabaseBackend::Postgres {
             query = query.lock_exclusive();
         }
         let owners = query.all(conn).await?;
         if owners.len() <= 1 {
-            return Err(DbErr::Custom(format!(
-                "Cannot {action} the last owner of an organization"
-            )));
+            return Err(MemberWriteError::LastOwner(action));
         }
         Ok(())
     }
 
-    /// Removes a member from an organization.
+    /// Removes the target user's membership, on behalf of an actor holding
+    /// `actor_role`. See [`Self::update_role`] for why the target row is
+    /// re-fetched inside the transaction.
     ///
     /// # Errors
     ///
-    /// Returns an error if the member is the last owner or the database
-    /// operation fails.
-    pub async fn remove_member(db: &DatabaseConnection, membership: Self) -> Result<(), DbErr> {
-        let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
+    /// [`MemberWriteError::NotFound`] if the membership does not exist,
+    /// [`MemberWriteError::Forbidden`] if `actor_role` is outranked, and
+    /// [`MemberWriteError::LastOwner`] when removing the last owner.
+    pub async fn remove_member(
+        db: &DatabaseConnection,
+        org_id: i32,
+        target_user_id: i32,
+        actor_role: OrgRole,
+    ) -> Result<(), MemberWriteError> {
         let txn = db.begin().await?;
+        let membership = Self::find_membership_in(&txn, org_id, target_user_id, true)
+            .await?
+            .ok_or(MemberWriteError::NotFound)?;
+        let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
+        if !actor_role.at_least(role) {
+            return Err(MemberWriteError::Forbidden);
+        }
         if role == OrgRole::Owner {
-            Self::guard_not_last_owner(&txn, membership.org_id, "remove").await?;
+            Self::guard_not_last_owner(&txn, org_id, "remove").await?;
         }
         membership.delete(&txn).await?;
         txn.commit().await?;

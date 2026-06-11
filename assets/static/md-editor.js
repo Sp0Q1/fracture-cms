@@ -32,11 +32,19 @@
         var start = textarea.selectionStart;
         var end = textarea.selectionEnd;
         var value = textarea.value;
-        var lineStart = value.lastIndexOf("\n", start - 1) + 1;
+        // lastIndexOf with fromIndex -1 clamps to 0 and can still match a
+        // leading "\n", which would put lineStart past the caret.
+        var lineStart = start > 0 ? value.lastIndexOf("\n", start - 1) + 1 : 0;
         var block = value.slice(lineStart, end);
-        var updated = block
-            .split("\n")
-            .map(function (line) {
+        var lines = block.split("\n");
+        var updated = lines
+            .map(function (line, i) {
+                // A selection ending just past a newline yields a trailing
+                // empty segment; prefixing it would mark the next, unselected
+                // line.
+                if (i > 0 && i === lines.length - 1 && line === "") {
+                    return line;
+                }
                 return prefix + line;
             })
             .join("\n");

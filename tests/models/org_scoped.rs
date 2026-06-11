@@ -10,7 +10,7 @@ use fracture_cms::{
     },
 };
 use loco_rs::testing::prelude::*;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serial_test::serial;
 
 async fn create_test_user(db: &sea_orm::DatabaseConnection, suffix: &str) -> users::Model {

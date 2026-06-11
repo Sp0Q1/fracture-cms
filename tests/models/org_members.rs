@@ -103,13 +103,10 @@ async fn test_update_role() {
         .await
         .unwrap();
 
-    let membership = org_members::Model::find_membership(db, org.id, user2.id)
-        .await
-        .unwrap()
-        .unwrap();
-    let updated = org_members::Model::update_role(db, membership, OrgRole::Admin)
-        .await
-        .unwrap();
+    let updated =
+        org_members::Model::update_role(db, org.id, user2.id, OrgRole::Owner, OrgRole::Admin)
+            .await
+            .unwrap();
     assert_eq!(updated.role, "admin");
 }
 
@@ -125,14 +122,9 @@ async fn test_cannot_remove_last_owner() {
         .unwrap();
     let org = &orgs[0];
 
-    let membership = org_members::Model::find_membership(db, org.id, user.id)
-        .await
-        .unwrap()
-        .unwrap();
-
-    let result = org_members::Model::remove_member(db, membership).await;
+    let result = org_members::Model::remove_member(db, org.id, user.id, OrgRole::Owner).await;
     assert!(
-        result.is_err(),
+        matches!(result, Err(org_members::MemberWriteError::LastOwner(_))),
         "Should not be able to remove the last owner"
     );
 }
@@ -157,11 +149,7 @@ async fn test_can_remove_non_last_owner() {
         .unwrap();
 
     // Now user1 can be removed (user2 is still owner)
-    let membership = org_members::Model::find_membership(db, org.id, user1.id)
-        .await
-        .unwrap()
-        .unwrap();
-    let result = org_members::Model::remove_member(db, membership).await;
+    let result = org_members::Model::remove_member(db, org.id, user1.id, OrgRole::Owner).await;
     assert!(
         result.is_ok(),
         "Should be able to remove owner when another owner exists"
@@ -210,9 +198,10 @@ async fn test_cannot_demote_last_owner() {
 
     // Demoting the only owner to admin should be rejected to prevent
     // an org from having zero owners.
-    let result = org_members::Model::update_role(db, membership, OrgRole::Admin).await;
+    let result =
+        org_members::Model::update_role(db, org.id, user.id, OrgRole::Owner, OrgRole::Admin).await;
     assert!(
-        result.is_err(),
+        matches!(result, Err(org_members::MemberWriteError::LastOwner(_))),
         "update_role should prevent demoting the last owner"
     );
 }
@@ -262,11 +251,7 @@ async fn test_remove_non_owner_member() {
         .await
         .unwrap();
 
-    let membership = org_members::Model::find_membership(db, org.id, user2.id)
-        .await
-        .unwrap()
-        .unwrap();
-    let result = org_members::Model::remove_member(db, membership).await;
+    let result = org_members::Model::remove_member(db, org.id, user2.id, OrgRole::Admin).await;
     assert!(
         result.is_ok(),
         "Should be able to remove a non-owner member"
@@ -277,4 +262,95 @@ async fn test_remove_non_owner_member() {
         .await
         .unwrap();
     assert!(gone.is_none());
+}
+
+#[tokio::test]
+#[serial]
+async fn test_admin_cannot_remove_owner() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user1 = create_test_user(db, "ceilrm1").await;
+    let user2 = create_test_user(db, "ceilrm2").await;
+
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
+    let org = &orgs[0];
+
+    org_members::Model::add_member(db, org.id, user2.id, OrgRole::Owner)
+        .await
+        .unwrap();
+
+    // An Admin actor must not be able to evict an Owner, even though two
+    // owners exist (the last-owner guard alone would allow it).
+    let result = org_members::Model::remove_member(db, org.id, user2.id, OrgRole::Admin).await;
+    assert!(
+        matches!(result, Err(org_members::MemberWriteError::Forbidden)),
+        "an admin must not remove an owner"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_admin_cannot_grant_or_revoke_owner() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user1 = create_test_user(db, "ceilrole1").await;
+    let user2 = create_test_user(db, "ceilrole2").await;
+    let user3 = create_test_user(db, "ceilrole3").await;
+
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
+    let org = &orgs[0];
+
+    org_members::Model::add_member(db, org.id, user2.id, OrgRole::Member)
+        .await
+        .unwrap();
+    org_members::Model::add_member(db, org.id, user3.id, OrgRole::Owner)
+        .await
+        .unwrap();
+
+    // Granting a role above the actor's own rank is refused...
+    let result =
+        org_members::Model::update_role(db, org.id, user2.id, OrgRole::Admin, OrgRole::Owner).await;
+    assert!(
+        matches!(result, Err(org_members::MemberWriteError::Forbidden)),
+        "an admin must not grant the owner role"
+    );
+
+    // ...and so is touching a member who outranks the actor.
+    let result =
+        org_members::Model::update_role(db, org.id, user3.id, OrgRole::Admin, OrgRole::Member)
+            .await;
+    assert!(
+        matches!(result, Err(org_members::MemberWriteError::Forbidden)),
+        "an admin must not demote an owner"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_update_role_missing_membership_is_not_found() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    let user1 = create_test_user(db, "missing1").await;
+    let user2 = create_test_user(db, "missing2").await;
+
+    let orgs = organizations::Model::find_orgs_for_user(db, user1.id)
+        .await
+        .unwrap();
+    let org = &orgs[0];
+
+    // user2 is not a member of user1's org.
+    let result =
+        org_members::Model::update_role(db, org.id, user2.id, OrgRole::Owner, OrgRole::Member)
+            .await;
+    assert!(
+        matches!(result, Err(org_members::MemberWriteError::NotFound)),
+        "updating a non-member must be NotFound"
+    );
 }
