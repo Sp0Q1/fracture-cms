@@ -42,6 +42,10 @@ mailer:
 # safer than silently falling back to no auth. Override via OIDC_REQUIRED=false
 # only for one-shot debug starts; never run a public deployment without it.
 settings:
+  # Background job runner (executes queued job_runs, evaluates cron schedules).
+  jobs:
+    enabled: {{ get_env(name="JOBS_RUNNER_ENABLED", default="true") }}
+    poll_interval_seconds: {{ get_env(name="JOBS_POLL_INTERVAL_SECONDS", default="15") }}
   oidc:
     required: {{ get_env(name="OIDC_REQUIRED", default="true") }}
     provider_name: {{ get_env(name="OIDC_PROVIDER_NAME", default="oidc") }}
@@ -51,6 +55,12 @@ settings:
     project_id: "{{ get_env(name='OIDC_PROJECT_ID', default='') }}"
     redirect_uri: {{ get_env(name="OIDC_REDIRECT_URI", default="http://localhost:5150/api/auth/oidc/callback") }}
     post_logout_redirect_uri: {{ get_env(name="OIDC_POST_LOGOUT_REDIRECT_URI", default="http://localhost:5150") }}
+    # Treat a MISSING email_verified claim as verified. Only enable for IdPs
+    # that are known to release only verified emails but never emit the claim
+    # (e.g. some Azure AD / SAML-bridge setups); without it, users of such
+    # IdPs cannot link accounts or auto-accept invites. An explicit
+    # email_verified=false from the IdP is always honored.
+    assume_email_verified: {{ get_env(name="OIDC_ASSUME_EMAIL_VERIFIED", default="false") }}
     scopes:
       - openid
       - email

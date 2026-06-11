@@ -37,7 +37,11 @@ Core templates are embedded in the `fracture-core` binary. The app's `view_engin
 3. Provider redirects back with authorization code
 4. Server exchanges code for ID token, verifies JWT signature against JWKS
 5. `find_or_create_from_oidc()` either finds existing user or creates new one
-6. On new user creation: personal org created, pending invites auto-accepted
+6. On new user creation: personal org created; pending invites are
+   auto-accepted **only when the IdP asserted `email_verified`** (or the
+   operator set `assume_email_verified` for IdPs that omit the claim).
+   Linking OIDC to an existing email-matched account requires the same
+   assertion — an unverified email is refused to prevent account takeover.
 7. JWT session cookie set (HTTP-only, SameSite=Lax)
 8. `org_pid` cookie set to user's first org
 
@@ -63,6 +67,15 @@ Owner > Admin > Member > Viewer
 | Owner   | Yes  | Yes               | Yes            | Yes          |
 
 Implemented via `OrgRole` enum with `PartialOrd` and `at_least()` method.
+
+Membership writes enforce a **role ceiling at the model layer**:
+`org_members::Model::update_role` / `remove_member` take the actor's role and
+refuse (as `MemberWriteError::Forbidden`) any change where the actor does not
+outrank-or-equal both the target's current role and the granted role. The
+check runs inside the write transaction against a freshly fetched (and, on
+PostgreSQL, row-locked) membership, so a concurrent promotion of the target
+cannot slip past a stale controller-side check. The same transaction guards
+against demoting or removing an org's last owner.
 
 ## Data Access Patterns
 
@@ -255,13 +268,14 @@ Blog admin templates use `data-md-editor` on the body textarea. The consuming ap
 
 ## Generic Jobs System
 
-The jobs system provides a framework for defining, scheduling, and executing background tasks with diff tracking. fracture-core provides the infrastructure; consuming apps implement `JobExecutor` for their specific job types.
+The jobs system provides a framework for defining, scheduling, and executing background tasks with diff tracking. fracture-core provides the infrastructure — including the runner that actually executes queued runs; consuming apps implement `JobExecutor` for their specific job types and wire two startup hooks (see "Wiring" below).
 
 ### Architecture
 
 ```
 fracture-core/src/jobs/
   mod.rs          # JobExecutor trait, JobRegistry, JobResult, JobDiff
+  runner.rs       # JobRunnerInitializer + the execution/scheduling loop
 ```
 
 **`JobExecutor` trait**: Apps implement this to define job behavior:
@@ -282,6 +296,38 @@ pub trait JobExecutor: Send + Sync {
 **`JobRegistry`**: A global `OnceLock`-backed registry. Apps call `init_job_registry()` at startup with their registered executors. The registry maps `job_type` strings to executor instances.
 
 **`JobResult`**: Returned by executors. Contains a JSON `summary` and a vec of `JobDiff` entries (type, entity key, old/new values).
+
+### Execution lifecycle (the runner)
+
+`jobs::runner::JobRunnerInitializer` spawns a polling loop (default every 15s, configurable). Each tick:
+
+1. **Scheduling** — every enabled definition with a `schedule` (cron expression *with a seconds field*, e.g. `0 0 * * * *` for hourly) gets a run enqueued when an occurrence has passed since its last run. A never-run scheduled definition is due immediately. A definition with a queued/running run is skipped, so slow jobs can't pile up a backlog.
+2. **Execution** — queued runs are claimed oldest-first with an atomic compare-and-swap (`UPDATE … WHERE status = 'queued'`), transitioning them `queued → running` (stamping `started_at`). The matching `JobExecutor` runs with the definition and the previous *completed* run; on success the run is marked `completed` with `result_summary` and its diffs persisted to `job_run_diffs`; on error it is marked `failed` with `error_message`. Runs whose definition was deleted, disabled, or has no registered executor fail with a descriptive error instead of executing (or sitting queued forever).
+
+Executors must return `Err` on failure, never panic — a panic kills the runner task until restart.
+
+### Wiring (consuming apps)
+
+```rust
+// 1. Register executors (in Hooks::routes(), before initializers run):
+fracture_core::jobs::init_job_registry(my_registry());
+
+// 2. Add the runner (in Hooks::initializers()):
+Box::new(fracture_core::jobs::runner::JobRunnerInitializer)
+```
+
+Settings (`config/*.yaml`):
+
+```yaml
+settings:
+  jobs:
+    enabled: true              # default true; set false in test configs
+    poll_interval_seconds: 15  # default 15
+```
+
+### Authorization
+
+Viewing jobs and runs requires org membership (Viewer+). Triggering a run requires Member+. Creating a definition (`POST /jobs`, validated against registered job types and cron syntax) and enabling/disabling (`POST /jobs/{pid}/toggle`) require Admin+. Platform admins can additionally open any org's definitions read-only from `/admin/jobs`.
 
 ### Tables
 
@@ -324,9 +370,11 @@ pub trait JobExecutor: Send + Sync {
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/jobs` | Authenticated | List job definitions for current org |
+| GET | `/jobs` | Authenticated | List job definitions + last-run status for current org |
+| POST | `/jobs` | Org admin | Create a definition (validates job type, cron, JSON config) |
 | GET | `/jobs/{pid}` | Authenticated | Show definition + runs |
-| POST | `/jobs/{pid}/run` | Authenticated | Trigger a new queued run |
+| POST | `/jobs/{pid}/toggle` | Org admin | Enable/disable a definition |
+| POST | `/jobs/{pid}/run` | Org member | Trigger a queued run (no-op while one is active) |
 | GET | `/jobs/{pid}/runs/{run_pid}` | Authenticated | Show a run + its diffs |
 | GET | `/admin/jobs` | Platform admin | List all definitions across all orgs |
 
@@ -345,7 +393,7 @@ This applies to all core template directories: `org/`, `blog/`, `jobs/`, etc. Ap
 3. `InviteMailer::send_invite()` sends an email via the background worker (SMTP)
 4. Accept link is shown on the members page for the creator to copy/share
 5. Existing users accept at `/invites/{token}/accept` → membership created
-6. New users: `find_or_create_from_oidc()` calls `find_pending_by_email()` and auto-accepts matching invites on first login
+6. New users: `find_or_create_from_oidc()` calls `find_pending_by_email()` and auto-accepts matching invites on first login — only when the login's email is verified (IdP `email_verified` claim, or the `assume_email_verified` config opt-in for IdPs that never emit it). Unverified signups keep their invites pending.
 
 Emails are sent asynchronously via Loco's `MailerWorker` background queue. In development, MailCrab catches all outbound email at `http://localhost:1080`.
 

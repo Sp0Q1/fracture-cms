@@ -1,3 +1,4 @@
+mod jobs;
 mod notes;
 mod org_invites;
 mod org_members;

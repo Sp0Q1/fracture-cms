@@ -23,8 +23,8 @@
                 <th>Organization</th>
                 <th>Type</th>
                 <th>Schedule</th>
-                <th>Created</th>
                 <th>Enabled</th>
+                <th>Last Run</th>
             </tr>
         </thead>
         <tbody>
@@ -34,12 +34,19 @@
                 <td>{{ def.org_name }}</td>
                 <td>{{ def.job_type }}</td>
                 <td>{{ def.schedule | default(value="Manual") }}</td>
-                <td>{{ def.created_at | truncate(length=16, end="") }}</td>
                 <td>
                     {% if def.enabled %}
                         <span class="badge success">Yes</span>
                     {% else %}
                         <span class="badge">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if def.latest_run %}
+                        <span class="badge job-status-{{ def.latest_run.status }}">{{ def.latest_run.status }}</span>
+                        {{ def.latest_run.created_at | truncate(length=16, end="") }}
+                    {% else %}
+                        <span class="badge">never run</span>
                     {% endif %}
                 </td>
             </tr>

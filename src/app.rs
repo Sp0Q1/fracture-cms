@@ -53,6 +53,7 @@ impl Hooks for App {
             Box::new(initializers::view_engine::TemplateInitializer),
             Box::new(initializers::oidc::OidcInitializer),
             Box::new(initializers::security_headers::SecurityHeadersInitializer),
+            Box::new(fracture_core::jobs::runner::JobRunnerInitializer),
         ])
     }
 
@@ -60,6 +61,7 @@ impl Hooks for App {
         fracture_core::entity_registry::init_entity_registry(
             fracture_core::entity_registry::default_entity_registry(),
         );
+        fracture_core::jobs::init_job_registry(crate::jobs::build_registry());
         AppRoutes::with_default_routes() // controller routes below
             .add_route(controllers::home::routes())
             .add_route(controllers::org::routes())
