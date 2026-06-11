@@ -436,6 +436,14 @@ nav[data-topnav] a[aria-current="page"] {
     font-weight: 500;
 }
 
+/* Multi-line free text (e.g. note bodies): preserve the author's line breaks
+   instead of collapsing them into a single line. */
+.detail-value-multiline {
+    display: block;
+    white-space: pre-wrap;
+    font-weight: 500;
+}
+
 /* --- Trust/Tech Badges --- */
 .trust-section {
     text-align: center;

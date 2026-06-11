@@ -71,6 +71,7 @@ impl Hooks for App {
             .add_route(controllers::jobs::org_routes())
             .add_route(controllers::jobs::admin_routes())
             .add_route(controllers::admin::routes())
+            .add_route(controllers::uploads::routes())
             .add_route(controllers::oidc::routes())
     }
     async fn after_routes(router: AxumRouter, _ctx: &AppContext) -> Result<AxumRouter> {
