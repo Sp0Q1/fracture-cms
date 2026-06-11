@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use loco_rs::prelude::*;
 use serde_json::json;
 
@@ -44,7 +46,8 @@ pub fn public_index(
     )
 }
 
-/// Renders a single published blog post.
+/// Renders a single blog post with the public template. `preview` shows the
+/// draft-preview banner (admin preview of unpublished posts).
 ///
 /// # Errors
 ///
@@ -54,6 +57,7 @@ pub fn public_show(
     post: &blog_posts::Model,
     author_name: &str,
     base_url: &str,
+    preview: bool,
 ) -> Result<Response> {
     let post_data = post_json(post);
     format::render().view(
@@ -63,7 +67,61 @@ pub fn public_show(
             "post": post_data,
             "author_name": author_name,
             "base_url": base_url,
+            "preview": preview,
         }),
+    )
+}
+
+/// Minimal XML text escaping for the Atom feed.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+/// Builds an Atom feed document for the published posts (newest first).
+#[must_use]
+pub fn atom_feed(posts: &[blog_posts::Model], base_url: &str) -> String {
+    let feed_updated = posts
+        .iter()
+        .filter_map(|p| p.published_at)
+        .max()
+        .map_or_else(|| chrono::Utc::now().to_rfc3339(), |d| d.to_rfc3339());
+    let mut entries = String::new();
+    for post in posts {
+        let url = format!("{base_url}/blog/{}", post.slug);
+        let updated = post
+            .published_at
+            .map_or_else(|| post.updated_at.to_rfc3339(), |d| d.to_rfc3339());
+        let summary = post.excerpt.as_deref().map_or_else(String::new, |e| {
+            format!("\n    <summary>{}</summary>", xml_escape(e))
+        });
+        let _ = write!(
+            entries,
+            r#"  <entry>
+    <title>{title}</title>
+    <id>{url}</id>
+    <link rel="alternate" type="text/html" href="{url}"/>
+    <updated>{updated}</updated>{summary}
+    <content type="html">{content}</content>
+  </entry>
+"#,
+            title = xml_escape(&post.title),
+            content = xml_escape(&post.body_html),
+        );
+    }
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Blog</title>
+  <id>{base_url}/blog</id>
+  <link rel="alternate" type="text/html" href="{base_url}/blog"/>
+  <link rel="self" type="application/atom+xml" href="{base_url}/blog/feed.xml"/>
+  <updated>{feed_updated}</updated>
+{entries}</feed>
+"#
     )
 }
 

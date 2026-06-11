@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "public_base.html" %}
 
 {% block title %}{{ post.meta_title | default(value=post.title) }} — Fracture CMS{% endblock title %}
 
@@ -33,6 +33,12 @@
 {% endblock structured_data %}
 
 {% block content %}
+{% if preview %}
+<article class="card">
+    <p><strong>Draft preview</strong> — this post is not published; only platform admins can see this page.
+    <a href="/admin/blog">Back to blog admin</a></p>
+</article>
+{% endif %}
 <article class="blog-post">
     <div class="page-header">
         <h1>{{ post.title }}</h1>

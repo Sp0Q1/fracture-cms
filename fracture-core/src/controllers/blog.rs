@@ -21,12 +21,30 @@ pub struct BlogPostParams {
 }
 
 /// Resolves the blog org from the config setting `settings.blog.org_slug`.
-async fn resolve_blog_org(ctx: &AppContext) -> Option<organizations::Model> {
-    let slug = blog_model::Model::get_blog_org_slug(&ctx.config)?;
-    org_model::Model::find_by_slug(&ctx.db, &slug)
-        .await
-        .ok()
-        .flatten()
+/// `Ok(None)` means the blog is not configured; database errors propagate
+/// instead of silently rendering an empty blog.
+async fn resolve_blog_org(ctx: &AppContext) -> Result<Option<organizations::Model>> {
+    let Some(slug) = blog_model::Model::get_blog_org_slug(&ctx.config) else {
+        return Ok(None);
+    };
+    Ok(org_model::Model::find_by_slug(&ctx.db, &slug).await?)
+}
+
+/// Resolves the blog org for admin mutations, failing loudly when unset.
+async fn require_blog_org(ctx: &AppContext) -> Result<organizations::Model> {
+    resolve_blog_org(ctx)
+        .await?
+        .ok_or_else(|| Error::Message("Blog org not configured".to_string()))
+}
+
+/// Marks a public response cacheable: these pages carry no session state and
+/// are identical for every visitor.
+fn cache_public(mut res: Response, max_age_secs: u32) -> Response {
+    if let Ok(value) = format!("public, max-age={max_age_secs}").parse() {
+        res.headers_mut()
+            .insert(axum::http::header::CACHE_CONTROL, value);
+    }
+    res
 }
 
 /// GET /blog/ — public blog index (no auth required)
@@ -39,13 +57,34 @@ pub async fn public_index(
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
 ) -> Result<Response> {
-    let org = resolve_blog_org(&ctx).await;
+    let org = resolve_blog_org(&ctx).await?;
     let posts = match org {
         Some(ref o) => blog_model::Model::find_published_by_org(&ctx.db, o.id).await?,
         None => vec![],
     };
     let base_url = ctx.config.server.host.clone();
-    views::blog::public_index(&v, &posts, &base_url)
+    views::blog::public_index(&v, &posts, &base_url).map(|res| cache_public(res, 60))
+}
+
+/// GET /blog/feed.xml — Atom feed of published posts (no auth required)
+///
+/// # Errors
+///
+/// Returns an error if the database query fails.
+#[debug_handler]
+pub async fn public_feed(State(ctx): State<AppContext>) -> Result<Response> {
+    let org = resolve_blog_org(&ctx).await?;
+    let posts = match org {
+        Some(ref o) => blog_model::Model::find_published_by_org(&ctx.db, o.id).await?,
+        None => vec![],
+    };
+    let base_url = ctx.config.server.host.clone();
+    let xml = views::blog::atom_feed(&posts, &base_url);
+    let res = Response::builder()
+        .header("content-type", "application/atom+xml; charset=utf-8")
+        .body(axum::body::Body::from(xml))
+        .map_err(|e| Error::Message(format!("feed response: {e}")))?;
+    Ok(cache_public(res.into_response(), 300))
 }
 
 /// GET /blog/:slug — public blog post (no auth required)
@@ -60,19 +99,18 @@ pub async fn public_show(
     State(ctx): State<AppContext>,
 ) -> Result<Response> {
     let org = resolve_blog_org(&ctx)
-        .await
+        .await?
         .ok_or_else(|| Error::NotFound)?;
     let post = blog_model::Model::find_published_by_slug(&ctx.db, org.id, &slug)
         .await?
         .ok_or_else(|| Error::NotFound)?;
     let author = users_entity::Entity::find_by_id(post.author_id)
         .one(&ctx.db)
-        .await
-        .ok()
-        .flatten();
+        .await?;
     let author_name = author.map_or_else(|| "Unknown".to_string(), |a| a.name);
     let base_url = ctx.config.server.host.clone();
-    views::blog::public_show(&v, &post, &author_name, &base_url)
+    views::blog::public_show(&v, &post, &author_name, &base_url, false)
+        .map(|res| cache_public(res, 60))
 }
 
 /// GET /admin/blog/ — admin blog post list
@@ -94,7 +132,7 @@ pub async fn admin_index(
         .await
         .unwrap_or_default();
 
-    let blog_org = resolve_blog_org(&ctx).await;
+    let blog_org = resolve_blog_org(&ctx).await?;
     let posts = match blog_org {
         Some(ref o) => blog_model::Model::find_all_by_org(&ctx.db, o.id).await?,
         None => vec![],
@@ -139,9 +177,7 @@ pub async fn admin_create(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
 
-    let blog_org = resolve_blog_org(&ctx)
-        .await
-        .ok_or_else(|| Error::Message("Blog org not configured".to_string()))?;
+    let blog_org = require_blog_org(&ctx).await?;
 
     // Generate slug from title if not provided
     let base_slug = if let Some(ref s) = params.slug {
@@ -206,7 +242,8 @@ pub async fn admin_edit(
         .await
         .unwrap_or_default();
 
-    let post = blog_model::Model::find_by_pid(&ctx.db, &pid)
+    let blog_org = require_blog_org(&ctx).await?;
+    let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
     views::blog::admin_edit(&v, &user, org_ctx.as_ref(), &user_orgs, &post)
@@ -229,7 +266,8 @@ pub async fn admin_update(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
 
-    let post = blog_model::Model::find_by_pid(&ctx.db, &pid)
+    let blog_org = require_blog_org(&ctx).await?;
+    let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
 
@@ -261,13 +299,19 @@ pub async fn admin_publish(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
 
-    let post = blog_model::Model::find_by_pid(&ctx.db, &pid)
+    let blog_org = require_blog_org(&ctx).await?;
+    let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
 
+    // The first publication date is the post's permanent date — republishing
+    // after a temporary unpublish must not bump it (feed/order stability).
+    let first_published = post.published_at;
     let mut active: blog_posts::ActiveModel = post.into();
     active.status = sea_orm::ActiveValue::Set("published".to_string());
-    active.published_at = sea_orm::ActiveValue::Set(Some(chrono::Utc::now().into()));
+    if first_published.is_none() {
+        active.published_at = sea_orm::ActiveValue::Set(Some(chrono::Utc::now().into()));
+    }
     active.update(&ctx.db).await?;
 
     Ok(Redirect::to("/admin/blog").into_response())
@@ -289,14 +333,72 @@ pub async fn admin_unpublish(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     require_platform_admin!(org_ctx);
 
-    let post = blog_model::Model::find_by_pid(&ctx.db, &pid)
+    let blog_org = require_blog_org(&ctx).await?;
+    let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
 
+    // Only the status changes; published_at stays as the first publication
+    // date so republishing doesn't reorder the blog or the feed.
     let mut active: blog_posts::ActiveModel = post.into();
     active.status = sea_orm::ActiveValue::Set("draft".to_string());
-    active.published_at = sea_orm::ActiveValue::Set(None);
     active.update(&ctx.db).await?;
+
+    Ok(Redirect::to("/admin/blog").into_response())
+}
+
+/// GET /admin/blog/:pid/preview — render a post (any status) with the public
+/// template, marked as a preview.
+///
+/// # Errors
+///
+/// Returns an error if the post is not found or the user is not a platform admin.
+#[debug_handler]
+pub async fn admin_preview(
+    Path(pid): Path<String>,
+    ViewEngine(v): ViewEngine<TeraView>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+    require_platform_admin!(org_ctx);
+
+    let blog_org = require_blog_org(&ctx).await?;
+    let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
+        .await?
+        .ok_or_else(|| Error::NotFound)?;
+    let author = users_entity::Entity::find_by_id(post.author_id)
+        .one(&ctx.db)
+        .await?;
+    let author_name = author.map_or_else(|| "Unknown".to_string(), |a| a.name);
+    let base_url = ctx.config.server.host.clone();
+    views::blog::public_show(&v, &post, &author_name, &base_url, true)
+}
+
+/// POST /admin/blog/:pid/delete — permanently delete a blog post.
+///
+/// # Errors
+///
+/// Returns an error if the post is not found or the user is not a platform admin.
+#[debug_handler]
+pub async fn admin_delete(
+    Path(pid): Path<String>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+    require_platform_admin!(org_ctx);
+
+    let blog_org = require_blog_org(&ctx).await?;
+    let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
+        .await?
+        .ok_or_else(|| Error::NotFound)?;
+    let active: blog_posts::ActiveModel = post.into();
+    active.delete(&ctx.db).await?;
 
     Ok(Redirect::to("/admin/blog").into_response())
 }
@@ -305,6 +407,7 @@ pub fn public_routes() -> Routes {
     Routes::new()
         .prefix("/blog")
         .add("/", get(public_index))
+        .add("/feed.xml", get(public_feed))
         .add("/{slug}", get(public_show))
 }
 
@@ -318,4 +421,6 @@ pub fn admin_routes() -> Routes {
         .add("/{pid}", post(admin_update))
         .add("/{pid}/publish", post(admin_publish))
         .add("/{pid}/unpublish", post(admin_unpublish))
+        .add("/{pid}/preview", get(admin_preview))
+        .add("/{pid}/delete", post(admin_delete))
 }

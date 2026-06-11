@@ -23,17 +23,20 @@ pub fn register_templates(tera: &mut tera::Tera) -> Result<(), tera::Error> {
     let Ok(entries) = TEMPLATES.find("**/*.html") else {
         return Ok(());
     };
-    for entry in entries {
-        if let Some(file) = entry.as_file() {
-            let Some(path) = file.path().to_str() else {
+    // Parents must be registered before the templates that extend them
+    // (add_raw_template validates inheritance immediately), so register
+    // root-level layouts like public_base.html first.
+    let mut files: Vec<_> = entries.filter_map(|e| e.as_file()).collect();
+    files.sort_by_key(|f| f.path().components().count());
+    for file in files {
+        let Some(path) = file.path().to_str() else {
+            continue;
+        };
+        if tera.get_template(path).is_err() {
+            let Some(contents) = file.contents_utf8() else {
                 continue;
             };
-            if tera.get_template(path).is_err() {
-                let Some(contents) = file.contents_utf8() else {
-                    continue;
-                };
-                tera.add_raw_template(path, contents)?;
-            }
+            tera.add_raw_template(path, contents)?;
         }
     }
     Ok(())

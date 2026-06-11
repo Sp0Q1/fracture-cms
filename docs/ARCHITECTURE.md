@@ -226,24 +226,31 @@ Set `settings.blog.org_slug` in the Loco YAML config to the slug of the organiza
 
 ### Architecture
 
-- **Model (`blog_posts.rs`)**: Markdown body is rendered to HTML via comrak (GFM extensions: tables, strikethrough, autolinks, task lists) in `before_save`. Both `body` (Markdown source) and `body_html` (rendered) are stored.
-- **Controller (`blog.rs`)**: Public routes (no auth) for the blog index and post pages. Admin routes (platform admin only) for CRUD and publish/unpublish.
-- **Views (`views/blog.rs`)**: Tera view helpers for both public and admin templates.
-- **Templates**: `fracture-core/templates/blog/` contains admin templates (list, new, edit). Public templates are provided by the consuming app.
+- **Model (`blog_posts.rs`)**: Markdown body is rendered to HTML via comrak (GFM extensions: tables, strikethrough, autolinks, task lists) in `before_save`, with `render.unsafe = false` so raw HTML in the source never reaches the page. Both `body` (Markdown source) and `body_html` (rendered) are stored. Admin mutations resolve posts via `find_by_pid_and_org` against the blog org.
+- **Controller (`blog.rs`)**: Public routes (no auth, marked `Cache-Control: public` — they carry no session state) for the blog index, posts, and the Atom feed. Admin routes (platform admin only) for CRUD, publish/unpublish, draft preview, and delete. `published_at` is the *first* publication date: unpublish keeps it and republish does not re-stamp it, so the blog and feed order stay stable.
+- **Views (`views/blog.rs`)**: Tera view helpers plus the Atom feed builder (hand-escaped XML).
+- **Templates**: `fracture-core/templates/blog/` contains both the public templates (which extend the public layout, see below) and the admin templates (which extend the app layout). All are overridable by the consuming app.
+
+### Public vs. app layout
+
+Public pages (blog, landing/sales pages) render with `public_base.html` — a marketing layout with no session state, no org chrome, and no JavaScript; every visitor gets identical bytes, which is what makes the cache headers safe. Authenticated pages render with `base.html` (app chrome: org switcher, account menu, session refresh). fracture-core embeds a default `public_base.html`; apps override it by shipping their own at `assets/views/public_base.html` — note that app-side templates which extend it (e.g. a landing page) *require* the app-side copy, because the app's Tera instance loads `assets/views` before core templates register.
 
 ### Routes
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/blog/` | Public | Blog index (published posts) |
+| GET | `/blog/` | Public | Blog index (published posts, cacheable) |
+| GET | `/blog/feed.xml` | Public | Atom feed of published posts |
 | GET | `/blog/{slug}` | Public | Single post by slug |
 | GET | `/admin/blog/` | Platform admin | Admin post list (all statuses) |
 | GET | `/admin/blog/new` | Platform admin | New post form |
 | POST | `/admin/blog/` | Platform admin | Create post |
 | GET | `/admin/blog/{pid}/edit` | Platform admin | Edit post form |
 | POST | `/admin/blog/{pid}` | Platform admin | Update post |
-| POST | `/admin/blog/{pid}/publish` | Platform admin | Set status to "published" |
-| POST | `/admin/blog/{pid}/unpublish` | Platform admin | Set status to "draft" |
+| POST | `/admin/blog/{pid}/publish` | Platform admin | Publish (first publish stamps `published_at`) |
+| POST | `/admin/blog/{pid}/unpublish` | Platform admin | Set status to "draft" (keeps `published_at`) |
+| GET | `/admin/blog/{pid}/preview` | Platform admin | Render any status with the public template |
+| POST | `/admin/blog/{pid}/delete` | Platform admin | Permanently delete |
 
 ### Markdown Editor
 

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+{# Marketing/public layout: no session state, no org chrome, no JavaScript.
+   Pages rendered with this layout are identical for every visitor, so they
+   are safe to cache. Apps override it by placing their own
+   assets/views/public_base.html. #}
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="{% block meta_description %}{% endblock meta_description %}">
+  <title>{% block title %}{% endblock title %}</title>
+  {% block canonical %}{% endblock canonical %}
+  {% block og_tags %}{% endblock og_tags %}
+  {% block structured_data %}{% endblock structured_data %}
+  <link rel="alternate" type="application/atom+xml" title="Blog" href="/blog/feed.xml">
+  <link rel="stylesheet" href="/static/oat.min.css" integrity="{{ sri(path='/static/oat.min.css') }}" crossorigin="anonymous">
+  {% block stylesheets %}
+  <link rel="stylesheet" href="/static/app.css" integrity="{{ sri(path='/static/app.css') }}" crossorigin="anonymous">
+  {% endblock stylesheets %}
+  {% block head %}{% endblock head %}
+</head>
+
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <nav data-topnav aria-label="Main navigation">
+        <span>
+            <a href="/" class="brand">
+                {% block brand_icon %}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="brand-shield">
+                    <path d="M12 2L3 7v6c0 5.25 3.75 10.14 9 11.43C17.25 23.14 21 18.25 21 13V7l-9-5z"/>
+                </svg>
+                {% endblock brand_icon %}
+                <strong class="gradient-text">{% block brand_name %}Fracture CMS{% endblock brand_name %}</strong>
+            </a>
+        </span>
+        {% block nav_public %}
+        <a href="/blog">Blog</a>
+        {% endblock nav_public %}
+        <span class="nav-end">
+            {% block nav_cta %}
+            <a href="/api/auth/oidc/authorize" class="button small">Sign in</a>
+            {% endblock nav_cta %}
+        </span>
+    </nav>
+    <main id="main-content" class="container">
+        {% block content %}
+        {% endblock content %}
+    </main>
+    <footer class="site-footer" role="contentinfo">
+        {% block footer %}
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <strong class="gradient-text">{% block footer_brand %}Fracture CMS{% endblock footer_brand %}</strong>
+                <p>{% block footer_tagline %}Secure content management built with Rust.{% endblock footer_tagline %}</p>
+            </div>
+            {% block footer_columns %}
+            {% endblock footer_columns %}
+        </div>
+        <div class="footer-bottom">
+            {% block footer_bottom %}{% endblock footer_bottom %}
+        </div>
+        {% endblock footer %}
+    </footer>
+</body>
+
+</html>
