@@ -61,6 +61,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (event.target.closest("a, button, input, select, textarea, label")) {
                 return;
             }
+            event.preventDefault();
             window.location.href = el.getAttribute("data-href");
         }
         el.addEventListener("click", navigateUnlessNested);
@@ -73,8 +74,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         el.addEventListener("keydown", function (event) {
             if (event.key === "Enter") {
-                event.preventDefault();
-                window.location.href = el.getAttribute("data-href");
+                navigateUnlessNested(event);
             }
         });
     });

@@ -84,7 +84,12 @@ services:
       # Bind to loopback only. With network_mode: host this listener is on the
       # host directly, so 0.0.0.0 would expose the dev app (and its devMode OIDC
       # client) on every interface, unlike every other service here.
-      - SERVER_BINDING=127.0.0.1
+      # Trade-off: Zitadel's back-channel logout POSTs to
+      # host.containers.internal, which reaches the host on a NON-loopback
+      # address — a loopback-bound app refuses it, so server-side session
+      # invalidation on IdP logout does not fire. To test that flow, opt in
+      # with: SERVER_BINDING=0.0.0.0 podman compose up -d app
+      - SERVER_BINDING=${SERVER_BINDING:-127.0.0.1}
     entrypoint: ["/entrypoint.sh"]
 
 volumes:

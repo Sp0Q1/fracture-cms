@@ -17,11 +17,11 @@ struct Cli {
 enum Commands {
     /// Generate production config (.env + compose.prod.yaml)
     Init {
-        /// Container image to deploy (e.g. ghcr.io/sp0q1/fracture-pt:latest)
+        /// Container image to deploy (e.g. ghcr.io/your-org/your-app:latest)
         #[arg(long)]
         image: Option<String>,
 
-        /// Git repo to clone for assets and config (e.g. https://github.com/Sp0Q1/fracture-pt.git)
+        /// Git repo to clone for assets and config (e.g. https://github.com/your-org/your-app.git)
         #[arg(long)]
         repo: Option<String>,
 
@@ -208,6 +208,12 @@ fn cmd_update() {
     if !download(&format!("{base_url}/SHA256SUMS"), &sums) {
         eprintln!("Error: could not download SHA256SUMS for release {latest_tag}.");
         eprintln!("Refusing to install an unverified binary.");
+        eprintln!();
+        eprintln!("Releases published before checksums were introduced lack this file.");
+        eprintln!("To install manually after verifying the asset yourself:");
+        eprintln!("  curl -fL -o /tmp/{asset} {base_url}/{asset}");
+        eprintln!("  tar xzf /tmp/{asset} -C /tmp");
+        eprintln!("  sudo install /tmp/fracture-ctl \"$(command -v fracture-ctl)\"");
         let _ = fs::remove_dir_all(workdir);
         std::process::exit(1);
     }
@@ -246,9 +252,18 @@ fn cmd_update() {
         let _ = fs::remove_dir_all(workdir);
         std::process::exit(1);
     }
-    let _ = Command::new("chmod")
-        .args(["755", &staged.to_string_lossy()])
-        .status();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // A swallowed failure here would let the rename below install a
+        // non-executable binary over the working one.
+        if let Err(e) = fs::set_permissions(&staged, fs::Permissions::from_mode(0o755)) {
+            eprintln!("Error: could not mark the new binary executable: {e}");
+            let _ = fs::remove_file(&staged);
+            let _ = fs::remove_dir_all(workdir);
+            std::process::exit(1);
+        }
+    }
     if let Err(e) = fs::rename(&staged, &current_exe) {
         eprintln!(
             "Error: could not replace binary at {} : {e}",
@@ -324,7 +339,7 @@ OIDC_CLIENT_SECRET="#
     let jwt_secret = generate_secret(32);
     let db_password = generate_secret(24);
     let image_name = image.unwrap_or_else(|| "ghcr.io/sp0q1/fracture-cms:latest".to_string());
-    // Strip v prefix from tag if present: ghcr.io/sp0q1/fracture-pt:v0.14.0 -> :0.14.0
+    // Strip v prefix from tag if present: ghcr.io/your-org/your-app:v0.14.0 -> :0.14.0
     let image_name = if let Some((base, tag)) = image_name.rsplit_once(':') {
         format!("{}:{}", base, tag.strip_prefix('v').unwrap_or(tag))
     } else {
@@ -351,6 +366,11 @@ OIDC_CLIENT_ID=
 OIDC_CLIENT_SECRET=
 OIDC_REDIRECT_URI=https://example.com/api/auth/oidc/callback
 OIDC_POST_LOGOUT_REDIRECT_URI=https://example.com
+# Treat a missing email_verified claim as verified. Only enable for IdPs that
+# never emit the claim but are known to release only verified emails (e.g.
+# some Azure AD / SAML-bridge setups); without it, users of such IdPs cannot
+# link accounts or auto-accept invites.
+# OIDC_ASSUME_EMAIL_VERIFIED=true
 
 # SMTP — optional. Invite emails fail silently if not configured.
 # Mail is OFF unless MAILER_ENABLED=true, even if MAILER_HOST is set.
@@ -1058,24 +1078,33 @@ fn run_db_query(sql: &str) -> String {
 
     match db_type.as_str() {
         "sqlite" => {
-            // Try to find the SQLite file via the volume
-            let volume_path = Command::new("podman")
-                .args([
-                    "volume",
-                    "inspect",
-                    "fracture-pt_app_data",
-                    "--format",
-                    "{{.Mountpoint}}",
-                ])
-                .output()
+            // Try the volume podman compose creates for this deploy directory
+            // (volumes are named `<dirname>_app_data`).
+            let project = std::env::current_dir()
                 .ok()
-                .and_then(|o| {
-                    if o.status.success() {
-                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-                    } else {
-                        None
-                    }
-                });
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                .unwrap_or_default();
+            let volume_path = if project.is_empty() {
+                None
+            } else {
+                Command::new("podman")
+                    .args([
+                        "volume",
+                        "inspect",
+                        &format!("{project}_app_data"),
+                        "--format",
+                        "{{.Mountpoint}}",
+                    ])
+                    .output()
+                    .ok()
+                    .and_then(|o| {
+                        if o.status.success() {
+                            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                        } else {
+                            None
+                        }
+                    })
+            };
 
             // Also try: list all volumes and find one containing "app_data"
             let volume_path = volume_path.or_else(|| {
@@ -1209,10 +1238,21 @@ fn cmd_admin(action: AdminAction) {
                 // every platform-admin feature unreachable on a fresh install.)
                 eprintln!("  No platform admin organization yet — creating it...");
                 let pid = generate_uuid();
+                // The app (sqlx) stores UUIDs as 16-byte blobs on SQLite, so
+                // the pid must be inserted as a blob literal — a text literal
+                // would never match the app's blob-bound lookups and every
+                // /orgs/{pid} route for this org would 404. PostgreSQL casts
+                // the text literal to its native uuid column type.
+                let (db_type, ..) = detect_database();
+                let pid_literal = if db_type == "sqlite" {
+                    format!("X'{}'", pid.replace('-', ""))
+                } else {
+                    format!("'{pid}'")
+                };
                 run_db_query(&format!(
                     "INSERT INTO organizations \
                      (pid, name, slug, is_personal, is_platform_admin, created_at, updated_at) \
-                     VALUES ('{pid}', 'Platform Admin', 'platform-admin', false, true, \
+                     VALUES ({pid_literal}, 'Platform Admin', 'platform-admin', false, true, \
                      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
                 ));
                 org_result = run_db_query(org_query).trim().to_string();

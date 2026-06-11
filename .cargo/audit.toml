@@ -1,0 +1,10 @@
+[advisories]
+ignore = [
+    # rsa 0.9.x Marvin Attack (timing side channel on PRIVATE-key operations).
+    # No fixed release exists. Our only compiled user is openidconnect, which
+    # uses rsa solely to VERIFY IdP JWT signatures with public keys — there is
+    # no private-key decryption/signing path to leak. (sqlx-mysql also lists
+    # rsa but the mysql feature is not enabled, so it is never built.)
+    # Re-evaluate when rsa publishes a fix: https://rustsec.org/advisories/RUSTSEC-2023-0071
+    "RUSTSEC-2023-0071",
+]

@@ -155,10 +155,14 @@ async fn callback(
         .and_then(|localized: &LocalizedClaim<EndUserName>| localized.get(None))
         .map(|n: &EndUserName| n.as_str().to_string());
 
-    // Whether the `IdP` asserts this email as verified. Only a `true` is trusted;
-    // a missing claim is treated as unverified. This gates account linking and
-    // invite auto-acceptance to prevent takeover via an attacker-chosen email.
-    let email_verified = claims.email_verified() == Some(true);
+    // Whether the `IdP` asserts this email as verified. This gates account
+    // linking and invite auto-acceptance to prevent takeover via an
+    // attacker-chosen email. The claim is optional: when absent it counts as
+    // unverified unless the operator opted in via `assume_email_verified`
+    // (for IdPs that only release verified emails but never emit the claim).
+    let email_verified = claims
+        .email_verified()
+        .unwrap_or(oidc.assume_email_verified);
 
     let info = OidcUserInfo {
         provider: oidc.provider_name.clone(),

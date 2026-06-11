@@ -90,6 +90,15 @@ CLIENT_ID=$(echo "$APP_RESPONSE" | jq -r '.clientId')
 CLIENT_SECRET=$(echo "$APP_RESPONSE" | jq -r '.clientSecret')
 echo "    Client ID: $CLIENT_ID"
 
+# Zitadel reaches the host via host.containers.internal, which arrives on a
+# NON-loopback address — the default loopback-bound app refuses it.
+if [ "${SERVER_BINDING:-127.0.0.1}" = "127.0.0.1" ]; then
+    echo "    NOTE: back-channel logout is registered but unreachable while the app"
+    echo "    binds 127.0.0.1 (the default). App-initiated logout still works; to"
+    echo "    test IdP-initiated logout run:"
+    echo "        SERVER_BINDING=0.0.0.0 podman compose up -d app"
+fi
+
 # --- 6. Create test user ---
 echo "==> Creating test user..."
 TEST_PASS="TestPassword1!"

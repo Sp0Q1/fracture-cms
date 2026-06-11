@@ -71,6 +71,23 @@ impl Model {
             .all(db)
             .await
     }
+
+    /// Returns all uploads created by a user, across every organization.
+    /// Used when deleting a user: their upload rows cascade in all orgs
+    /// (`fk-uploads-uploaded_by`), so the on-disk files need cleanup too.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_uploader(
+        db: &DatabaseConnection,
+        user_id: i32,
+    ) -> Result<Vec<Self>, DbErr> {
+        Entity::find()
+            .filter(Column::UploadedBy.eq(user_id))
+            .all(db)
+            .await
+    }
 }
 
 impl ActiveModel {}

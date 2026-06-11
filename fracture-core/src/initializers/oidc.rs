@@ -30,6 +30,14 @@ struct OidcConfig {
     post_logout_redirect_uri: Option<String>,
     #[serde(default = "default_scopes")]
     scopes: Vec<String>,
+    /// Treat a *missing* `email_verified` claim as verified. The OIDC claim
+    /// is optional and some `IdP`s (Azure AD, several SAML bridges) never
+    /// emit it even though they only release verified emails; without this
+    /// flag their users can never link accounts or auto-accept invites. An
+    /// explicit `email_verified: false` from the `IdP` is still honored.
+    /// Leave off (the default) unless you know the `IdP` verifies emails.
+    #[serde(default)]
+    assume_email_verified: bool,
     /// When `true`, missing/invalid OIDC config fails app boot with an
     /// error. When `false` or omitted (default), the initializer logs and
     /// silently disables auth — useful for `cargo loco doctor` style local
@@ -191,6 +199,7 @@ async fn setup_oidc(ctx: &AppContext, router: Router) -> Result<Router> {
         issuer_url: issuer_url_str,
         client_id: client_id_str,
         jwks_uri,
+        assume_email_verified: config.assume_email_verified,
     };
 
     tracing::info!("OIDC initializer loaded successfully");
@@ -269,5 +278,21 @@ mod tests {
         let json = serde_json::json!({ "required": true });
         let cfg: OidcConfig = serde_json::from_value(json).unwrap();
         assert!(cfg.required);
+    }
+
+    #[test]
+    fn oidc_config_assume_email_verified_defaults_to_false() {
+        // The secure default: a missing email_verified claim stays unverified
+        // unless the operator explicitly opts in for their IdP.
+        let json = serde_json::json!({});
+        let cfg: OidcConfig = serde_json::from_value(json).unwrap();
+        assert!(!cfg.assume_email_verified);
+    }
+
+    #[test]
+    fn oidc_config_assume_email_verified_parses_true() {
+        let json = serde_json::json!({ "assume_email_verified": true });
+        let cfg: OidcConfig = serde_json::from_value(json).unwrap();
+        assert!(cfg.assume_email_verified);
     }
 }

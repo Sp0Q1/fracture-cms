@@ -9,7 +9,7 @@ use sea_orm::TransactionTrait;
 use crate::controllers::middleware;
 use crate::mailers::invite::InviteMailer;
 use crate::models::_entities::{org_members, organizations, users as users_entity};
-use crate::models::org_members::OrgRole;
+use crate::models::org_members::{MemberWriteError, OrgRole};
 use crate::models::{org_invites, organizations as org_model, uploads as upload_model};
 use crate::views;
 use crate::{require_role, require_user};
@@ -33,6 +33,17 @@ pub struct InviteParams {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RoleParams {
     pub role: String,
+}
+
+/// Maps a refused membership write to the right HTTP outcome: 404 for
+/// missing/forbidden (never 403, per the IDOR policy), a user-visible
+/// message for the last-owner guard.
+fn member_write_error(e: MemberWriteError) -> Error {
+    match e {
+        MemberWriteError::NotFound | MemberWriteError::Forbidden => Error::NotFound,
+        MemberWriteError::LastOwner(_) => Error::Message(e.to_string()),
+        MemberWriteError::Db(db) => db.into(),
+    }
 }
 
 /// GET /orgs/ — list user's organizations
@@ -299,21 +310,15 @@ pub async fn update_role(
     let target_user = users_entity::Model::find_by_pid(&ctx.db, &user_pid)
         .await
         .map_err(|_| Error::NotFound)?;
-    let target_membership = org_members::Model::find_membership(&ctx.db, org.id, target_user.id)
-        .await?
-        .ok_or_else(|| Error::NotFound)?;
     let new_role = OrgRole::from_str_role(&params.role).unwrap_or(OrgRole::Member);
-    let target_current_role =
-        OrgRole::from_str_role(&target_membership.role).unwrap_or(OrgRole::Viewer);
 
-    // Only Owners can grant/revoke the Owner role or modify other Owners.
-    if (new_role == OrgRole::Owner || target_current_role == OrgRole::Owner)
-        && !org_ctx.role.at_least(OrgRole::Owner)
-    {
-        return Err(Error::NotFound);
-    }
-
-    org_members::Model::update_role(&ctx.db, target_membership, new_role).await?;
+    // The role ceiling (an actor may not touch a member above their own rank,
+    // nor grant a role above it) is enforced inside the model's transaction,
+    // against the membership row as it exists at write time — a check here
+    // would race a concurrent promotion of the target.
+    org_members::Model::update_role(&ctx.db, org.id, target_user.id, org_ctx.role, new_role)
+        .await
+        .map_err(member_write_error)?;
 
     Ok(Redirect::to(&format!("/orgs/{pid}/members")).into_response())
 }
@@ -344,19 +349,10 @@ pub async fn remove_member(
     let target_user = users_entity::Model::find_by_pid(&ctx.db, &user_pid)
         .await
         .map_err(|_| Error::NotFound)?;
-    let target_membership = org_members::Model::find_membership(&ctx.db, org.id, target_user.id)
-        .await?
-        .ok_or_else(|| Error::NotFound)?;
-    // Only Owners may remove other Owners — mirrors the guard in `update_role`
-    // so an Admin can't evict an Owner.
-    let target_current_role =
-        OrgRole::from_str_role(&target_membership.role).unwrap_or(OrgRole::Viewer);
-    if target_current_role == OrgRole::Owner && !org_ctx.role.at_least(OrgRole::Owner) {
-        return Err(Error::NotFound);
-    }
-    org_members::Model::remove_member(&ctx.db, target_membership)
+    // Role ceiling enforced in the model's transaction; see `update_role`.
+    org_members::Model::remove_member(&ctx.db, org.id, target_user.id, org_ctx.role)
         .await
-        .map_err(|e| Error::Message(e.to_string()))?;
+        .map_err(member_write_error)?;
 
     Ok(Redirect::to(&format!("/orgs/{pid}/members")).into_response())
 }
@@ -435,11 +431,18 @@ pub async fn delete(
 
     let org_id = org.id;
 
-    // Capture the org's uploads up front so we can remove the on-disk files
-    // after the DB rows are gone (the rows themselves cascade with the org).
-    let org_uploads = upload_model::Model::find_by_org(&ctx.db, org_id)
-        .await
-        .unwrap_or_default();
+    // Capture every upload row this deletion will cascade away, so the
+    // on-disk files can be removed after commit: the org's own uploads, plus
+    // — when the personal org's user is deleted too — that user's uploads in
+    // every other org (`fk-uploads-uploaded_by` cascades on user delete).
+    // A failed snapshot aborts before anything is deleted; proceeding with a
+    // partial list would orphan the missing files forever.
+    let mut doomed_uploads = upload_model::Model::find_by_org(&ctx.db, org_id).await?;
+    if let Some(uid) = delete_user_id {
+        let known: std::collections::HashSet<i32> = doomed_uploads.iter().map(|u| u.id).collect();
+        let user_uploads = upload_model::Model::find_by_uploader(&ctx.db, uid).await?;
+        doomed_uploads.extend(user_uploads.into_iter().filter(|u| !known.contains(&u.id)));
+    }
 
     // Perform all deletions atomically so a mid-way failure can't leave the org
     // half-deleted (orphaned members/invites or a dangling user).
@@ -471,11 +474,12 @@ pub async fn delete(
 
     txn.commit().await?;
 
-    // Best-effort: remove the org's upload files from disk now that the rows are
-    // gone. A failure here only leaves orphaned files, never inconsistent data.
-    if !org_uploads.is_empty() {
+    // Best-effort: remove the cascaded uploads' files from disk now that the
+    // rows are gone. A failure here only leaves orphaned files, never
+    // inconsistent data.
+    if !doomed_uploads.is_empty() {
         if let Ok(service) = crate::controllers::uploads::get_upload_service(&ctx).await {
-            for upload in &org_uploads {
+            for upload in &doomed_uploads {
                 let _ = service.delete_file(upload).await;
             }
         }
