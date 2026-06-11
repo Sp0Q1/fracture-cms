@@ -55,6 +55,27 @@ impl Model {
         Entity::find().filter(Column::Pid.eq(uuid)).one(db).await
     }
 
+    /// Finds a blog post by public ID, scoped to an org. Admin mutations use
+    /// this so a pid from another org's data can never be operated on.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_by_pid_and_org(
+        db: &DatabaseConnection,
+        pid: &str,
+        org_id: i32,
+    ) -> Result<Option<Self>, DbErr> {
+        let Some(uuid) = Uuid::parse_str(pid).ok() else {
+            return Ok(None);
+        };
+        Entity::find()
+            .filter(Column::Pid.eq(uuid))
+            .filter(Column::OrgId.eq(org_id))
+            .one(db)
+            .await
+    }
+
     /// Finds a published blog post by org and slug.
     ///
     /// # Errors

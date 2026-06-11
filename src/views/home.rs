@@ -20,11 +20,12 @@ pub fn index(
     format::render().view(v, "home/index.html", data!(ctx))
 }
 
-/// Render the home page for a guest (unauthenticated) user.
+/// Render the public landing (sales) page for a guest. Uses the marketing
+/// layout — no session state, identical for every visitor.
 ///
 /// # Errors
 ///
 /// Returns an error if template rendering fails.
 pub fn index_guest(v: &impl ViewRenderer) -> Result<Response> {
-    format::render().view(v, "home/index.html", data!({}))
+    format::render().view(v, "home/landing.html", data!({}))
 }

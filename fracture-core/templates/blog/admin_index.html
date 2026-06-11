@@ -48,7 +48,12 @@
                         <form action="/admin/blog/{{ post.pid }}/publish" method="post" class="inline-form">
                             <button type="submit" class="button outline small">Publish</button>
                         </form>
+                        <a href="/admin/blog/{{ post.pid }}/preview" class="button outline small" target="_blank">Preview</a>
                     {% endif %}
+                    <form action="/admin/blog/{{ post.pid }}/delete" method="post" class="inline-form"
+                          data-confirm="Permanently delete '{{ post.title }}'? This cannot be undone.">
+                        <button type="submit" class="button outline small danger">Delete</button>
+                    </form>
                 </td>
             </tr>
             {% endfor %}

@@ -85,6 +85,8 @@ settings:
   # directly; tests call runner functions with their own registry instead.
   jobs:
     enabled: false
+  blog:
+    org_slug: "test-blog"
   auth:
     allowed_email_domains:
       - example.com
