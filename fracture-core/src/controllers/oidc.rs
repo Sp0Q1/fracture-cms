@@ -23,6 +23,43 @@ fn is_secure(ctx: &AppContext) -> bool {
     ctx.config.server.host.starts_with("https")
 }
 
+/// Parses `settings.auth.allowed_email_domains` — the per-deployment login
+/// admission allowlist. In a federated setup (one `IdP` shared by many tenant
+/// deployments) this is the app-side trust boundary: without it, any user
+/// the `IdP` authenticates gets an auto-provisioned account here.
+///
+/// Accepts a YAML list or a comma-separated string (env-var friendly).
+/// `None` means no restriction is configured.
+fn parse_allowed_domains(settings: Option<&serde_json::Value>) -> Option<Vec<String>> {
+    let value = settings?.get("auth")?.get("allowed_email_domains")?;
+    let domains: Vec<String> = match value {
+        serde_json::Value::Array(items) => items
+            .iter()
+            .filter_map(|i| i.as_str())
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        serde_json::Value::String(s) => s
+            .split(',')
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        _ => return None,
+    };
+    if domains.is_empty() {
+        None
+    } else {
+        Some(domains)
+    }
+}
+
+/// Returns true when `email`'s domain is in the allowlist (exact match,
+/// case-insensitive).
+fn email_domain_allowed(domains: &[String], email: &str) -> bool {
+    let domain = email.rsplit('@').next().unwrap_or("").to_ascii_lowercase();
+    !domain.is_empty() && domains.contains(&domain)
+}
+
 fn oidc_unavailable_response() -> Response {
     Response::builder()
         .status(503)
@@ -149,6 +186,22 @@ async fn callback(
         .email()
         .map(|e: &EndUserEmail| e.as_str().to_string())
         .ok_or_else(|| loco_rs::Error::Message("No email claim in ID token".to_string()))?;
+
+    // Per-deployment admission boundary, checked on EVERY login (not just
+    // signup) so removing a domain from the allowlist locks its users out.
+    // The IdP authenticating an identity is not the same as this deployment
+    // accepting it — see docs/FEDERATION.md.
+    if let Some(domains) = parse_allowed_domains(ctx.config.settings.as_ref()) {
+        if !email_domain_allowed(&domains, &email) {
+            tracing::warn!(
+                subject = %subject,
+                "OIDC login rejected: email domain not in auth.allowed_email_domains"
+            );
+            return Err(loco_rs::Error::Unauthorized(
+                "this identity is not permitted to access this application".to_string(),
+            ));
+        }
+    }
 
     let name = claims
         .name()
@@ -459,4 +512,52 @@ pub fn routes() -> Routes {
         .add("/logout", get(logout))
         .add("/refresh", get(refresh))
         .add("/backchannel-logout", post(backchannel_logout))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{email_domain_allowed, parse_allowed_domains};
+    use serde_json::json;
+
+    #[test]
+    fn no_settings_or_key_means_no_restriction() {
+        assert!(parse_allowed_domains(None).is_none());
+        assert!(parse_allowed_domains(Some(&json!({}))).is_none());
+        assert!(parse_allowed_domains(Some(&json!({"auth": {}}))).is_none());
+        // An empty list is treated as "not configured", not "deny everyone" —
+        // a templated env var that resolves empty must not lock the app.
+        let empty = json!({"auth": {"allowed_email_domains": []}});
+        assert!(parse_allowed_domains(Some(&empty)).is_none());
+        let blank = json!({"auth": {"allowed_email_domains": ""}});
+        assert!(parse_allowed_domains(Some(&blank)).is_none());
+    }
+
+    #[test]
+    fn parses_yaml_list_and_csv_string() {
+        let list = json!({"auth": {"allowed_email_domains": ["Example.com", " corp.io "]}});
+        assert_eq!(
+            parse_allowed_domains(Some(&list)).unwrap(),
+            vec!["example.com", "corp.io"]
+        );
+        let csv = json!({"auth": {"allowed_email_domains": "Example.com, corp.io ,"}});
+        assert_eq!(
+            parse_allowed_domains(Some(&csv)).unwrap(),
+            vec!["example.com", "corp.io"]
+        );
+    }
+
+    #[test]
+    fn domain_matching_is_exact_and_case_insensitive() {
+        let domains = vec!["example.com".to_string()];
+        assert!(email_domain_allowed(&domains, "user@example.com"));
+        assert!(email_domain_allowed(&domains, "user@EXAMPLE.COM"));
+        // Subdomains and lookalikes are NOT allowed by an exact-domain list.
+        assert!(!email_domain_allowed(&domains, "user@sub.example.com"));
+        assert!(!email_domain_allowed(&domains, "user@evilexample.com"));
+        assert!(!email_domain_allowed(&domains, "user@other.org"));
+        // An email with a sneaky extra @ is judged by its real domain.
+        assert!(email_domain_allowed(&domains, "a@b@example.com"));
+        assert!(!email_domain_allowed(&domains, "user@example.com@evil.org"));
+        assert!(!email_domain_allowed(&domains, "no-at-sign"));
+    }
 }
