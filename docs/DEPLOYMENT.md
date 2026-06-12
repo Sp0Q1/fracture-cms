@@ -73,6 +73,12 @@ Generate `.env` with `fracture-ctl init --image <image>`, then edit as needed:
 | `MAILER_USER` | No | SMTP username. |
 | `MAILER_PASSWORD` | No | SMTP password. |
 
+### Multi-tenant fleets
+
+Running one deployment per tenant against a shared IdP? Read
+[FEDERATION.md](FEDERATION.md) for the topology, the per-tenant trust
+boundaries, and the `AUTH_ALLOWED_EMAIL_DOMAINS` admission control.
+
 ### OIDC Provider Setup
 
 Register your app as an OIDC client in any provider (Zitadel, Keycloak, Auth0, etc.):

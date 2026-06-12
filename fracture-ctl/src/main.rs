@@ -372,6 +372,11 @@ OIDC_POST_LOGOUT_REDIRECT_URI=https://example.com
 # link accounts or auto-accept invites.
 # OIDC_ASSUME_EMAIL_VERIFIED=true
 
+# Login admission allowlist (comma-separated email domains). Strongly
+# recommended when the IdP is shared across tenant deployments — it is this
+# deployment's trust boundary against users of other tenants.
+# AUTH_ALLOWED_EMAIL_DOMAINS=your-company.com
+
 # SMTP — optional. Invite emails fail silently if not configured.
 # Mail is OFF unless MAILER_ENABLED=true, even if MAILER_HOST is set.
 # MAILER_ENABLED=true

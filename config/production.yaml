@@ -42,6 +42,13 @@ mailer:
 # safer than silently falling back to no auth. Override via OIDC_REQUIRED=false
 # only for one-shot debug starts; never run a public deployment without it.
 settings:
+  # Login admission allowlist: only identities whose email is on one of these
+  # domains may sign in — checked on every login, on top of whatever the IdP
+  # authenticates. In a federated setup (one IdP, many tenant deployments)
+  # this is the per-tenant trust boundary; see docs/FEDERATION.md.
+  # Comma-separated; empty = no restriction.
+  auth:
+    allowed_email_domains: "{{ get_env(name='AUTH_ALLOWED_EMAIL_DOMAINS', default='') }}"
   # Background job runner (executes queued job_runs, evaluates cron schedules).
   jobs:
     enabled: {{ get_env(name="JOBS_RUNNER_ENABLED", default="true") }}

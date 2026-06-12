@@ -287,6 +287,8 @@ See [docs/UPSTREAM_UPDATES.md](docs/UPSTREAM_UPDATES.md) for updating `fracture-
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment instructions.
 
+See [docs/FEDERATION.md](docs/FEDERATION.md) for running many tenant deployments on separate servers/domains with a shared identity provider — central IAM with hard trust boundaries between tenants.
+
 ## CI
 
 GitHub Actions runs 4 checks: **rustfmt**, **clippy** (with pedantic lints), **semgrep**, and **tests**.
