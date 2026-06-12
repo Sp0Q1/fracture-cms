@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod blog;
+pub mod contact;
 pub mod jobs;
 pub mod org;
 pub mod site;

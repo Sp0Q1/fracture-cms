@@ -1,5 +1,7 @@
 pub mod admin;
 pub mod blog;
+pub mod captcha;
+pub mod contact;
 pub mod jobs;
 pub mod middleware;
 pub mod oidc;

@@ -16,6 +16,7 @@ The core infrastructure lives in the `fracture-core` library crate. Downstream p
 - **File uploads** — Org-scoped file upload API with configurable size limits, MIME type validation, SHA-256 checksums, and visibility control (`org` or `public`). Files stored on disk under a configurable storage root.
 - **Blog system** — Markdown-based blog with GFM support (tables, strikethrough, task lists). Posts tied to a configurable blog org. Public routes (cacheable, with an Atom feed at `/blog/feed.xml`) for readers; admin routes for platform admins with draft preview, publish/unpublish (stable first-publish dates), and delete. Markdown rendered to HTML on save via comrak.
 - **Generic jobs system** — Define job types, schedule runs (cron), and track diffs. Apps implement the `JobExecutor` trait and register it via `init_job_registry()`; fracture-core's `JobRunnerInitializer` polls for queued runs, executes them, and persists run history and diffs. Org admins create/enable jobs, members trigger runs, and both org-scoped and platform-admin views show live run status.
+- **Contact form with self-hosted captcha** — Public `/contact` form protected by [Altcha](https://altcha.org) (open-source proof-of-work, no third-party service, vendored CSP-safe build). Messages land in a platform-admin inbox at `/admin/contact`. The challenge endpoint (`/captcha/challenge`) and `fracture_core::captcha::verify_payload` are reusable for any other public form.
 - **Public site included** — The landing (sales) page, blog, and static marketing pages ship with the framework and live outside your repo: `public_base.html` marketing layout (session-aware CTA, no JS), default `site/landing.html`, and `GET /pages/{slug}` serving plain-HTML fragments from `assets/views/site/pages/`. Override any template by placing a same-named file under `assets/views/`; the authenticated app uses your `base.html`.
 - **Markdown editor hook** — Blog admin templates use the `data-md-editor` attribute on textareas. Consuming apps provide their own `md-editor.js` to initialize a Markdown editor (toolbar, preview, etc.) for elements with this attribute. fracture-core does not bundle an editor implementation.
 - **i18n** — Fluent-based internationalization with locale files in `assets/i18n/`.
@@ -245,6 +246,9 @@ dev/
 | GET | `/blog/` | Public |
 | GET | `/blog/feed.xml` | Public |
 | GET | `/pages/{slug}` | Public |
+| GET/POST | `/contact` | Public (Altcha-gated POST) |
+| GET | `/captcha/challenge` | Public |
+| GET/POST | `/admin/contact/...` | Platform admin |
 | GET | `/blog/{slug}` | Public |
 | GET/POST | `/admin/blog/...` | Platform admin |
 

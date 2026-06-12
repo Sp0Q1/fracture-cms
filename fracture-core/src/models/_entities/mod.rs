@@ -1,6 +1,7 @@
 pub mod prelude;
 
 pub mod blog_posts;
+pub mod contact_messages;
 pub mod job_definitions;
 pub mod job_run_diffs;
 pub mod job_runs;

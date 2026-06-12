@@ -391,6 +391,26 @@ Viewing jobs and runs requires org membership (Viewer+). Triggering a run requir
 | GET | `/jobs/{pid}/runs/{run_pid}` | Authenticated | Show a run + its diffs |
 | GET | `/admin/jobs` | Platform admin | List all definitions across all orgs |
 
+## Contact Form & Captcha
+
+`/contact` (public layout, session-aware CTA) stores submissions in the
+`contact_messages` table; platform admins triage at `/admin/contact`. Spam
+control is a self-hosted [Altcha](https://altcha.org) proof-of-work captcha —
+no third-party calls:
+
+- `captcha.rs` issues SHA-256 PoW challenges signed with HMAC-SHA256 under a
+  boot-ephemeral key (`GET /captcha/challenge`), and verifies solutions
+  (solution hash, signature, expiry embedded in the salt, single-use replay
+  store). HMAC is implemented per RFC 2104 over the existing `sha2` dep and
+  pinned by RFC 4231 test vectors.
+- The widget is vendored at `assets/static/altcha.{min.js,worker.js,css}`
+  (the `dist_external` CSP-friendly build — external worker file, external
+  CSS, so `script-src 'self'`/`style-src 'self'` hold). Downstream apps must
+  ship these three static files (same rule as `oat.min.*`).
+- Any other public form can reuse the gate: embed the widget pointing at
+  `/captcha/challenge` and call `fracture_core::captcha::verify_payload` on
+  the submitted `altcha` field.
+
 ## Template Overrides
 
 Core templates are embedded in the `fracture-core` binary via `include_dir!`. The app's `view_engine` initializer calls `fracture_core::register_templates(tera)`, which only adds a template when no filesystem version already exists.
