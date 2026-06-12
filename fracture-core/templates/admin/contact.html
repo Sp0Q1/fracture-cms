@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Contact Messages — Platform Admin — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<div class="page-header">
+    <div class="hstack">
+        <div>
+            <h1>Contact Messages <span class="badge secondary">{{ messages | length }}</span></h1>
+            <p class="page-subtitle">Submissions from the public contact form</p>
+        </div>
+        <a href="/admin" class="button outline">Back to Dashboard</a>
+    </div>
+</div>
+
+{% if messages %}
+    {% for msg in messages %}
+    <article class="card">
+        <header class="hstack">
+            <div>
+                <strong>{{ msg.name }}</strong>
+                <small>&lt;{{ msg.email }}&gt; &middot; {{ msg.created_at | truncate(length=16, end="") }}</small>
+            </div>
+            <form action="/admin/contact/{{ msg.pid }}/delete" method="post" class="inline-form"
+                  data-confirm="Delete this message permanently?">
+                <button type="submit" class="button outline small danger">Delete</button>
+            </form>
+        </header>
+        <p>{{ msg.message }}</p>
+    </article>
+    {% endfor %}
+{% else %}
+    <article class="card empty-state">
+        <h3>No Messages</h3>
+        <p>Nothing has come in through the contact form yet.</p>
+    </article>
+{% endif %}
+{% endblock content %}

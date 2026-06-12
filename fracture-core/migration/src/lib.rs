@@ -23,6 +23,7 @@ mod m20260404_000001_add_settings_to_organizations;
 mod m20260406_000001_create_uploads;
 mod m20260426_000001_create_resource_assignments;
 mod m20260612_000001_add_missing_indexes;
+mod m20260612_000003_create_contact_messages;
 
 pub struct Migrator;
 
@@ -49,6 +50,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260406_000001_create_uploads::Migration),
             Box::new(m20260426_000001_create_resource_assignments::Migration),
             Box::new(m20260612_000001_add_missing_indexes::Migration),
+            Box::new(m20260612_000003_create_contact_messages::Migration),
         ]
     }
 }

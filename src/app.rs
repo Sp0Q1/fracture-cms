@@ -70,6 +70,9 @@ impl Hooks for App {
             .add_route(controllers::note::routes())
             .add_route(controllers::blog::public_routes())
             .add_route(fracture_core::controllers::site::routes())
+            .add_route(fracture_core::controllers::contact::public_routes())
+            .add_route(fracture_core::controllers::contact::admin_routes())
+            .add_route(fracture_core::controllers::captcha::routes())
             .add_route(controllers::blog::admin_routes())
             .add_route(controllers::jobs::org_routes())
             .add_route(controllers::jobs::admin_routes())
@@ -90,6 +93,11 @@ impl Hooks for App {
         // tasks-inject (do not remove)
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {
+        truncate_table(
+            &ctx.db,
+            fracture_core::models::_entities::contact_messages::Entity,
+        )
+        .await?;
         truncate_table(&ctx.db, job_run_diffs::Entity).await?;
         truncate_table(&ctx.db, job_runs::Entity).await?;
         truncate_table(&ctx.db, job_definitions::Entity).await?;

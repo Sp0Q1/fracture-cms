@@ -1,3 +1,4 @@
+pub mod captcha;
 pub mod controllers;
 pub mod entity_registry;
 pub mod initializers;
