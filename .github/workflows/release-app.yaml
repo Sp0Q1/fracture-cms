@@ -65,7 +65,7 @@ jobs:
         # makes the dependency build its own layer, so with mode=max a tag
         # whose dependencies are unchanged only recompiles the app crates
         # instead of the whole workspace from scratch.
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ inputs.containerfile }}
