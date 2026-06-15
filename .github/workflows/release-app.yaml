@@ -58,7 +58,7 @@ jobs:
           echo "image=$(echo "$RAW_IMAGE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and push
         # BuildKit + GHA layer cache: the Containerfile's cargo-chef stage
