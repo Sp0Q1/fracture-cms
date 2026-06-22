@@ -68,6 +68,7 @@ impl Hooks for App {
             .add_route(controllers::org::invite_routes())
             .add_route(controllers::project::routes())
             .add_route(controllers::note::routes())
+            .add_route(controllers::comment::routes())
             .add_route(controllers::blog::public_routes())
             .add_route(fracture_core::controllers::site::routes())
             .add_route(fracture_core::controllers::contact::public_routes())

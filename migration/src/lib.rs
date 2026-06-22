@@ -8,6 +8,7 @@ mod m20260220_000004_create_projects;
 mod m20260220_000005_create_notes;
 mod m20260612_000002_add_resource_indexes;
 mod m20260623_000001_add_authority_to_notes;
+mod m20260623_000002_create_note_comments;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
                 Box::new(m20260220_000005_create_notes::Migration),
                 Box::new(m20260612_000002_add_resource_indexes::Migration),
                 Box::new(m20260623_000001_add_authority_to_notes::Migration),
+                Box::new(m20260623_000002_create_note_comments::Migration),
             ])
             .collect()
     }

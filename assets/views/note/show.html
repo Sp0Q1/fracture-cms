@@ -40,4 +40,49 @@
         {% endif %}
     </div>
 </article>
+
+<section class="card mt-6" aria-label="Comments">
+    <h3>Activity <span class="badge secondary">{{ comments | length }}</span></h3>
+
+    {% if comments %}
+    <ol class="timeline">
+        {% for c in comments %}
+        <li class="timeline-item">
+            <div class="timeline-meta">
+                <strong>{{ c.author }}</strong>
+                <span class="timeline-time">{{ c.created_at }}</span>
+                {% if c.edited %}<span class="badge">edited</span>{% endif %}
+            </div>
+            <p class="timeline-body">{{ c.body }}</p>
+            {% if c.can_edit or c.can_delete %}
+            <div class="action-links">
+                {% if c.can_edit %}
+                <a href="/projects/{{ project.pid }}/notes/{{ item.pid }}/comments/{{ c.pid }}/edit" class="button outline small">Edit</a>
+                {% endif %}
+                {% if c.can_delete %}
+                <button class="button outline small" data-variant="danger"
+                        data-delete-url="/projects/{{ project.pid }}/notes/{{ item.pid }}/comments/{{ c.pid }}"
+                        data-delete-redirect="/projects/{{ project.pid }}/notes/{{ item.pid }}">Delete</button>
+                {% endif %}
+            </div>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <p>No comments yet.</p>
+    {% endif %}
+
+    {% if can_comment %}
+    <form action="/projects/{{ project.pid }}/notes/{{ item.pid }}/comments/" method="post" class="comment-form mt-6">
+        <div data-field>
+            <label for="comment-body">Add a comment</label>
+            <textarea id="comment-body" name="body" rows="3" required></textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Comment</button>
+        </div>
+    </form>
+    {% endif %}
+</section>
 {% endblock content %}

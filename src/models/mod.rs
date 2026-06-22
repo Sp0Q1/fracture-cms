@@ -1,4 +1,5 @@
 pub mod _entities;
+pub mod note_comments;
 pub mod notes;
 pub mod projects;
 pub use fracture_core::models::{
