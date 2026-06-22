@@ -41,7 +41,7 @@ enum Commands {
     Ci,
     /// Start the development environment — run from project repo
     Dev {
-        /// Run Zitadel OIDC setup before starting
+        /// Run Keycloak OIDC setup before starting
         #[arg(long)]
         setup: bool,
     },
@@ -64,6 +64,23 @@ enum Commands {
     Admin {
         #[command(subcommand)]
         action: AdminAction,
+    },
+    /// Provision an IdP user for invite-only onboarding (Keycloak).
+    ///
+    /// Onboarding is invite-only: the app has no self-registration. After an
+    /// org admin invites someone in-app, run this to create their identity in
+    /// the tenant realm so they can log in (the in-app invite auto-accepts on
+    /// first login). Keeps the app itself IdP-agnostic — only this deployment
+    /// tool talks to Keycloak's admin API.
+    Invite {
+        /// Email of the person to provision
+        email: String,
+        /// Tenant realm to create the user in
+        #[arg(long, default_value = "tenant-acme")]
+        realm: String,
+        /// Temporary password (generated if omitted)
+        #[arg(long)]
+        password: Option<String>,
     },
     /// Update fracture-ctl to the latest version
     Update,
@@ -1210,6 +1227,138 @@ fn run_db_query(sql: &str) -> String {
     }
 }
 
+/// Extracts the first `"key":"value"` string value from a JSON blob.
+/// ctl avoids a JSON dependency; this is enough for Keycloak's responses.
+fn json_str<'a>(body: &'a str, key: &str) -> Option<&'a str> {
+    let pat = format!("\"{key}\":\"");
+    let start = body.find(&pat)? + pat.len();
+    let rest = &body[start..];
+    let end = rest.find('"')?;
+    Some(&rest[..end])
+}
+
+/// Provisions an IdP user in a tenant realm so an invited person can log in.
+/// Onboarding is invite-only — the app has no self-registration — so the
+/// identity must be created out of band; this keeps that out of the
+/// IdP-agnostic app and in the deployment tool.
+fn cmd_invite(email: &str, realm: &str, password: Option<String>) {
+    let kc = std::env::var("KEYCLOAK_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let admin_user = std::env::var("KEYCLOAK_ADMIN").unwrap_or_else(|_| "admin".to_string());
+    let admin_pass =
+        std::env::var("KEYCLOAK_ADMIN_PASSWORD").unwrap_or_else(|_| "admin".to_string());
+    let temp_pw = password.unwrap_or_else(|| generate_secret(16));
+
+    eprintln!("Provisioning '{email}' in realm '{realm}' on {kc}...");
+
+    // 1. Admin token via the master realm's admin-cli client (password grant).
+    let token_body = run_capture(
+        "curl",
+        &[
+            "-s",
+            &format!("{kc}/realms/master/protocol/openid-connect/token"),
+            "-d",
+            "grant_type=password",
+            "-d",
+            "client_id=admin-cli",
+            "-d",
+            &format!("username={admin_user}"),
+            "-d",
+            &format!("password={admin_pass}"),
+        ],
+    );
+    let Some(token) = json_str(&token_body, "access_token") else {
+        eprintln!(
+            "Error: could not obtain a Keycloak admin token. Check KEYCLOAK_ADMIN/\
+             KEYCLOAK_ADMIN_PASSWORD and that Keycloak is reachable at {kc}."
+        );
+        std::process::exit(1);
+    };
+    let auth = format!("Authorization: Bearer {token}");
+
+    // 2. Create the user, email-verified so the in-app org invite auto-accepts.
+    let user_json = format!(
+        "{{\"email\":\"{email}\",\"username\":\"{email}\",\"enabled\":true,\"emailVerified\":true}}"
+    );
+    let create = run_capture(
+        "curl",
+        &[
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "-X",
+            "POST",
+            &format!("{kc}/admin/realms/{realm}/users"),
+            "-H",
+            &auth,
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &user_json,
+        ],
+    );
+    match create.trim() {
+        "201" => {}
+        "409" => eprintln!("  User already exists; refreshing the temporary password."),
+        other => {
+            eprintln!("Error: user creation failed (HTTP {other}). Does realm '{realm}' exist?");
+            std::process::exit(1);
+        }
+    }
+
+    // 3. Look up the user id.
+    let users = run_capture(
+        "curl",
+        &[
+            "-s",
+            &format!("{kc}/admin/realms/{realm}/users?exact=true&email={email}"),
+            "-H",
+            &auth,
+        ],
+    );
+    let Some(uid) = json_str(&users, "id") else {
+        eprintln!("Error: could not locate the user after creation.");
+        std::process::exit(1);
+    };
+
+    // 4. Set a temporary password (the invitee sets their own on first login).
+    let pw_json = format!("{{\"type\":\"password\",\"value\":\"{temp_pw}\",\"temporary\":true}}");
+    let pw = run_capture(
+        "curl",
+        &[
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "-X",
+            "PUT",
+            &format!("{kc}/admin/realms/{realm}/users/{uid}/reset-password"),
+            "-H",
+            &auth,
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &pw_json,
+        ],
+    );
+    if pw.trim() != "204" {
+        eprintln!(
+            "Warning: could not set a temporary password (HTTP {}).",
+            pw.trim()
+        );
+    }
+
+    eprintln!();
+    eprintln!("  Provisioned {email} in realm {realm}.");
+    eprintln!("  Temporary password: {temp_pw}");
+    eprintln!("  (They will be prompted to set their own password on first login.)");
+    eprintln!();
+    eprintln!("  Ensure an in-app org invite exists for {email} — it auto-accepts");
+    eprintln!("  on their first sign-in.");
+}
+
 fn cmd_admin(action: AdminAction) {
     match action {
         AdminAction::Set { email } => {
@@ -1623,6 +1772,11 @@ fn main() {
         Commands::Backup { output } => cmd_backup(output),
         Commands::Restore { file, yes } => cmd_restore(file, yes),
         Commands::Admin { action } => cmd_admin(action),
+        Commands::Invite {
+            email,
+            realm,
+            password,
+        } => cmd_invite(&email, &realm, password),
         Commands::Update => cmd_update(),
     }
 }
