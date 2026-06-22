@@ -25,10 +25,7 @@ async fn markdown_rendering_strips_raw_html() {
     )
     .await
     .unwrap();
-    let org = fracture_cms::models::organizations::Model::find_orgs_for_user(db, author.id)
-        .await
-        .unwrap()
-        .remove(0);
+    let org = crate::support::owned_org(db, "blog-md", author.id).await;
 
     let post = blog_posts::ActiveModel {
         org_id: Set(org.id),

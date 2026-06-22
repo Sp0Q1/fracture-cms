@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use loco_rs::{auth::jwt, hash, prelude::*};
-use sea_orm::TransactionTrait;
 use serde::Deserialize;
 use serde_json::Map;
 use uuid::Uuid;
@@ -190,9 +189,10 @@ impl Model {
             return Ok(updated);
         }
 
-        // 3. Create a new user and their personal org atomically. If org
-        //    creation fails the user insert rolls back too, so we never strand
-        //    an account with no organization.
+        // 3. Create a new user. No org is created per user — onboarding is
+        //    default-org + invite based, not personal-org-per-user. The OIDC
+        //    callback places the user in the deployment's default org, and
+        //    additional orgs are staff-provisioned. See docs/FEDERATION.md.
         let password_hash = hash::hash_password(&Uuid::new_v4().to_string())
             .map_err(|e| ModelError::Any(e.into()))?;
         let name = info
@@ -207,7 +207,6 @@ impl Model {
             ActiveValue::Set(None)
         };
 
-        let txn = db.begin().await?;
         let user = users::ActiveModel {
             email: ActiveValue::Set(info.email.clone()),
             password: ActiveValue::Set(password_hash),
@@ -217,10 +216,8 @@ impl Model {
             email_verified_at,
             ..Default::default()
         }
-        .insert(&txn)
+        .insert(db)
         .await?;
-        super::organizations::Model::create_personal_org_in(&txn, &user).await?;
-        txn.commit().await?;
 
         // Auto-accept pending invites only for a verified email — otherwise an
         // unverified signup could claim invitations addressed to someone else.

@@ -79,10 +79,7 @@ async fn mk_org(db: &DatabaseConnection, suffix: &str) -> organizations::Model {
     )
     .await
     .expect("create user");
-    organizations::Model::find_orgs_for_user(db, user.id)
-        .await
-        .unwrap()
-        .remove(0)
+    crate::support::owned_org(db, suffix, user.id).await
 }
 
 async fn mk_definition(

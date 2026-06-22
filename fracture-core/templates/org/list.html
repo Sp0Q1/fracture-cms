@@ -11,7 +11,9 @@
             <h1>Organizations <span class="badge secondary">{{ user_orgs | length }}</span></h1>
             <p class="page-subtitle">Manage your organizations</p>
         </div>
+        {% if is_platform_admin %}
         <a href="/orgs/new" class="button">New Organization</a>
+        {% endif %}
     </div>
 </div>
 
@@ -44,8 +46,12 @@
 {% else %}
     <article class="card empty-state">
         <h3>No Organizations</h3>
-        <p>Create your first organization to get started.</p>
+        {% if is_platform_admin %}
+        <p>Create the first organization to get started.</p>
         <a href="/orgs/new" class="button">New Organization</a>
+        {% else %}
+        <p>You are not a member of any organization yet. Contact your administrator to be added to one.</p>
+        {% endif %}
     </article>
 {% endif %}
 {% endblock content %}

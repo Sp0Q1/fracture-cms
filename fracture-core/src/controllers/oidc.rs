@@ -227,6 +227,30 @@ async fn callback(
 
     let user = users::Model::find_or_create_from_oidc(&ctx.db, &info).await?;
 
+    // Place the user in the deployment's default org (one shared client org;
+    // no per-user personal orgs). Configured via settings.org.default_slug /
+    // default_name; the org is created on first use. Best-effort — a failure
+    // here must not block an otherwise-valid login.
+    if let Some(org_cfg) = ctx.config.settings.as_ref().and_then(|s| s.get("org")) {
+        if let Some(slug) = org_cfg
+            .get("default_slug")
+            .and_then(serde_json::Value::as_str)
+            .filter(|s| !s.is_empty())
+        {
+            let name = org_cfg
+                .get("default_name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(slug);
+            if let Err(e) = crate::models::organizations::Model::ensure_default_membership(
+                &ctx.db, slug, name, user.id,
+            )
+            .await
+            {
+                tracing::warn!(error = %e, "could not ensure default-org membership");
+            }
+        }
+    }
+
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = user
         .generate_jwt(&jwt_secret.secret, jwt_secret.expiration)

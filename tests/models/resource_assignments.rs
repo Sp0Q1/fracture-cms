@@ -19,7 +19,7 @@ const RESOURCE_TYPE: &str = "test_resource";
 const ROLE_KEY: &str = "test_role";
 
 async fn create_test_user(db: &sea_orm::DatabaseConnection, suffix: &str) -> users::Model {
-    users::Model::find_or_create_from_oidc(
+    let user = users::Model::find_or_create_from_oidc(
         db,
         &OidcUserInfo {
             provider: "test".to_string(),
@@ -30,7 +30,9 @@ async fn create_test_user(db: &sea_orm::DatabaseConnection, suffix: &str) -> use
         },
     )
     .await
-    .expect("Failed to create test user")
+    .expect("create test user");
+    crate::support::owned_org(db, suffix, user.id).await;
+    user
 }
 
 async fn personal_org(db: &sea_orm::DatabaseConnection, user_id: i32) -> organizations::Model {

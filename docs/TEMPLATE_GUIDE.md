@@ -238,7 +238,7 @@ Out of the box, your project has:
 
 - **OIDC authentication** — login, logout, token refresh, back-channel logout
 - **User management** — auto-created on first OIDC login
-- **Organizations** — personal orgs (auto-created) + team orgs
+- **Organizations** — shared default org (auto-join on first login) + staff-created orgs
 - **RBAC** — four roles: Owner > Admin > Member > Viewer
 - **Org invites** — email invitations with 7-day expiry, auto-accept on signup
 - **Org context** — resolved from `org_pid` cookie on every request
