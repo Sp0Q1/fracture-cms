@@ -3,3 +3,4 @@ mod contact;
 mod jobs;
 mod oidc;
 mod org;
+mod projects;

@@ -1,3 +1,4 @@
+use fracture_core::permissions::{Capabilities, COMMENT, DELETE, EDIT};
 use loco_rs::prelude::*;
 
 use crate::controllers::middleware::OrgContext;
@@ -32,10 +33,16 @@ pub fn show(
     user_orgs: &[organizations::Model],
     item: &projects::Model,
     notes: &[notes::Model],
+    caps: &Capabilities,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
     ctx["item"] = serde_json::json!(item);
     ctx["notes"] = serde_json::json!(notes);
+    // Capability flags drive which actions the template offers — the same
+    // resolver result the controller gates on (see src/authz.rs).
+    ctx["can_edit"] = serde_json::json!(caps.allows(EDIT));
+    ctx["can_delete"] = serde_json::json!(caps.allows(DELETE));
+    ctx["can_comment"] = serde_json::json!(caps.allows(COMMENT));
     format::render().view(v, "project/show.html", data!(ctx))
 }
 

@@ -7,6 +7,7 @@ pub use sea_orm_migration::prelude::*;
 mod m20260220_000004_create_projects;
 mod m20260220_000005_create_notes;
 mod m20260612_000002_add_resource_indexes;
+mod m20260622_000001_add_authority_to_projects;
 
 pub struct Migrator;
 
@@ -19,6 +20,7 @@ impl MigratorTrait for Migrator {
                 Box::new(m20260220_000004_create_projects::Migration) as Box<dyn MigrationTrait>,
                 Box::new(m20260220_000005_create_notes::Migration),
                 Box::new(m20260612_000002_add_resource_indexes::Migration),
+                Box::new(m20260622_000001_add_authority_to_projects::Migration),
             ])
             .collect()
     }

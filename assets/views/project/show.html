@@ -24,13 +24,32 @@
         <span class="detail-label">ID</span>
         <span class="detail-value"><code>{{ item.pid }}</code></span>
     </div>
+    <div class="detail-row">
+        <span class="detail-label">Ownership</span>
+        <span class="detail-value">
+            {% if item.owner_tier == "platform" %}
+                <span class="badge">Staff-managed</span> — local members &amp; admins may only view and comment
+            {% else %}
+                <span class="badge success">Org project</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Your access</span>
+        <span class="detail-value">
+            <span class="badge">view</span>
+            {% if can_comment %}<span class="badge">comment</span>{% endif %}
+            {% if can_edit %}<span class="badge success">edit</span>{% endif %}
+            {% if can_delete %}<span class="badge success">delete</span>{% endif %}
+        </span>
+    </div>
 
     <div class="form-actions">
-        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        {% if can_edit %}
         <a href="/projects/{{ item.pid }}/edit" class="button">Edit</a>
         {% endif %}
         <a href="/projects" class="button" data-variant="secondary">Back to Projects</a>
-        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        {% if can_delete %}
         <span class="spacer"></span>
         <button class="outline" data-variant="danger"
                 data-delete-url="/projects/{{ item.pid }}"

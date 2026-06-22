@@ -3,7 +3,10 @@ use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use fracture_core::permissions::{DELETE, EDIT, VIEW};
+
 use super::middleware;
+use crate::authz;
 use crate::models::_entities::projects::{ActiveModel, Model};
 use crate::models::org_members::OrgRole;
 use crate::models::organizations as org_model;
@@ -92,6 +95,15 @@ pub async fn add(
     let mut item: ActiveModel = Default::default();
     params.update(&mut item);
     item.org_id = Set(org_ctx.org.id);
+    item.created_by = Set(Some(user.id));
+    // A project created by platform/staff is owned at the platform tier, which
+    // caps the local org tiers (even Owner) per ProjectPolicy; a member-created
+    // one is org-owned. This is the both-directions switch.
+    item.owner_tier = Set(if org_ctx.is_platform_admin {
+        "platform".to_string()
+    } else {
+        "org".to_string()
+    });
     item.insert(&ctx.db).await?;
     Ok(Redirect::to("/projects").into_response())
 }
@@ -113,17 +125,29 @@ pub async fn show(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Viewer);
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
+    // Per-resource capabilities replace the blanket role check: a staff-owned
+    // project caps even the org Owner at view+comment (see src/authz.rs).
+    let caps = authz::project_capabilities(
+        &ctx.db,
+        user.id,
+        org_ctx.is_platform_admin,
+        org_ctx.role,
+        &item,
+    )
+    .await?;
+    if !caps.allows(VIEW) {
+        return Err(Error::NotFound);
+    }
     let notes =
         crate::models::notes::Model::find_by_project_and_org(&ctx.db, item.id, org_ctx.org.id)
             .await?;
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
-    views::project::show(&v, &user, &org_ctx, &user_orgs, &item, &notes)
+    views::project::show(&v, &user, &org_ctx, &user_orgs, &item, &notes, &caps)
 }
 
 /// `GET /projects/:pid/edit` -- edit project form.
@@ -143,10 +167,20 @@ pub async fn edit(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
+    let caps = authz::project_capabilities(
+        &ctx.db,
+        user.id,
+        org_ctx.is_platform_admin,
+        org_ctx.role,
+        &item,
+    )
+    .await?;
+    if !caps.allows(EDIT) {
+        return Err(Error::NotFound);
+    }
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -170,10 +204,20 @@ pub async fn update(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
+    let caps = authz::project_capabilities(
+        &ctx.db,
+        user.id,
+        org_ctx.is_platform_admin,
+        org_ctx.role,
+        &item,
+    )
+    .await?;
+    if !caps.allows(EDIT) {
+        return Err(Error::NotFound);
+    }
     let mut item = item.into_active_model();
     params.update(&mut item);
     item.update(&ctx.db).await?;
@@ -196,10 +240,20 @@ pub async fn remove(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
+    let caps = authz::project_capabilities(
+        &ctx.db,
+        user.id,
+        org_ctx.is_platform_admin,
+        org_ctx.role,
+        &item,
+    )
+    .await?;
+    if !caps.allows(DELETE) {
+        return Err(Error::NotFound);
+    }
     item.delete(&ctx.db).await?;
     format::empty()
 }
