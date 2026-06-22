@@ -52,8 +52,9 @@ Core templates are embedded in the `fracture-core` binary. The app's `view_engin
 
 - **Default org**: One shared org per deployment (named for the client),
   configured via `settings.org.default_slug` / `default_name`. New users join it
-  at `Viewer` on first login; it is created on first use if missing. There are
-  **no per-user personal orgs**. Leave the slug empty to disable the auto-join.
+  on first login at the role set by `settings.org.default_role` (defaults to
+  `member`); it is created on first use if missing. There are **no per-user
+  personal orgs**. Leave the slug empty to disable the auto-join.
 - **Additional orgs**: Staff-only. Creating and configuring orgs requires
   platform-admin; clients request additional orgs out of band. Within an org,
   client Admins/Owners manage their own members and settings.

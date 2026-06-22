@@ -63,7 +63,30 @@ pub async fn list(
     let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
         .await
         .unwrap_or_default();
-    views::org::list(&v, &user, org_ctx.as_ref(), &user_orgs)
+    // Resolve the viewer's role in each org so the list only offers the
+    // Members/Settings actions they can actually use (Admin+ in that org, or
+    // platform admin). Platform admins see every org but may not be a member
+    // of it — they manage all of them.
+    let is_platform_admin = org_ctx.as_ref().is_some_and(|o| o.is_platform_admin);
+    let mut items = Vec::with_capacity(user_orgs.len());
+    for org in &user_orgs {
+        let role = org_members::Model::find_membership(&ctx.db, org.id, user.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|m| m.role);
+        let can_manage = is_platform_admin
+            || role
+                .as_deref()
+                .and_then(OrgRole::from_str_role)
+                .is_some_and(|r| r.at_least(OrgRole::Admin));
+        items.push(views::org::OrgListItem {
+            org,
+            role,
+            can_manage,
+        });
+    }
+    views::org::list(&v, &user, org_ctx.as_ref(), &items)
 }
 
 /// GET /orgs/new — new org form
@@ -407,6 +430,19 @@ pub async fn delete(
             .status(axum::http::StatusCode::FORBIDDEN)
             .body(axum::body::Body::from(
                 "Cannot delete the platform admin organization",
+            ))
+            .unwrap()
+            .into_response());
+    }
+
+    // Refuse if any member's only org is this one. With no personal orgs to
+    // fall back to, deleting it would leave them with no organization.
+    if org_model::Model::has_member_whose_only_org_is(&ctx.db, org.id).await? {
+        return Ok(axum::response::Response::builder()
+            .status(axum::http::StatusCode::CONFLICT)
+            .body(axum::body::Body::from(
+                "Cannot delete this organization: a member would be left \
+                 with no organization. Move members to another org first.",
             ))
             .unwrap()
             .into_response());

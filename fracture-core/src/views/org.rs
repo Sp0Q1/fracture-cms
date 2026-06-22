@@ -3,6 +3,14 @@ use loco_rs::prelude::*;
 use crate::controllers::middleware::OrgContext;
 use crate::models::_entities::{org_invites, org_members, organizations, users};
 
+/// One row of the organization list: the org plus the viewer's role in it and
+/// whether they may manage it (Admin+ in that org, or platform admin).
+pub struct OrgListItem<'a> {
+    pub org: &'a organizations::Model,
+    pub role: Option<String>,
+    pub can_manage: bool,
+}
+
 /// Renders the organization list page.
 ///
 /// # Errors
@@ -12,9 +20,22 @@ pub fn list(
     v: &impl ViewRenderer,
     user: &users::Model,
     org_ctx: Option<&OrgContext>,
-    user_orgs: &[organizations::Model],
+    items: &[OrgListItem<'_>],
 ) -> Result<Response> {
-    let ctx = super::base_context(user, org_ctx, user_orgs);
+    let orgs: Vec<organizations::Model> = items.iter().map(|i| i.org.clone()).collect();
+    let mut ctx = super::base_context(user, org_ctx, &orgs);
+    // Replace the nav's bare org list with entries enriched for the table:
+    // the viewer's role and whether they can manage each org.
+    ctx["user_orgs"] = serde_json::json!(items
+        .iter()
+        .map(|i| serde_json::json!({
+            "name": i.org.name,
+            "pid": i.org.pid.to_string(),
+            "is_personal": i.org.is_personal,
+            "role": i.role,
+            "can_manage": i.can_manage,
+        }))
+        .collect::<Vec<_>>());
     format::render().view(v, "org/list.html", data!(ctx))
 }
 

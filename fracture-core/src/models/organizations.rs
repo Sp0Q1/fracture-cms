@@ -27,8 +27,9 @@ impl Model {
     ///
     /// New users join one shared default org (named for the client) rather
     /// than each getting a personal org; additional orgs are staff-created.
-    /// The org is created on first use if missing; members join at
-    /// [`OrgRole::Viewer`] (staff/admins elevate as needed). Idempotent.
+    /// The org is created on first use if missing; members join at `role`
+    /// (configured via `settings.org.default_role`; staff elevate individuals
+    /// as needed). Idempotent — an existing member's role is left untouched.
     ///
     /// # Errors
     ///
@@ -37,6 +38,7 @@ impl Model {
         db: &DatabaseConnection,
         slug: &str,
         name: &str,
+        role: OrgRole,
         user_id: i32,
     ) -> Result<Self, DbErr> {
         let org = match Self::find_by_slug(db, slug).await? {
@@ -61,7 +63,7 @@ impl Model {
             org_members::ActiveModel {
                 org_id: sea_orm::ActiveValue::Set(org.id),
                 user_id: sea_orm::ActiveValue::Set(user_id),
-                role: sea_orm::ActiveValue::Set(OrgRole::Viewer.to_string()),
+                role: sea_orm::ActiveValue::Set(role.to_string()),
                 ..Default::default()
             }
             .insert(db)
@@ -93,6 +95,36 @@ impl Model {
     /// Returns an error if the database query fails.
     pub async fn find_by_slug(db: &DatabaseConnection, slug: &str) -> Result<Option<Self>, DbErr> {
         Entity::find().filter(Column::Slug.eq(slug)).one(db).await
+    }
+
+    /// Returns true if any member of `org_id` belongs to no other org, i.e.
+    /// deleting this org would leave them with no organization.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a database query fails.
+    pub async fn has_member_whose_only_org_is(
+        db: &DatabaseConnection,
+        org_id: i32,
+    ) -> Result<bool, DbErr> {
+        let member_ids: Vec<i32> = org_members::Entity::find()
+            .filter(org_members::Column::OrgId.eq(org_id))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|m| m.user_id)
+            .collect();
+        for uid in member_ids {
+            let others = org_members::Entity::find()
+                .filter(org_members::Column::UserId.eq(uid))
+                .filter(org_members::Column::OrgId.ne(org_id))
+                .count(db)
+                .await?;
+            if others == 0 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Returns true if the user is a member of any org with `is_platform_admin`.

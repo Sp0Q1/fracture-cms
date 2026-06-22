@@ -53,13 +53,26 @@ async fn test_no_personal_org_and_default_org_join() {
         "no personal org should be auto-created"
     );
 
-    // Joining the deployment's default org adds them as Viewer, idempotently.
-    let org = organizations::Model::ensure_default_membership(db, "acme", "Acme Inc.", user.id)
-        .await
-        .unwrap();
-    organizations::Model::ensure_default_membership(db, "acme", "Acme Inc.", user.id)
-        .await
-        .unwrap();
+    // Joining the deployment's default org adds them at the configured role,
+    // idempotently (a second call doesn't change or duplicate the membership).
+    let org = organizations::Model::ensure_default_membership(
+        db,
+        "acme",
+        "Acme Inc.",
+        OrgRole::Member,
+        user.id,
+    )
+    .await
+    .unwrap();
+    organizations::Model::ensure_default_membership(
+        db,
+        "acme",
+        "Acme Inc.",
+        OrgRole::Member,
+        user.id,
+    )
+    .await
+    .unwrap();
     let orgs = organizations::Model::find_orgs_for_user(db, user.id)
         .await
         .unwrap();
@@ -69,7 +82,10 @@ async fn test_no_personal_org_and_default_org_join() {
         .await
         .unwrap()
         .expect("default-org membership");
-    assert_eq!(membership.role, "viewer", "default-org join is Viewer");
+    assert_eq!(
+        membership.role, "member",
+        "default-org join uses given role"
+    );
 }
 
 #[tokio::test]

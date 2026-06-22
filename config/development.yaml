@@ -78,6 +78,10 @@ settings:
   org:
     default_slug: acme
     default_name: "Acme Inc."
+    # Role new members get in the default org (viewer|member|admin|owner).
+    # Member lets them work immediately; staff elevate individuals, and
+    # per-resource authority still protects staff-owned data.
+    default_role: member
   blog:
     org_slug: "platform-admin"
   # Login admission allowlist (see docs/FEDERATION.md). Unset in dev so any
