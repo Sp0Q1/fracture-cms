@@ -101,14 +101,18 @@ pub async fn get_org_context_or_default(
         .await
         .ok()
         .flatten();
-    let role = membership
+    // Resolve the role lazily: only bail when the member genuinely has no role
+    // and isn't a platform admin. (A previous `unwrap_or(... return None)`
+    // evaluated the `return None` eagerly, dropping every non-admin member that
+    // reached the fallback — e.g. any member without a valid `org_pid` cookie.)
+    let role = match membership
         .as_ref()
         .and_then(|m| OrgRole::from_str_role(&m.role))
-        .unwrap_or(if is_platform_admin {
-            OrgRole::Admin
-        } else {
-            return None;
-        });
+    {
+        Some(role) => role,
+        None if is_platform_admin => OrgRole::Admin,
+        None => return None,
+    };
     let membership =
         membership.unwrap_or_else(|| org_members::Model::virtual_admin(org.id, user.id));
     Some(OrgContext {
