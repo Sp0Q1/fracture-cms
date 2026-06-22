@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Comment — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/projects/{{ project_pid }}/notes/{{ note.pid }}">{{ note.title }}</a>
+    <span class="separator" aria-hidden="true">/</span>
+    <span aria-current="page">Edit comment</span>
+</nav>
+
+<div class="page-header">
+    <h1>Edit Comment</h1>
+</div>
+
+<article class="card form-card">
+    <form action="/projects/{{ project_pid }}/notes/{{ note.pid }}/comments/{{ comment.pid }}" method="post">
+        <div data-field>
+            <label for="body">Comment</label>
+            <textarea id="body" name="body" rows="4" required>{{ comment.body }}</textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit">Save Changes</button>
+            <a href="/projects/{{ project_pid }}/notes/{{ note.pid }}" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+{% endblock content %}

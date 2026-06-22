@@ -1,3 +1,4 @@
+pub mod comment;
 pub mod home;
 pub mod note;
 pub mod project;

@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod note_comments;
 pub mod notes;
 pub mod projects;
 pub use fracture_core::models::_entities::{

@@ -1,10 +1,10 @@
 //! Per-resource authorization glue: wires `fracture_core::permissions` into the
-//! demo resources (`projects`, `notes`).
+//! demo resources (`projects`, `notes`, `note_comments`).
 //!
 //! For each resource type an app wants capability-based access on, it writes a
-//! [`ResourcePolicy`]. `notes` uses the newer [`Authorizable`] trait +
-//! `middleware::capabilities` + `require_capability!`; `projects` shows the
-//! lower-level `resolve` helper. See `docs/ADDING_RESOURCES.md`.
+//! [`ResourcePolicy`]. `notes`/`note_comments` use the newer [`Authorizable`]
+//! trait + `middleware::capabilities` + `require_capability!`; `projects` shows
+//! the lower-level `resolve` helper. See `docs/ADDING_RESOURCES.md`.
 
 use fracture_core::models::org_members::OrgRole;
 use fracture_core::models::resource_assignments;
@@ -14,7 +14,7 @@ use fracture_core::permissions::{
 };
 use sea_orm::DatabaseConnection;
 
-use crate::models::_entities::{notes, projects};
+use crate::models::_entities::{note_comments, notes, projects};
 
 /// `resource_type` key for project assignments in `resource_assignments`.
 pub const PROJECT: &str = "project";
@@ -90,17 +90,19 @@ pub const NOTE: &str = "note";
 
 /// Capability policy for notes.
 ///
-/// Org (client) users get **read-only** access by default; staff (platform
-/// admin) are the ceiling and bypass the policy, so they edit/delete anything.
-/// This is the per-model knob an app tunes (add capabilities per `(owner, role)`
-/// to let org users do more — comment, edit, custom actions).
+/// Clients can **read and comment** but not edit/delete the note itself; staff
+/// (platform admin) are the ceiling and bypass the policy. `COMMENT` is what
+/// gates posting a comment (see `CommentPolicy`).
 #[derive(Default)]
 pub struct NotePolicy;
 
 impl ResourcePolicy for NotePolicy {
-    fn caps_for(&self, _owner: OwnerTier, _role: OrgRole) -> Vec<&'static str> {
-        // Read-only for every org role, on both org- and staff-owned notes.
-        vec![VIEW]
+    fn caps_for(&self, _owner: OwnerTier, role: OrgRole) -> Vec<&'static str> {
+        match role {
+            // Viewers are read-only; Members and up may comment on a note.
+            OrgRole::Viewer => vec![VIEW],
+            _ => vec![VIEW, COMMENT],
+        }
     }
 }
 
@@ -125,5 +127,45 @@ impl Authorizable for notes::Model {
 
     fn created_by(&self) -> Option<i32> {
         self.created_by
+    }
+}
+
+/// `resource_type` key for note-comment grants in `resource_assignments`.
+pub const NOTE_COMMENT: &str = "note_comment";
+
+/// Capability policy for note comments.
+///
+/// Everyone in the org gets `VIEW`. Edit/delete are *not* granted by tier —
+/// they come from the resolver's built-ins: a comment's **author** controls
+/// their own (creator → full control), and **staff** edit/delete any (the
+/// ceiling). So org users can only touch their own comments.
+#[derive(Default)]
+pub struct CommentPolicy;
+
+impl ResourcePolicy for CommentPolicy {
+    fn caps_for(&self, _owner: OwnerTier, _role: OrgRole) -> Vec<&'static str> {
+        vec![VIEW]
+    }
+}
+
+impl Authorizable for note_comments::Model {
+    type Policy = CommentPolicy;
+
+    fn resource_type() -> &'static str {
+        NOTE_COMMENT
+    }
+
+    fn resource_id(&self) -> i32 {
+        self.id
+    }
+
+    fn owner_tier(&self) -> OwnerTier {
+        // Comment ownership doesn't distinguish tiers; author/staff rules
+        // (handled by the resolver) decide who may edit or delete.
+        OwnerTier::Org
+    }
+
+    fn created_by(&self) -> Option<i32> {
+        Some(self.author_id)
     }
 }
