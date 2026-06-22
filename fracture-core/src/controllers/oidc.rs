@@ -229,8 +229,8 @@ async fn callback(
 
     // Place the user in the deployment's default org (one shared client org;
     // no per-user personal orgs). Configured via settings.org.default_slug /
-    // default_name; the org is created on first use. Best-effort — a failure
-    // here must not block an otherwise-valid login.
+    // default_name / default_role; the org is created on first use.
+    // Best-effort — a failure here must not block an otherwise-valid login.
     if let Some(org_cfg) = ctx.config.settings.as_ref().and_then(|s| s.get("org")) {
         if let Some(slug) = org_cfg
             .get("default_slug")
@@ -241,8 +241,16 @@ async fn callback(
                 .get("default_name")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or(slug);
+            // Role new members join at; defaults to Member so they can work in
+            // their org immediately. Staff elevate individuals as needed, and
+            // per-resource authority still keeps clients off staff-owned data.
+            let role = org_cfg
+                .get("default_role")
+                .and_then(serde_json::Value::as_str)
+                .and_then(crate::models::org_members::OrgRole::from_str_role)
+                .unwrap_or(crate::models::org_members::OrgRole::Member);
             if let Err(e) = crate::models::organizations::Model::ensure_default_membership(
-                &ctx.db, slug, name, user.id,
+                &ctx.db, slug, name, role, user.id,
             )
             .await
             {

@@ -48,6 +48,8 @@ settings:
   org:
     default_slug: "{{ get_env(name='DEFAULT_ORG_SLUG', default='') }}"
     default_name: "{{ get_env(name='DEFAULT_ORG_NAME', default='') }}"
+    # Role new members get in the default org (viewer|member|admin|owner).
+    default_role: "{{ get_env(name='DEFAULT_ORG_ROLE', default='member') }}"
   # Login admission allowlist: only identities whose email is on one of these
   # domains may sign in — checked on every login, on top of whatever the IdP
   # authenticates. In a federated setup (one IdP, many tenant deployments)

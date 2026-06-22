@@ -194,3 +194,52 @@ async fn member_resolves_org_context_without_org_pid_cookie() {
     })
     .await;
 }
+
+/// Deleting an org that is some member's ONLY org would orphan them (no
+/// personal orgs exist as a fallback), so it must be refused.
+#[tokio::test]
+#[serial]
+async fn cannot_delete_a_members_last_org() {
+    request::<App, _, _>(|request, ctx| async move {
+        let owner = mk_user(&ctx.db, "del-last").await;
+        let org_a = crate::support::owned_org(&ctx.db, "del-a", owner.id).await;
+
+        // org_a is the owner's only org → deletion refused.
+        let response = request
+            .post(&format!("/orgs/{}/delete", org_a.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .await;
+        assert_eq!(
+            response.status_code(),
+            409,
+            "deleting a member's last org must be refused"
+        );
+        assert!(
+            organizations::Model::find_by_pid(&ctx.db, &org_a.pid.to_string())
+                .await
+                .unwrap()
+                .is_some(),
+            "the org must still exist after a refused delete"
+        );
+
+        // Give the owner a second org; now org_a is no longer anyone's last org.
+        let _org_b = crate::support::owned_org(&ctx.db, "del-b", owner.id).await;
+        let response = request
+            .post(&format!("/orgs/{}/delete", org_a.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .await;
+        assert!(
+            response.status_code().as_u16() < 400,
+            "with another org present, deletion should succeed (got {})",
+            response.status_code()
+        );
+        assert!(
+            organizations::Model::find_by_pid(&ctx.db, &org_a.pid.to_string())
+                .await
+                .unwrap()
+                .is_none(),
+            "org A should be gone after a successful delete"
+        );
+    })
+    .await;
+}

@@ -1,7 +1,7 @@
 use fracture_cms::{
     app::App,
     models::{
-        org_members, organizations,
+        organizations,
         users::{self, Model, OidcUserInfo},
     },
 };
