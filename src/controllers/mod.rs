@@ -1,3 +1,4 @@
+pub mod comment;
 pub mod fallback;
 pub mod home;
 pub mod note;

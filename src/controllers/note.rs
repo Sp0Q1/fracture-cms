@@ -3,13 +3,14 @@ use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use fracture_core::permissions::{DELETE, EDIT};
+use fracture_core::permissions::{COMMENT, DELETE, EDIT};
 
 use super::middleware;
 use crate::models::_entities::notes::{ActiveModel, Model};
+use crate::models::_entities::users as users_entity;
 use crate::models::org_members::OrgRole;
 use crate::models::organizations as org_model;
-use crate::models::projects;
+use crate::models::{note_comments, projects};
 use crate::{require_capability, require_platform_admin, require_role, require_user, views};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -117,13 +118,47 @@ pub async fn show(
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
-    // Only offer Edit/Delete the viewer can actually use (org members can't
-    // mutate staff-owned notes) — no buttons that lead to a denial.
+    // Only offer Edit/Delete the viewer can actually use (clients can't mutate
+    // notes) — no buttons that lead to a denial. COMMENT gates the reply box.
     let caps = middleware::capabilities(&ctx.db, &org_ctx, user.id, &item).await?;
+    let can_comment = caps.allows(COMMENT);
+
+    // Build the comment timeline: author name, timestamp, an "edited" marker,
+    // and per-comment edit/delete capability (author or staff).
+    let comments =
+        note_comments::Model::find_by_note_and_org(&ctx.db, item.id, org_ctx.org.id).await?;
+    let author_ids: Vec<i32> = comments.iter().map(|c| c.author_id).collect();
+    let authors = users_entity::Entity::find()
+        .filter(users_entity::Column::Id.is_in(author_ids))
+        .all(&ctx.db)
+        .await?;
+    let name_by_id: std::collections::HashMap<i32, String> =
+        authors.into_iter().map(|u| (u.id, u.name)).collect();
+    let mut comment_views = Vec::with_capacity(comments.len());
+    for c in &comments {
+        let comment_caps = middleware::capabilities(&ctx.db, &org_ctx, user.id, c).await?;
+        comment_views.push(serde_json::json!({
+            "pid": c.pid.to_string(),
+            "body": c.body,
+            "author": name_by_id.get(&c.author_id).cloned().unwrap_or_else(|| "Unknown".to_string()),
+            "created_at": c.created_at.to_string(),
+            "edited": c.updated_at > c.created_at,
+            "can_edit": comment_caps.allows(EDIT),
+            "can_delete": comment_caps.allows(DELETE),
+        }));
+    }
+
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
-    views::note::show(&v, &user, &org_ctx, &user_orgs, &project, &item, &caps)
+    let data = views::note::ShowData {
+        project: &project,
+        note: &item,
+        caps: &caps,
+        can_comment,
+        comments: comment_views,
+    };
+    views::note::show(&v, &user, &org_ctx, &user_orgs, &data)
 }
 
 /// `GET /projects/:project_pid/notes/:pid/edit` -- edit note form.

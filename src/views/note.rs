@@ -20,6 +20,17 @@ pub fn create(
     format::render().view(v, "note/create.html", data!(ctx))
 }
 
+/// Bundled inputs for the note detail page: the note, the viewer's note
+/// capabilities, and the comment timeline (each pre-rendered with its own
+/// `can_edit`/`can_delete`).
+pub struct ShowData<'a> {
+    pub project: &'a projects::Model,
+    pub note: &'a notes::Model,
+    pub caps: &'a fracture_core::permissions::Capabilities,
+    pub can_comment: bool,
+    pub comments: Vec<serde_json::Value>,
+}
+
 /// Render the note detail page.
 ///
 /// # Errors
@@ -30,16 +41,16 @@ pub fn show(
     user: &users::Model,
     org_ctx: &OrgContext,
     user_orgs: &[organizations::Model],
-    project: &projects::Model,
-    item: &notes::Model,
-    caps: &fracture_core::permissions::Capabilities,
+    data: &ShowData<'_>,
 ) -> Result<Response> {
     use fracture_core::permissions::{DELETE, EDIT};
     let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
-    ctx["project"] = serde_json::json!(project);
-    ctx["item"] = serde_json::json!(item);
-    ctx["can_edit"] = serde_json::json!(caps.allows(EDIT));
-    ctx["can_delete"] = serde_json::json!(caps.allows(DELETE));
+    ctx["project"] = serde_json::json!(data.project);
+    ctx["item"] = serde_json::json!(data.note);
+    ctx["can_edit"] = serde_json::json!(data.caps.allows(EDIT));
+    ctx["can_delete"] = serde_json::json!(data.caps.allows(DELETE));
+    ctx["can_comment"] = serde_json::json!(data.can_comment);
+    ctx["comments"] = serde_json::json!(data.comments);
     format::render().view(v, "note/show.html", data!(ctx))
 }
 
