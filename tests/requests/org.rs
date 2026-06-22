@@ -7,6 +7,7 @@ use fracture_cms::{
     },
 };
 use loco_rs::testing::prelude::*;
+use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serial_test::serial;
 
 async fn mk_user(db: &sea_orm::DatabaseConnection, suffix: &str) -> users::Model {
@@ -154,6 +155,42 @@ async fn admin_cannot_remove_owner() {
                 .unwrap()
                 .is_some(),
             "the owner should still be a member"
+        );
+    })
+    .await;
+}
+
+/// Regression: a non-platform-admin member with NO `org_pid` cookie must still
+/// resolve an org context via the fallback. A prior `unwrap_or(... return None)`
+/// evaluated the bail eagerly and dropped every such member (404 everywhere).
+#[tokio::test]
+#[serial]
+async fn member_resolves_org_context_without_org_pid_cookie() {
+    request::<App, _, _>(|request, ctx| async move {
+        let user = mk_user(&ctx.db, "no-cookie").await;
+        let org = organizations::ActiveModel {
+            name: Set("No-Cookie Org".to_string()),
+            slug: Set(format!("nocookie-{}", user.id)),
+            is_personal: Set(false),
+            is_platform_admin: Set(false),
+            ..Default::default()
+        }
+        .insert(&ctx.db)
+        .await
+        .unwrap();
+        org_members::Model::add_member(&ctx.db, org.id, user.id, OrgRole::Member)
+            .await
+            .unwrap();
+
+        // jwt only — NO org_pid cookie — exercises the fallback path.
+        let response = request
+            .get("/projects")
+            .add_cookie(jwt_cookie(&ctx, &user))
+            .await;
+        assert_eq!(
+            response.status_code(),
+            200,
+            "a member must resolve an org context without an org_pid cookie"
         );
     })
     .await;
