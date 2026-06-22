@@ -31,7 +31,11 @@
       "publicClient": false,
       "secret": "broker-dev-secret",
       "standardFlowEnabled": true,
-      "redirectUris": [ "http://localhost:8080/realms/tenant-acme/broker/staff/endpoint" ],
+      "redirectUris": [
+        "http://localhost:8080/realms/tenant-acme/broker/staff/endpoint",
+        "http://localhost:8080/realms/tenant-acme/broker/staff/endpoint/logout_response"
+      ],
+      "attributes": { "post.logout.redirect.uris": "+" },
       "webOrigins": [ "+" ],
       "protocolMappers": [
         {
