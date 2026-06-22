@@ -25,8 +25,8 @@ pub struct OrgContext {
     pub org: organizations::Model,
     pub membership: org_members::Model,
     pub role: OrgRole,
-    /// True if the user is a member of any org with `is_platform_admin`.
-    pub is_platform_admin: bool,
+    /// True if the user is a member of any org with `is_staff`.
+    pub is_staff: bool,
 }
 
 impl OrgContext {
@@ -40,12 +40,12 @@ impl OrgContext {
         user_id: i32,
     ) -> Self {
         let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
-        let is_platform_admin = organizations::Model::is_user_platform_admin(db, user_id).await;
+        let is_staff = organizations::Model::is_user_staff(db, user_id).await;
         Self {
             org,
             membership,
             role,
-            is_platform_admin,
+            is_staff,
         }
     }
 }
@@ -57,7 +57,7 @@ pub async fn get_org_context_or_default(
     db: &DatabaseConnection,
     user: &users::Model,
 ) -> Option<OrgContext> {
-    let is_platform_admin = organizations::Model::is_user_platform_admin(db, user.id).await;
+    let is_staff = organizations::Model::is_user_staff(db, user.id).await;
 
     // Try cookie first
     if let Some(cookie) = jar.get("org_pid") {
@@ -77,16 +77,16 @@ pub async fn get_org_context_or_default(
                     org,
                     membership,
                     role,
-                    is_platform_admin,
+                    is_staff,
                 });
             }
             // Platform admins can access any org even without membership
-            if is_platform_admin {
+            if is_staff {
                 return Some(OrgContext {
                     membership: org_members::Model::virtual_admin(org.id, user.id),
                     org,
                     role: OrgRole::Owner,
-                    is_platform_admin,
+                    is_staff,
                 });
             }
         }
@@ -110,7 +110,7 @@ pub async fn get_org_context_or_default(
         .and_then(|m| OrgRole::from_str_role(&m.role))
     {
         Some(role) => role,
-        None if is_platform_admin => OrgRole::Admin,
+        None if is_staff => OrgRole::Admin,
         None => return None,
     };
     let membership =
@@ -119,7 +119,7 @@ pub async fn get_org_context_or_default(
         org,
         membership,
         role,
-        is_platform_admin,
+        is_staff,
     })
 }
 
@@ -146,7 +146,7 @@ pub async fn public_nav_context(jar: &CookieJar, ctx: &AppContext) -> Option<ser
 /// Resolves the actor's capabilities on `resource` in the current org context.
 ///
 /// The ergonomic wrapper around [`crate::permissions::capabilities`] that pulls
-/// `is_platform_admin`/`role` from the [`OrgContext`]. Pair with
+/// `is_staff`/`role` from the [`OrgContext`]. Pair with
 /// `require_capability!` to enforce.
 ///
 /// # Errors
@@ -161,14 +161,7 @@ pub async fn capabilities<R>(
 where
     R: crate::permissions::Authorizable + Sync,
 {
-    crate::permissions::capabilities(
-        db,
-        user_id,
-        org_ctx.is_platform_admin,
-        org_ctx.role,
-        resource,
-    )
-    .await
+    crate::permissions::capabilities(db, user_id, org_ctx.is_staff, org_ctx.role, resource).await
 }
 
 /// Enforce a capability on an already-resolved set of capabilities.
@@ -187,9 +180,9 @@ macro_rules! require_capability {
 
 /// Macro to require platform admin. Returns 403 if the user is not a platform admin.
 #[macro_export]
-macro_rules! require_platform_admin {
+macro_rules! require_staff {
     ($org_ctx:expr) => {
-        if !$org_ctx.as_ref().is_some_and(|ctx| ctx.is_platform_admin) {
+        if !$org_ctx.as_ref().is_some_and(|ctx| ctx.is_staff) {
             return Ok(axum::response::Response::builder()
                 .status(axum::http::StatusCode::FORBIDDEN)
                 .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")

@@ -24,7 +24,7 @@ pub fn base_context(
         "org_name": org_ctx.map(|o| o.org.name.clone()),
         "org_pid": org_ctx.map(|o| o.org.pid.to_string()),
         "user_role": org_ctx.map(|o| o.role.to_string()),
-        "is_platform_admin": org_ctx.is_some_and(|o| o.is_platform_admin),
+        "is_staff": org_ctx.is_some_and(|o| o.is_staff),
         "user_orgs": user_orgs.iter().map(|o| json!({
             "name": o.name,
             "pid": o.pid.to_string(),

@@ -56,7 +56,7 @@ async fn mk_team_org(
         name: Set(format!("Team {suffix}")),
         slug: Set(format!("team-{suffix}")),
         is_personal: Set(false),
-        is_platform_admin: Set(false),
+        is_staff: Set(false),
         settings: Set(None),
         ..Default::default()
     }

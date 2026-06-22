@@ -27,7 +27,7 @@
             <tr data-href="/orgs/{{ org.pid }}/settings">
                 <td>
                     {{ org.name }}
-                    {% if org.is_platform_admin %}<span class="badge success">Admin</span>{% endif %}
+                    {% if org.is_staff %}<span class="badge success">Admin</span>{% endif %}
                 </td>
                 <td><code>{{ org.slug }}</code></td>
                 <td>

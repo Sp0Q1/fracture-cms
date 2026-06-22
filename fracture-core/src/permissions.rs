@@ -8,7 +8,7 @@
 //!         ≥ local Owner ≥ Admin ≥ Member ≥ Viewer
 //! ```
 //!
-//! - **Platform admins** (`is_platform_admin`) short-circuit to every
+//! - **Platform admins** (`is_staff`) short-circuit to every
 //!   capability — they are the ceiling and are never capped by a resource.
 //! - **The resource's owner tier** decides how far the *local* tiers reach:
 //!   a staff/platform-created resource can grant local Owners/Admins as
@@ -54,7 +54,7 @@ pub enum OwnerTier {
 #[derive(Debug, Clone, Copy)]
 pub struct Actor {
     /// Cross-tenant/platform admin — the ceiling tier.
-    pub is_platform_admin: bool,
+    pub is_staff: bool,
     /// The actor's org-wide role.
     pub role: OrgRole,
     /// True if this actor created/owns *this specific* resource.
@@ -115,7 +115,7 @@ pub fn resolve(
     granted: &[String],
 ) -> Capabilities {
     // Ceiling tier: never capped by a resource policy.
-    if actor.is_platform_admin {
+    if actor.is_staff {
         return Capabilities::All;
     }
     // You fully control what you created (the "user CRUDs their own docs"
@@ -180,7 +180,7 @@ pub trait Authorizable {
 pub async fn capabilities<R: Authorizable + Sync>(
     db: &DatabaseConnection,
     user_id: i32,
-    is_platform_admin: bool,
+    is_staff: bool,
     role: OrgRole,
     resource: &R,
 ) -> Result<Capabilities, DbErr> {
@@ -195,7 +195,7 @@ pub async fn capabilities<R: Authorizable + Sync>(
     .flat_map(|a| R::grant_capabilities(&a.role_key))
     .collect();
     let actor = Actor {
-        is_platform_admin,
+        is_staff,
         role,
         owns_resource: resource.created_by() == Some(user_id),
     };
@@ -232,14 +232,14 @@ mod tests {
 
     fn actor(pa: bool, role: OrgRole, owns: bool) -> Actor {
         Actor {
-            is_platform_admin: pa,
+            is_staff: pa,
             role,
             owns_resource: owns,
         }
     }
 
     #[test]
-    fn platform_admin_is_the_ceiling() {
+    fn staff_is_the_ceiling() {
         let caps = resolve(
             &actor(true, OrgRole::Viewer, false),
             OwnerTier::Staff,

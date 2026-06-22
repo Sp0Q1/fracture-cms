@@ -37,13 +37,13 @@ fn jwt_cookie(
     axum_extra::extract::cookie::Cookie::new("jwt", jwt)
 }
 
-async fn mk_platform_admin(db: &sea_orm::DatabaseConnection, suffix: &str) -> users::Model {
+async fn mk_staff(db: &sea_orm::DatabaseConnection, suffix: &str) -> users::Model {
     let admin = mk_user(db, suffix).await;
     let org = fracture_core::models::_entities::organizations::ActiveModel {
         name: Set(format!("Admin Org {suffix}")),
         slug: Set(format!("admin-org-{suffix}")),
         is_personal: Set(false),
-        is_platform_admin: Set(true),
+        is_staff: Set(true),
         settings: Set(None),
         ..Default::default()
     }
@@ -160,9 +160,9 @@ async fn solved_captcha_stores_message_and_cannot_be_replayed() {
 
 #[tokio::test]
 #[serial]
-async fn admin_inbox_is_platform_admin_only() {
+async fn admin_inbox_is_staff_only() {
     request::<App, _, _>(|request, ctx| async move {
-        let admin = mk_platform_admin(&ctx.db, "inbox-admin").await;
+        let admin = mk_staff(&ctx.db, "inbox-admin").await;
         let outsider = mk_user(&ctx.db, "inbox-outsider").await;
 
         let altcha = solved_altcha();

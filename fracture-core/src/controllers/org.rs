@@ -12,7 +12,7 @@ use crate::models::_entities::{org_members, organizations, users as users_entity
 use crate::models::org_members::{MemberWriteError, OrgRole};
 use crate::models::{org_invites, organizations as org_model, uploads as upload_model};
 use crate::views;
-use crate::{require_platform_admin, require_role, require_user};
+use crate::{require_role, require_staff, require_user};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewOrgParams {
@@ -67,7 +67,7 @@ pub async fn list(
     // Members/Settings actions they can actually use (Admin+ in that org, or
     // platform admin). Platform admins see every org but may not be a member
     // of it — they manage all of them.
-    let is_platform_admin = org_ctx.as_ref().is_some_and(|o| o.is_platform_admin);
+    let is_staff = org_ctx.as_ref().is_some_and(|o| o.is_staff);
     let mut items = Vec::with_capacity(user_orgs.len());
     for org in &user_orgs {
         let role = org_members::Model::find_membership(&ctx.db, org.id, user.id)
@@ -75,7 +75,7 @@ pub async fn list(
             .ok()
             .flatten()
             .map(|m| m.role);
-        let can_manage = is_platform_admin
+        let can_manage = is_staff
             || role
                 .as_deref()
                 .and_then(OrgRole::from_str_role)
@@ -104,7 +104,7 @@ pub async fn new(
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     // Org creation is staff-only; clients request additional orgs out of band.
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -126,7 +126,7 @@ pub async fn create(
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
     // Org creation is staff-only.
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
 
     let base_slug = slug::slugify(&params.name);
     let mut slug = base_slug.clone();
@@ -416,7 +416,7 @@ pub async fn delete(
 
     // Platform admins can delete any org. Org owners can delete their own non-personal org.
     let is_owner = org_ctx.role.at_least(OrgRole::Owner);
-    if !org_ctx.is_platform_admin && !is_owner {
+    if !org_ctx.is_staff && !is_owner {
         return Ok(axum::response::Response::builder()
             .status(axum::http::StatusCode::FORBIDDEN)
             .body(axum::body::Body::from("Forbidden"))
@@ -425,7 +425,7 @@ pub async fn delete(
     }
 
     // Cannot delete platform admin orgs
-    if org.is_platform_admin {
+    if org.is_staff {
         return Ok(axum::response::Response::builder()
             .status(axum::http::StatusCode::FORBIDDEN)
             .body(axum::body::Body::from(

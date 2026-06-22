@@ -99,7 +99,7 @@ pub async fn add(
     // A project created by platform/staff is owned at the platform tier, which
     // caps the local org tiers (even Owner) per ProjectPolicy; a member-created
     // one is org-owned. This is the both-directions switch.
-    item.owner_tier = Set(if org_ctx.is_platform_admin {
+    item.owner_tier = Set(if org_ctx.is_staff {
         "platform".to_string()
     } else {
         "org".to_string()
@@ -130,14 +130,8 @@ pub async fn show(
         .ok_or_else(|| Error::NotFound)?;
     // Per-resource capabilities replace the blanket role check: a staff-owned
     // project caps even the org Owner at view+comment (see src/authz.rs).
-    let caps = authz::project_capabilities(
-        &ctx.db,
-        user.id,
-        org_ctx.is_platform_admin,
-        org_ctx.role,
-        &item,
-    )
-    .await?;
+    let caps = authz::project_capabilities(&ctx.db, user.id, org_ctx.is_staff, org_ctx.role, &item)
+        .await?;
     if !caps.allows(VIEW) {
         return Err(Error::NotFound);
     }
@@ -170,14 +164,8 @@ pub async fn edit(
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
-    let caps = authz::project_capabilities(
-        &ctx.db,
-        user.id,
-        org_ctx.is_platform_admin,
-        org_ctx.role,
-        &item,
-    )
-    .await?;
+    let caps = authz::project_capabilities(&ctx.db, user.id, org_ctx.is_staff, org_ctx.role, &item)
+        .await?;
     if !caps.allows(EDIT) {
         return Err(Error::NotFound);
     }
@@ -207,14 +195,8 @@ pub async fn update(
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
-    let caps = authz::project_capabilities(
-        &ctx.db,
-        user.id,
-        org_ctx.is_platform_admin,
-        org_ctx.role,
-        &item,
-    )
-    .await?;
+    let caps = authz::project_capabilities(&ctx.db, user.id, org_ctx.is_staff, org_ctx.role, &item)
+        .await?;
     if !caps.allows(EDIT) {
         return Err(Error::NotFound);
     }
@@ -243,14 +225,8 @@ pub async fn remove(
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
-    let caps = authz::project_capabilities(
-        &ctx.db,
-        user.id,
-        org_ctx.is_platform_admin,
-        org_ctx.role,
-        &item,
-    )
-    .await?;
+    let caps = authz::project_capabilities(&ctx.db, user.id, org_ctx.is_staff, org_ctx.role, &item)
+        .await?;
     if !caps.allows(DELETE) {
         return Err(Error::NotFound);
     }

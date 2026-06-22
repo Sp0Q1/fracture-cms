@@ -171,7 +171,7 @@ async fn member_resolves_org_context_without_org_pid_cookie() {
             name: Set("No-Cookie Org".to_string()),
             slug: Set(format!("nocookie-{}", user.id)),
             is_personal: Set(false),
-            is_platform_admin: Set(false),
+            is_staff: Set(false),
             ..Default::default()
         }
         .insert(&ctx.db)

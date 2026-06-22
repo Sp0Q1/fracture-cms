@@ -52,7 +52,7 @@ pub fn orgs(
             "name": o.name,
             "slug": o.slug,
             "is_personal": o.is_personal,
-            "is_platform_admin": o.is_platform_admin,
+            "is_staff": o.is_staff,
         }))
         .collect::<Vec<_>>());
     format::render().view(v, "admin/orgs.html", data!(ctx))

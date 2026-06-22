@@ -21,7 +21,7 @@ pub async fn owned_org(
         name: Set(format!("Test Org {suffix}")),
         slug: Set(format!("test-{suffix}-{user_id}")),
         is_personal: Set(false),
-        is_platform_admin: Set(false),
+        is_staff: Set(false),
         settings: Set(None),
         ..Default::default()
     }

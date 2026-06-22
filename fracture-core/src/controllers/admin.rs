@@ -7,7 +7,7 @@ use crate::entity_registry::entity_registry;
 use crate::models::organizations as org_model;
 use crate::views;
 use crate::views::admin::EntityStat;
-use crate::{require_platform_admin, require_user};
+use crate::{require_staff, require_user};
 
 /// `GET /admin` — platform admin dashboard.
 ///
@@ -23,7 +23,7 @@ pub async fn dashboard(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -58,7 +58,7 @@ pub async fn orgs(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();

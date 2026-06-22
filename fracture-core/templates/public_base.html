@@ -53,7 +53,7 @@
                 {% endfor %}
                 <hr>
                 {% endif %}
-                {% if is_platform_admin %}
+                {% if is_staff %}
                 <a href="/orgs/new" role="menuitem">Create Organization</a>
                 {% endif %}
                 <a href="/orgs" role="menuitem">Manage Organizations</a>
@@ -63,7 +63,7 @@
         {% block nav_public %}
         <a href="/blog">Blog</a>
         {% endblock nav_public %}
-        {% if is_platform_admin %}
+        {% if is_staff %}
         <a href="/admin">Admin</a>
         {% endif %}
         <span class="nav-end">
@@ -77,7 +77,7 @@
                     <hr>
                     <a href="/" role="menuitem">Dashboard</a>
                     <a href="/orgs" role="menuitem">Organizations</a>
-                    {% if is_platform_admin %}
+                    {% if is_staff %}
                     <a href="/admin" role="menuitem">Platform Admin</a>
                     {% endif %}
                     <a href="/api/auth/oidc/logout" role="menuitem">Sign out</a>

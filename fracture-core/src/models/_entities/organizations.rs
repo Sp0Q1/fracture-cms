@@ -16,7 +16,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub slug: String,
     pub is_personal: bool,
-    pub is_platform_admin: bool,
+    pub is_staff: bool,
     #[sea_orm(column_type = "Text", nullable)]
     pub settings: Option<String>,
 }

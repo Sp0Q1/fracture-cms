@@ -8,7 +8,7 @@ use crate::controllers::middleware;
 use crate::models::_entities::{blog_posts, organizations, users as users_entity};
 use crate::models::{blog_posts as blog_model, organizations as org_model};
 use crate::views;
-use crate::{require_platform_admin, require_user};
+use crate::{require_staff, require_user};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlogPostParams {
@@ -132,7 +132,7 @@ pub async fn admin_index(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -159,7 +159,7 @@ pub async fn admin_new(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -180,7 +180,7 @@ pub async fn admin_create(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
 
     let blog_org = require_blog_org(&ctx).await?;
 
@@ -242,7 +242,7 @@ pub async fn admin_edit(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -269,7 +269,7 @@ pub async fn admin_update(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
 
     let blog_org = require_blog_org(&ctx).await?;
     let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
@@ -302,7 +302,7 @@ pub async fn admin_publish(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
 
     let blog_org = require_blog_org(&ctx).await?;
     let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
@@ -336,7 +336,7 @@ pub async fn admin_unpublish(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
 
     let blog_org = require_blog_org(&ctx).await?;
     let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
@@ -368,7 +368,7 @@ pub async fn admin_preview(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
 
     let blog_org = require_blog_org(&ctx).await?;
     let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
@@ -400,7 +400,7 @@ pub async fn admin_delete(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
 
     let blog_org = require_blog_org(&ctx).await?;
     let post = blog_model::Model::find_by_pid_and_org(&ctx.db, &pid, blog_org.id)
