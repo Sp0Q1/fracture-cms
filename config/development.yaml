@@ -72,6 +72,12 @@ mailer:
 # The app boots without OIDC when client_id/client_secret are empty or the
 # IdP is unreachable.  Set the OIDC_* env vars to enable authentication.
 settings:
+  # New users join this one shared org (named for the client) instead of
+  # getting a personal org; it's created on first login if missing.
+  # Additional orgs are staff-created. See docs/FEDERATION.md.
+  org:
+    default_slug: acme
+    default_name: "Acme Inc."
   blog:
     org_slug: "platform-admin"
   # Login admission allowlist (see docs/FEDERATION.md). Unset in dev so any

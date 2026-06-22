@@ -66,9 +66,8 @@ async fn viewer_cannot_trigger_job_run() {
     request::<App, _, _>(|request, ctx| async move {
         let owner = mk_user(&ctx.db, "trig-owner").await;
         let viewer = mk_user(&ctx.db, "trig-viewer").await;
-        let org = &organizations::Model::find_orgs_for_user(&ctx.db, owner.id)
-            .await
-            .unwrap()[0];
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
         org_members::Model::add_member(&ctx.db, org.id, viewer.id, OrgRole::Viewer)
             .await
             .unwrap();
@@ -97,9 +96,8 @@ async fn member_trigger_queues_one_run() {
     request::<App, _, _>(|request, ctx| async move {
         let owner = mk_user(&ctx.db, "trig2-owner").await;
         let member = mk_user(&ctx.db, "trig2-member").await;
-        let org = &organizations::Model::find_orgs_for_user(&ctx.db, owner.id)
-            .await
-            .unwrap()[0];
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
         org_members::Model::add_member(&ctx.db, org.id, member.id, OrgRole::Member)
             .await
             .unwrap();
@@ -130,9 +128,8 @@ async fn member_cannot_create_definition_and_unknown_type_rejected() {
     request::<App, _, _>(|request, ctx| async move {
         let owner = mk_user(&ctx.db, "create-owner").await;
         let member = mk_user(&ctx.db, "create-member").await;
-        let org = &organizations::Model::find_orgs_for_user(&ctx.db, owner.id)
-            .await
-            .unwrap()[0];
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
         org_members::Model::add_member(&ctx.db, org.id, member.id, OrgRole::Member)
             .await
             .unwrap();

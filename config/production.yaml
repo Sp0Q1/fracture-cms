@@ -42,6 +42,12 @@ mailer:
 # safer than silently falling back to no auth. Override via OIDC_REQUIRED=false
 # only for one-shot debug starts; never run a public deployment without it.
 settings:
+  # New users join this one shared org (named for the client) instead of a
+  # personal org; created on first login if missing. Additional orgs are
+  # staff-created. Leave the slug empty to disable default-org join.
+  org:
+    default_slug: "{{ get_env(name='DEFAULT_ORG_SLUG', default='') }}"
+    default_name: "{{ get_env(name='DEFAULT_ORG_NAME', default='') }}"
   # Login admission allowlist: only identities whose email is on one of these
   # domains may sign in — checked on every login, on top of whatever the IdP
   # authenticates. In a federated setup (one IdP, many tenant deployments)

@@ -12,7 +12,7 @@ use crate::models::_entities::{org_members, organizations, users as users_entity
 use crate::models::org_members::{MemberWriteError, OrgRole};
 use crate::models::{org_invites, organizations as org_model, uploads as upload_model};
 use crate::views;
-use crate::{require_role, require_user};
+use crate::{require_platform_admin, require_role, require_user};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewOrgParams {
@@ -80,6 +80,8 @@ pub async fn new(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+    // Org creation is staff-only; clients request additional orgs out of band.
+    require_platform_admin!(org_ctx);
     let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -99,6 +101,9 @@ pub async fn create(
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+    // Org creation is staff-only.
+    require_platform_admin!(org_ctx);
 
     let base_slug = slug::slugify(&params.name);
     let mut slug = base_slug.clone();

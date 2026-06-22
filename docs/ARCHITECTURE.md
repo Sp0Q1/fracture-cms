@@ -37,18 +37,26 @@ Core templates are embedded in the `fracture-core` binary. The app's `view_engin
 3. Provider redirects back with authorization code
 4. Server exchanges code for ID token, verifies JWT signature against JWKS
 5. `find_or_create_from_oidc()` either finds existing user or creates new one
-6. On new user creation: personal org created; pending invites are
-   auto-accepted **only when the IdP asserted `email_verified`** (or the
-   operator set `assume_email_verified` for IdPs that omit the claim).
-   Linking OIDC to an existing email-matched account requires the same
-   assertion — an unverified email is refused to prevent account takeover.
+6. On new user creation: **no personal org is created**. After the user record
+   exists, the OIDC callback places the user in the deployment's single default
+   org (configured via `settings.org.default_slug` / `default_name`, created on
+   first use) at `Viewer` role. Pending invites are auto-accepted **only when
+   the IdP asserted `email_verified`** (or the operator set
+   `assume_email_verified` for IdPs that omit the claim). Linking OIDC to an
+   existing email-matched account requires the same assertion — an unverified
+   email is refused to prevent account takeover.
 7. JWT session cookie set (HTTP-only, SameSite=Lax)
 8. `org_pid` cookie set to user's first org
 
 ## Organization Model
 
-- **Personal org**: Auto-created on first OIDC login. Cannot be deleted. User is owner.
-- **Team orgs**: Created manually. Users can be invited via email.
+- **Default org**: One shared org per deployment (named for the client),
+  configured via `settings.org.default_slug` / `default_name`. New users join it
+  at `Viewer` on first login; it is created on first use if missing. There are
+  **no per-user personal orgs**. Leave the slug empty to disable the auto-join.
+- **Additional orgs**: Staff-only. Creating and configuring orgs requires
+  platform-admin; clients request additional orgs out of band. Within an org,
+  client Admins/Owners manage their own members and settings.
 - **Org context**: Resolved on every request from `org_pid` cookie → falls back to first org.
 
 ## RBAC (Role-Based Access Control)
@@ -145,7 +153,7 @@ Request → get_current_user(jwt cookie)
 | Table          | Purpose                           | Key Relations              |
 |----------------|-----------------------------------|---------------------------|
 | users          | User accounts                     | has_many org_members      |
-| organizations  | Orgs (personal + team)            | has_many org_members, projects, notes |
+| organizations  | Orgs (default + staff-created)     | has_many org_members, projects, notes |
 | org_members    | User-org membership + role        | belongs_to users, organizations |
 | org_invites    | Email-based invitations           | belongs_to organizations, users |
 | projects       | Org-scoped projects               | belongs_to organizations, has_many notes |

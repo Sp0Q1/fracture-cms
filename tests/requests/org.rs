@@ -39,7 +39,7 @@ fn jwt_cookie(
 #[serial]
 async fn orgs_list_returns_user_orgs_when_authenticated() {
     request::<App, _, _>(|request, ctx| async move {
-        // Create a user (this also creates a personal org)
+        // Create a user and give them membership in an org.
         let user = users::Model::find_or_create_from_oidc(
             &ctx.db,
             &OidcUserInfo {
@@ -52,6 +52,7 @@ async fn orgs_list_returns_user_orgs_when_authenticated() {
         )
         .await
         .unwrap();
+        let org = crate::support::owned_org(&ctx.db, "req-list", user.id).await;
 
         // Generate a JWT
         let jwt = user
@@ -67,8 +68,8 @@ async fn orgs_list_returns_user_orgs_when_authenticated() {
         assert_eq!(response.status_code(), 200);
         let body = response.text();
         assert!(
-            body.contains("Personal"),
-            "Org list should contain personal org"
+            body.contains(&org.name),
+            "org list should contain the user's org"
         );
     })
     .await;
@@ -84,9 +85,8 @@ async fn admin_cannot_invite_owner() {
         let admin = mk_user(&ctx.db, "inv-admin").await;
 
         // Owner's personal org; promote `admin` to Admin within it.
-        let org = &organizations::Model::find_orgs_for_user(&ctx.db, owner.id)
-            .await
-            .unwrap()[0];
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
         org_members::Model::add_member(&ctx.db, org.id, admin.id, OrgRole::Admin)
             .await
             .unwrap();
@@ -125,9 +125,8 @@ async fn admin_cannot_remove_owner() {
         let admin = mk_user(&ctx.db, "rm-admin").await;
         let other_owner = mk_user(&ctx.db, "rm-owner2").await;
 
-        let org = &organizations::Model::find_orgs_for_user(&ctx.db, owner.id)
-            .await
-            .unwrap()[0];
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
         org_members::Model::add_member(&ctx.db, org.id, admin.id, OrgRole::Admin)
             .await
             .unwrap();

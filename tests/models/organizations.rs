@@ -10,7 +10,7 @@ use loco_rs::testing::prelude::*;
 use serial_test::serial;
 
 async fn create_test_user(db: &sea_orm::DatabaseConnection, suffix: &str) -> users::Model {
-    users::Model::find_or_create_from_oidc(
+    let user = users::Model::find_or_create_from_oidc(
         db,
         &OidcUserInfo {
             provider: "test".to_string(),
@@ -21,37 +21,55 @@ async fn create_test_user(db: &sea_orm::DatabaseConnection, suffix: &str) -> use
         },
     )
     .await
-    .expect("Failed to create test user")
+    .expect("create test user");
+    crate::support::owned_org(db, suffix, user.id).await;
+    user
 }
 
 #[tokio::test]
 #[serial]
-async fn test_personal_org_auto_created_on_user_creation() {
+async fn test_no_personal_org_and_default_org_join() {
     let boot = boot_test::<App>().await.unwrap();
     let db = &boot.app_context.db;
 
-    let user = create_test_user(db, "personal").await;
+    // A freshly created OIDC user gets NO org of their own (no personal orgs).
+    let user = users::Model::find_or_create_from_oidc(
+        db,
+        &fracture_cms::models::users::OidcUserInfo {
+            provider: "test".to_string(),
+            subject: "default-org".to_string(),
+            email: "default-org@example.com".to_string(),
+            name: Some("Default Org".to_string()),
+            email_verified: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        organizations::Model::find_orgs_for_user(db, user.id)
+            .await
+            .unwrap()
+            .is_empty(),
+        "no personal org should be auto-created"
+    );
+
+    // Joining the deployment's default org adds them as Viewer, idempotently.
+    let org = organizations::Model::ensure_default_membership(db, "acme", "Acme Inc.", user.id)
+        .await
+        .unwrap();
+    organizations::Model::ensure_default_membership(db, "acme", "Acme Inc.", user.id)
+        .await
+        .unwrap();
     let orgs = organizations::Model::find_orgs_for_user(db, user.id)
         .await
         .unwrap();
-
-    assert_eq!(
-        orgs.len(),
-        1,
-        "User should have exactly one org after creation"
-    );
-    assert!(orgs[0].is_personal, "First org should be personal");
-    assert!(
-        orgs[0].name.contains("Personal"),
-        "Org name should contain 'Personal'"
-    );
-
-    // Verify user is owner
-    let membership = org_members::Model::find_membership(db, orgs[0].id, user.id)
+    assert_eq!(orgs.len(), 1, "joined exactly the default org once");
+    assert!(!orgs[0].is_personal);
+    let membership = org_members::Model::find_membership(db, org.id, user.id)
         .await
         .unwrap()
-        .expect("User should be a member of their personal org");
-    assert_eq!(membership.role, "owner");
+        .expect("default-org membership");
+    assert_eq!(membership.role, "viewer", "default-org join is Viewer");
 }
 
 #[tokio::test]
@@ -105,7 +123,7 @@ async fn test_find_orgs_for_user() {
 
     let user = create_test_user(db, "multiorg").await;
 
-    // User has personal org from creation
+    // create_test_user gives the user one owned org.
     let orgs = organizations::Model::find_orgs_for_user(db, user.id)
         .await
         .unwrap();

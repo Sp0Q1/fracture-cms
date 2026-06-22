@@ -252,16 +252,16 @@ async fn oidc_creates_user_without_name_falls_back_to_email_prefix() {
 
 #[tokio::test]
 #[serial]
-async fn oidc_creates_personal_org_for_new_user() {
+async fn oidc_creates_no_personal_org_for_new_user() {
     let boot = boot_test::<App>()
         .await
         .expect("Failed to boot test application");
 
     let info = OidcUserInfo {
         provider: "test".to_string(),
-        subject: "test-personal-org".to_string(),
-        email: "personal-org@example.com".to_string(),
-        name: Some("Personal Org User".to_string()),
+        subject: "test-no-personal-org".to_string(),
+        email: "no-personal-org@example.com".to_string(),
+        name: Some("No Personal Org User".to_string()),
         email_verified: true,
     };
 
@@ -269,17 +269,14 @@ async fn oidc_creates_personal_org_for_new_user() {
         .await
         .expect("Failed to create user from OIDC");
 
+    // No personal org is auto-created — onboarding is default-org + invite based.
     let orgs = organizations::Model::find_orgs_for_user(&boot.app_context.db, user.id)
         .await
         .unwrap();
-    assert_eq!(orgs.len(), 1, "New OIDC user should have one personal org");
-    assert!(orgs[0].is_personal);
-
-    let membership = org_members::Model::find_membership(&boot.app_context.db, orgs[0].id, user.id)
-        .await
-        .unwrap();
-    assert!(membership.is_some());
-    assert_eq!(membership.unwrap().role, "owner");
+    assert!(
+        orgs.is_empty(),
+        "new OIDC user should not get a personal org"
+    );
 }
 
 #[tokio::test]

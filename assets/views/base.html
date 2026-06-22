@@ -48,7 +48,9 @@
                 {% endfor %}
                 <hr>
                 {% endif %}
+                {% if is_platform_admin %}
                 <a href="/orgs/new" role="menuitem">Create Organization</a>
+                {% endif %}
                 <a href="/orgs" role="menuitem">Manage Organizations</a>
             </div>
         </ot-dropdown>

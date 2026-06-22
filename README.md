@@ -7,7 +7,7 @@ The core infrastructure lives in the `fracture-core` library crate. Downstream p
 ## What You Get
 
 - **OIDC single sign-on** — Delegates authentication to any OpenID Connect provider (Keycloak, Auth0, Zitadel, etc.). No passwords stored in your database. Uses PKCE authorization code flow.
-- **Organizations** — Each user gets a personal org on first login. Users can create team orgs and invite members by email.
+- **Organizations** — New users join one shared default org (named for the client) on first login. Additional orgs are staff-created; within an org, Admins invite members by email.
 - **Role-based access control** — Four roles (Owner > Admin > Member > Viewer) enforced at the controller level via `require_role!` macro. All database queries scoped by `org_id`.
 - **Email invites** — Admins invite users by email. Invites expire after 7 days. If the invitee doesn't have an account yet, the invite is auto-accepted when they sign in with a matching email.
 - **Session management** — JWT stored in HTTP-only cookies. The frontend refreshes the token every 12 minutes; on failure, the user sees a "session expired" message with a re-login link.
@@ -56,9 +56,9 @@ A test user is created automatically by `setup.sh`. Credentials are printed at t
 
 1. Open http://localhost:5150 and click **Get Started**
 2. Sign in with the test user credentials
-3. You land on the dashboard — a personal org was created for you automatically
-4. Go to **Organizations** to create a team org
-5. Invite a colleague (or yourself with a different email) from the **Members** page
+3. You land on the dashboard — you are placed in the deployment's default org automatically
+4. Go to **Organizations** to view your orgs (creating new orgs is staff-only)
+5. An org Admin can invite a colleague (or yourself with a different email) from the **Members** page
 6. Check http://localhost:1080 to see the invitation email
 7. Create a project, add some notes — all scoped to the active org
 8. Switch between orgs using the dropdown in the nav bar
@@ -83,7 +83,7 @@ The app never handles passwords. All authentication is delegated to an OIDC prov
 2. After authenticating, the IdP redirects back with an authorization code
 3. The app exchanges the code for an ID token, verifies the signature via JWKS, and checks audience claims
 4. A JWT session cookie is set (HTTP-only, SameSite=Lax)
-5. On first login, a user record and personal org are created. Pending invites matching the email are auto-accepted.
+5. On first login, a user record is created and the user joins the deployment's default org. Pending invites matching the email are auto-accepted.
 
 ### Organizations & Roles
 
@@ -121,7 +121,7 @@ fracture-core/                      # Library crate (reusable across projects)
     models/
       _entities/                     # Core SeaORM entities
       users.rs                       # User lookup, OIDC account creation/linking
-      organizations.rs               # Org creation, personal orgs, slug lookup
+      organizations.rs               # Org creation, default-org join, slug lookup
       org_members.rs                 # Membership, OrgRole enum, role hierarchy
       org_invites.rs                 # Email invitations, auto-accept on signup
       uploads.rs                     # Upload queries, Visibility enum

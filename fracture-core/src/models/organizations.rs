@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{ActiveModelTrait, QueryOrder, TransactionTrait};
+use sea_orm::{ActiveModelTrait, QueryOrder};
 
 use super::_entities::org_members;
 pub use super::_entities::organizations::{ActiveModel, Column, Entity, Model};
@@ -23,57 +23,50 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 impl Model {
-    /// Creates a personal organization for a user and adds them as owner.
+    /// Ensures the deployment's default org exists and `user_id` is a member.
+    ///
+    /// New users join one shared default org (named for the client) rather
+    /// than each getting a personal org; additional orgs are staff-created.
+    /// The org is created on first use if missing; members join at
+    /// [`OrgRole::Viewer`] (staff/admins elevate as needed). Idempotent.
     ///
     /// # Errors
     ///
-    /// Returns an error if the database transaction fails.
-    pub async fn create_personal_org(
+    /// Returns an error if a database operation fails.
+    pub async fn ensure_default_membership(
         db: &DatabaseConnection,
-        user: &super::_entities::users::Model,
+        slug: &str,
+        name: &str,
+        user_id: i32,
     ) -> Result<Self, DbErr> {
-        let txn = db.begin().await?;
-        let org = Self::create_personal_org_in(&txn, user).await?;
-        txn.commit().await?;
-        Ok(org)
-    }
-
-    /// Creates a personal organization and owner membership using the provided
-    /// connection (which may be an open transaction). Callers that need the
-    /// operation to be atomic with surrounding writes pass their transaction
-    /// here; standalone callers use [`Self::create_personal_org`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if either insert fails.
-    pub async fn create_personal_org_in<C>(
-        conn: &C,
-        user: &super::_entities::users::Model,
-    ) -> Result<Self, DbErr>
-    where
-        C: ConnectionTrait,
-    {
-        let slug = format!("personal-{}", user.pid);
-        let org = ActiveModel {
-            name: sea_orm::ActiveValue::Set(format!("{}'s Personal", user.name)),
-            slug: sea_orm::ActiveValue::Set(slug),
-            is_personal: sea_orm::ActiveValue::Set(true),
-            is_platform_admin: sea_orm::ActiveValue::Set(false),
-            settings: sea_orm::ActiveValue::Set(None),
-            ..Default::default()
+        let org = match Self::find_by_slug(db, slug).await? {
+            Some(o) => o,
+            None => {
+                ActiveModel {
+                    name: sea_orm::ActiveValue::Set(name.to_string()),
+                    slug: sea_orm::ActiveValue::Set(slug.to_string()),
+                    is_personal: sea_orm::ActiveValue::Set(false),
+                    is_platform_admin: sea_orm::ActiveValue::Set(false),
+                    settings: sea_orm::ActiveValue::Set(None),
+                    ..Default::default()
+                }
+                .insert(db)
+                .await?
+            }
+        };
+        if org_members::Model::find_membership(db, org.id, user_id)
+            .await?
+            .is_none()
+        {
+            org_members::ActiveModel {
+                org_id: sea_orm::ActiveValue::Set(org.id),
+                user_id: sea_orm::ActiveValue::Set(user_id),
+                role: sea_orm::ActiveValue::Set(OrgRole::Viewer.to_string()),
+                ..Default::default()
+            }
+            .insert(db)
+            .await?;
         }
-        .insert(conn)
-        .await?;
-
-        org_members::ActiveModel {
-            org_id: sea_orm::ActiveValue::Set(org.id),
-            user_id: sea_orm::ActiveValue::Set(user.id),
-            role: sea_orm::ActiveValue::Set(OrgRole::Owner.to_string()),
-            ..Default::default()
-        }
-        .insert(conn)
-        .await?;
-
         Ok(org)
     }
 
