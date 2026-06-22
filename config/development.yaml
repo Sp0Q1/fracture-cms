@@ -84,8 +84,9 @@ settings:
     enabled: true
     poll_interval_seconds: 5
   oidc:
-    provider_name: zitadel
-    issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="http://localhost:8080") }}
+    provider_name: keycloak
+    # Points at one tenant realm — the app is a single tenant deployment.
+    issuer_url: {{ get_env(name="OIDC_ISSUER_URL", default="http://localhost:8080/realms/tenant-acme") }}
     client_id: "{{ get_env(name='OIDC_CLIENT_ID', default='') }}"
     client_secret: "{{ get_env(name='OIDC_CLIENT_SECRET', default='') }}"
     project_id: "{{ get_env(name='OIDC_PROJECT_ID', default='') }}"

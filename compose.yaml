@@ -1,59 +1,23 @@
 services:
-  zitadel-db:
-    image: docker.io/library/postgres:16-alpine
+  # Central identity provider. Realms are imported declaratively from
+  # dev/keycloak/import on boot (no post-start API scripting):
+  #   - tenant-acme : a tenant realm (self-registration on, the app's client)
+  #   - staff       : the cross-tenant staff realm, brokered INTO each tenant
+  #                   realm via OIDC. This mirrors the production topology —
+  #                   realm-per-tenant for hard isolation, one staff realm
+  #                   that every tenant realm trusts. See docs/FEDERATION.md.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
     environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: zitadel
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
     volumes:
-      - zitadel_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d zitadel"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  zitadel:
-    image: ghcr.io/zitadel/zitadel:latest-debug
-    command: start-from-init --masterkey "MasterkeyNeedsToHave32Characters" --tlsMode disabled
-    environment:
-      ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
-      ZITADEL_DATABASE_POSTGRES_PORT: 5432
-      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
-      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
-      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: postgres
-      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
-      ZITADEL_TLS_ENABLED: "false"
-      ZITADEL_EXTERNALSECURE: "false"
-      ZITADEL_EXTERNALPORT: 8080
-      ZITADEL_EXTERNALDOMAIN: localhost
-      # Machine user with PAT for API provisioning
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: zitadel-admin-sa
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: Admin
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "2030-01-01T00:00:00Z"
-      # Self-registration
-      ZITADEL_FIRSTINSTANCE_LOGINPOLICY_ALLOWREGISTER: "true"
-      # SMTP (MailCrab)
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_SMTP_HOST: mailcrab:1025
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_SMTP_USER: ""
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_TLS: "false"
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_FROM: noreply@fracture-cms.local
-      ZITADEL_FIRSTINSTANCE_SMTPCONFIGURATION_FROMNAME: Fracture CMS
-    extra_hosts:
-      - "host.containers.internal:host-gateway"
-    depends_on:
-      zitadel-db:
-        condition: service_healthy
+      - ./dev/keycloak/import:/opt/keycloak/data/import:ro
     ports:
       - "127.0.0.1:8080:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "/app/zitadel ready"]
-      interval: 10s
-      timeout: 5s
-      start_period: 30s
-      retries: 5
 
   mailcrab:
     image: docker.io/marlonb/mailcrab:latest
@@ -67,8 +31,8 @@ services:
       dockerfile: Containerfile.dev
     network_mode: host
     depends_on:
-      zitadel:
-        condition: service_healthy
+      keycloak:
+        condition: service_started
       mailcrab:
         condition: service_started
     volumes:
@@ -77,20 +41,13 @@ services:
     env_file:
       - .env
     environment:
-      - OIDC_ISSUER_URL=http://localhost:8080
+      # The app is one tenant deployment → it points at one tenant realm.
+      - OIDC_ISSUER_URL=http://localhost:8080/realms/tenant-acme
       - OIDC_REDIRECT_URI=http://localhost:5150/api/auth/oidc/callback
+      - OIDC_POST_LOGOUT_REDIRECT_URI=http://localhost:5150
       - MAILER_HOST=localhost
       - MAILER_ENABLED=true
-      # Bind to loopback only. With network_mode: host this listener is on the
-      # host directly, so 0.0.0.0 would expose the dev app (and its devMode OIDC
-      # client) on every interface, unlike every other service here.
-      # Trade-off: Zitadel's back-channel logout POSTs to
-      # host.containers.internal, which reaches the host on a NON-loopback
-      # address — a loopback-bound app refuses it, so server-side session
-      # invalidation on IdP logout does not fire. To test that flow, opt in
-      # with: SERVER_BINDING=0.0.0.0 podman compose up -d app
+      # Bind to loopback only; with network_mode: host this listener is on the
+      # host directly, so 0.0.0.0 would expose the dev app on every interface.
       - SERVER_BINDING=${SERVER_BINDING:-127.0.0.1}
     entrypoint: ["/entrypoint.sh"]
-
-volumes:
-  zitadel_data:

@@ -6,7 +6,7 @@ The core infrastructure lives in the `fracture-core` library crate. Downstream p
 
 ## What You Get
 
-- **OIDC single sign-on** — Delegates authentication to any OpenID Connect provider (Zitadel, Keycloak, Auth0, etc.). No passwords stored in your database. Uses PKCE authorization code flow.
+- **OIDC single sign-on** — Delegates authentication to any OpenID Connect provider (Keycloak, Auth0, Zitadel, etc.). No passwords stored in your database. Uses PKCE authorization code flow.
 - **Organizations** — Each user gets a personal org on first login. Users can create team orgs and invite members by email.
 - **Role-based access control** — Four roles (Owner > Admin > Member > Viewer) enforced at the controller level via `require_role!` macro. All database queries scoped by `org_id`.
 - **Email invites** — Admins invite users by email. Invites expire after 7 days. If the invitee doesn't have an account yet, the invite is auto-accepted when they sign in with a matching email.
@@ -33,7 +33,7 @@ The core infrastructure lives in the `fracture-core` library crate. Downstream p
 ```sh
 git clone <repo-url> my-project
 cd my-project
-./dev/setup.sh            # Starts Zitadel, creates OIDC app, creates test user, writes .env
+./dev/setup.sh            # Starts Keycloak (imports tenant + staff realms), writes .env
 ```
 
 ### 2. Start the app
@@ -47,7 +47,7 @@ podman compose up -d mailcrab app
 | Service | URL | Purpose |
 |---------|-----|---------|
 | App | http://localhost:5150 | Your application |
-| Zitadel | http://localhost:8080 | Identity provider admin console |
+| Keycloak | http://localhost:8080 | Identity provider admin console (admin / admin) |
 | MailCrab | http://localhost:1080 | Catches all outbound email for testing |
 
 A test user is created automatically by `setup.sh`. Credentials are printed at the end of the script.
@@ -175,7 +175,7 @@ fracture-ctl/                        # CLI tool for deployment management
 config/                              # Loco YAML config per environment
 docs/                                # Architecture, template guide, resource recipes
 dev/
-  setup.sh                           # Provisions Zitadel + writes .env
+  setup.sh                           # Starts Keycloak + writes .env
   ci.sh                              # Runs all CI checks locally in containers
   Dockerfile.ci                      # CI container image (Rust + SQLite + clippy + rustfmt)
 ```
@@ -313,5 +313,5 @@ To run the same checks locally:
 | Templates | [Tera](https://keats.github.io/tera/) + [Fluent](https://projectfluent.org/) i18n |
 | Auth | OpenID Connect via [openidconnect-rs](https://github.com/ramosbugs/openidconnect-rs) |
 | CSS | [oat.ink](https://oat.ink) (semantic HTML styling, no build step) |
-| IdP | Any OIDC provider (Zitadel ships in the dev stack; Keycloak, Auth0, etc. also work) |
+| IdP | Any OIDC provider (Keycloak ships in the dev stack; Auth0, Zitadel, etc. also work) |
 | Containers | [Podman](https://podman.io/) |

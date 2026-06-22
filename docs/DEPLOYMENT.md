@@ -81,7 +81,7 @@ boundaries, and the `AUTH_ALLOWED_EMAIL_DOMAINS` admission control.
 
 ### OIDC Provider Setup
 
-Register your app as an OIDC client in any provider (Zitadel, Keycloak, Auth0, etc.):
+Register your app as an OIDC client in any provider (Keycloak, Auth0, Zitadel, etc.):
 
 | Setting | Value |
 |---------|-------|
