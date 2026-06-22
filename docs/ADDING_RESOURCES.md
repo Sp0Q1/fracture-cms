@@ -142,3 +142,33 @@ Register in `tests/models/mod.rs`.
 ## 11. Truncation Order
 
 Update `truncate()` in `src/app.rs` — child tables before parent tables (foreign key order).
+
+## 12. Per-resource capabilities (optional)
+
+Org-wide `require_role!` is enough for resources where the org role decides
+access. For resources that need *per-resource* authority — different access
+depending on who created the row, or per-user grants — wire in the capability
+resolver (`fracture_core::permissions`). The demo `projects` resource is the
+reference implementation; see `src/authz.rs` and `docs/PERMISSIONS.md`.
+
+The recipe:
+
+1. **Record ownership.** Add `owner_tier` (`"org"` / `"platform"`) and
+   `created_by` columns (migration `m20260622_000001_add_authority_to_projects.rs`).
+   On create, set `created_by` to the actor and `owner_tier` to `"platform"`
+   when a platform admin creates it, else `"org"`.
+2. **Define the policy** — implement `ResourcePolicy::caps_for(owner, role)`
+   for your type (`src/authz.rs::ProjectPolicy`), stating what each org tier
+   gets in each ownership direction. Staff-owned rows can cap local tiers
+   (even Owner) down to e.g. `view`+`comment`.
+3. **Resolve in the controller** — fetch the row, then
+   `let caps = authz::project_capabilities(db, user.id, org_ctx.is_platform_admin, org_ctx.role, &item).await?;`
+   and gate each handler: `if !caps.allows(EDIT) { return Err(Error::NotFound); }`
+   (404, not 403 — don't leak existence). Pass `caps` to the view so the
+   template hides actions the user can't take.
+4. **Per-user grants** — `resource_assignments` rows for `(user, resource)`
+   add capabilities on top of the tier default; the helper reads them
+   (treating the opaque `role_key` as a capability string).
+
+Field-level rules (e.g. "may submit only this one field") live in that
+action's handler, gated on a named capability — not in the resolver.
