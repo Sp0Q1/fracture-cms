@@ -155,10 +155,13 @@ pub async fn remove(
 }
 
 pub fn routes() -> Routes {
+    // The note segment must use the SAME capture name as the notes controller
+    // (`{pid}`); a different name (`{note_pid}`) collides in the router and
+    // breaks the whole /projects subtree. The comment id is `{comment_pid}`.
     Routes::new()
-        .prefix("/projects/{project_pid}/notes/{note_pid}/comments")
+        .prefix("/projects/{project_pid}/notes/{pid}/comments")
         .add("/", post(add))
-        .add("/{pid}/edit", get(edit))
-        .add("/{pid}", post(update))
-        .add("/{pid}", delete(remove))
+        .add("/{comment_pid}/edit", get(edit))
+        .add("/{comment_pid}", post(update))
+        .add("/{comment_pid}", delete(remove))
 }

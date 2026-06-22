@@ -41,10 +41,18 @@ async fn comment_edit_delete_is_author_or_staff_only() {
 
     let author = mk_user(db, "author").await;
     let other = mk_user(db, "other").await;
-    let org = organizations::Model::find_orgs_for_user(db, author.id)
-        .await
-        .unwrap()
-        .remove(0);
+    // Create an org directly (the capability checks below take role explicitly,
+    // so no membership rows are needed).
+    let org = organizations::ActiveModel {
+        name: Set("Auth Org".to_string()),
+        slug: Set("auth-comments".to_string()),
+        is_personal: Set(false),
+        is_platform_admin: Set(false),
+        ..Default::default()
+    }
+    .insert(db)
+    .await
+    .unwrap();
     let project = ProjectActiveModel {
         title: Set("P".to_string()),
         org_id: Set(org.id),

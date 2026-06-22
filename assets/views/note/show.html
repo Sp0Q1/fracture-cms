@@ -74,7 +74,7 @@
     {% endif %}
 
     {% if can_comment %}
-    <form action="/projects/{{ project.pid }}/notes/{{ item.pid }}/comments/" method="post" class="comment-form mt-6">
+    <form action="/projects/{{ project.pid }}/notes/{{ item.pid }}/comments" method="post" class="comment-form mt-6">
         <div data-field>
             <label for="comment-body">Add a comment</label>
             <textarea id="comment-body" name="body" rows="3" required></textarea>
