@@ -5,6 +5,7 @@ pub mod initializers;
 pub mod jobs;
 pub mod mailers;
 pub mod models;
+pub mod permissions;
 pub mod upload;
 pub mod views;
 
