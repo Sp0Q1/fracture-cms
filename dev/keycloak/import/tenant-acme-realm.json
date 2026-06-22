@@ -2,8 +2,7 @@
   "realm": "tenant-acme",
   "enabled": true,
   "sslRequired": "none",
-  "registrationAllowed": true,
-  "registrationEmailAsUsername": true,
+  "registrationAllowed": false,
   "loginWithEmailAllowed": true,
   "verifyEmail": false,
   "users": [
