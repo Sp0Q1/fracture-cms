@@ -7,14 +7,16 @@ without letting a compromised tenant move laterally.
 ## Topology
 
 ```
-                       ┌─────────────────────────┐
-                       │   Central IdP (Zitadel)  │
-                       │  org per tenant          │
-                       │  project + app per       │
-                       │  deployment              │
-                       └────┬──────────┬─────────┘
-              OIDC (https)  │          │  OIDC (https)
-        ┌───────────────────┘          └──────────────────┐
+                       ┌──────────────────────────────┐
+                       │   Central IdP (Keycloak)      │
+                       │   ┌────────┐  realm per tenant │
+                       │   │ staff  │  + one staff realm │
+                       │   │ realm  │  brokered into each │
+                       │   └───┬────┘                    │
+                       │  realm-acme   realm-globex ...  │
+                       └────┬──────────────┬────────────┘
+              OIDC (https)  │              │  OIDC (https)
+        ┌───────────────────┘              └──────────────┐
 ┌───────┴────────────┐                       ┌────────────┴───────┐
 │ tenant-a.example   │                       │ tenant-b.example   │
 │ own server/VM      │                       │ own server/VM      │
@@ -28,28 +30,48 @@ One deployment per tenant: its own host (today a VM with podman compose via
 its own database, its own `.env`. Nothing is shared between tenants except
 the IdP — and the IdP relationship is scoped per deployment.
 
-## IdP layout (Zitadel reference)
+## IdP layout (Keycloak reference)
 
-Per tenant:
+The reference IdP is **Keycloak**, configured **realm-per-tenant** with one
+shared **staff realm**. Per tenant:
 
-1. **Organization** — the tenant's users live here; tenant admins get org
-   manager roles only (never instance-level roles).
-2. **Project** with **authorization required** ("Check for Project on
-   Authentication" / user grant required): only users explicitly granted the
-   project can authenticate to it at all. This is the *primary*,
-   IdP-enforced tenant boundary.
-3. **OIDC application** in that project — its own `client_id`,
-   `client_secret`, and redirect URI pinned to the tenant's domain
-   (`https://tenant-a.example/api/auth/oidc/callback`).
+1. **A dedicated realm** — the tenant's users live in their own realm, which
+   is its own OIDC issuer with its own signing keys. Tenant A's tokens
+   therefore cannot authenticate against tenant B's app (different `iss`,
+   different keys): the realm boundary is the *primary*, IdP-enforced tenant
+   boundary. Self-registration is enabled per realm so clients can onboard.
+2. **An OIDC client** in that realm — its own `client_id`, `client_secret`,
+   and redirect URI pinned to the tenant's domain
+   (`https://tenant-a.example/api/auth/oidc/callback`). Keycloak's ID-token
+   `aud` is the client id, so `OIDC_PROJECT_ID` is left empty.
+3. **The staff realm brokered in** — each tenant realm registers the central
+   `staff` realm as an OIDC identity provider (Keycloak realm-to-realm
+   brokering). See "Cross-tenant staff" below.
 
-Each deployment's `.env` gets only its own `OIDC_CLIENT_ID`,
-`OIDC_CLIENT_SECRET`, `OIDC_PROJECT_ID`. Central management stays easy:
-user lifecycle, MFA policy, lockout, and audit all live in one IdP console;
-granting someone access to a tenant is one project grant.
+The dev stack stands up exactly this shape: a `tenant-acme` realm and a
+`staff` realm, imported declaratively from `dev/keycloak/import/`.
 
-Any OIDC-compliant IdP works (the app is IdP-agnostic); the equivalent
-constructs elsewhere are per-app client registrations plus app-assignment
-policies (e.g. Entra ID "user assignment required").
+### Cross-tenant staff
+
+Staff identities live **once**, in the central `staff` realm (one account
+per staff member; MFA, lifecycle, audit all in one place — the "central
+management" win). Each tenant realm trusts the staff realm as an upstream
+identity provider. When a staff member opens a tenant's app, they sign in
+against that *tenant* realm, choose "Staff sign-in", are brokered to the
+staff realm to authenticate, and the tenant realm mints a **tenant-realm
+token** for a brokered shadow user. The app at that tenant only ever
+validates its own realm's issuer/token — there is no cross-realm token, so
+isolation holds. Entitlement (which tenants a staff member may enter) is a
+group/role on the staff account that each tenant realm's broker flow admits
+on; the staff realm asserts a `platform-staff` role that a tenant realm
+role-mapper imports (and which a deployment maps to platform-admin —
+in-app promotion via `fracture-ctl admin set` today, claim-driven mapping
+is a planned enhancement).
+
+Any OIDC-compliant IdP works (the app is IdP-agnostic). On a single full
+IdP, realm-per-tenant gives a stronger boundary than per-app
+"user-assignment-required" policies, because each realm is a separate issuer
+with separate keys rather than one issuer gating clients.
 
 ## What the app enforces (defense in depth)
 
@@ -57,7 +79,7 @@ The IdP boundary is primary, but each deployment independently enforces:
 
 | Control | Where | Stops |
 |---|---|---|
-| Audience pinning — ID tokens must carry this deployment's project in `aud` | `controllers/oidc.rs` callback verifier | Replaying tenant A's tokens against tenant B |
+| Audience/issuer validation — ID tokens are validated against this deployment's realm issuer + client `aud` | `controllers/oidc.rs` callback verifier | Replaying tenant A's tokens against tenant B |
 | `auth.allowed_email_domains` admission allowlist, checked on **every** login | `controllers/oidc.rs`, set `AUTH_ALLOWED_EMAIL_DOMAINS` | Auto-provisioning accounts for other tenants' (or any IdP) users if IdP-side grants are misconfigured |
 | Per-deployment `JWT_SECRET` (generated by `fracture-ctl init`) | session cookies | A session/JWT minted on tenant A being replayed on tenant B |
 | `email_verified` gating on account linking and invite auto-accept | `models/users.rs` | Account takeover via attacker-registered lookalike emails |
@@ -72,10 +94,11 @@ Assume tenant A's server is owned (root, app credentials, DB):
   `JWT_SECRET`, A's sessions, and the ability to run an evil app on A's
   domain.
 - **Attacker does NOT get**: any of tenant B's data (separate host/DB), the
-  ability to validate or mint logins for B (B's tokens are audience-pinned
-  to B's project; B's sessions need B's `JWT_SECRET`), or the ability to
-  authenticate A's stolen client credentials against B's app (the IdP binds
-  them to A's redirect URIs and project).
+  ability to validate or mint logins for B (B's tokens are issued by B's
+  realm — a different issuer with different signing keys — and B's sessions
+  need B's `JWT_SECRET`), or the ability to authenticate A's stolen client
+  credentials against B's app (A's client lives in A's realm and is bound to
+  A's redirect URIs).
 - **Residual exposure to contain**: A's OIDC client could phish A's *own*
   users (rotate A's client secret and invalidate A's grants on incident);
   and the IdP itself is the crown jewel — a compromise there crosses every
@@ -83,28 +106,31 @@ Assume tenant A's server is owned (root, app credentials, DB):
 
 ## IdP hardening rules
 
-- Tenant admins are **org managers** in their own org only. Instance-level
-  IdP admin is reserved for the platform operator with MFA.
-- Never share one OIDC app/client across deployments; never wildcard
-  redirect URIs.
-- Service users / PATs used for provisioning are scoped to one org and
-  expire (`fracture-ctl`'s dev provisioning already uses an expiring PAT).
+- Tenant admins get **realm-management roles scoped to their own realm**
+  only. Keycloak instance (master-realm) admin is reserved for the platform
+  operator with MFA.
+- Never share one OIDC client across deployments; never wildcard redirect
+  URIs. The staff-broker client in each tenant realm is per-tenant.
+- The staff realm is the highest-value asset (it brokers into every tenant);
+  enforce MFA on all staff accounts and keep `platform-staff` grants tight.
 - The IdP runs on its own host (or hardened managed service), not co-located
   with any tenant.
 
 ## Tenant onboarding checklist
 
-1. IdP: create org → project (authorization required) → OIDC app with the
-   tenant's exact redirect URI; grant the tenant's users.
+1. IdP: create the tenant's realm (self-registration as desired) → an OIDC
+   client with the tenant's exact redirect URI → register the `staff` realm
+   as a brokered identity provider in it.
 2. Server: `fracture-ctl init` (fresh `JWT_SECRET` + DB password), fill
-   `OIDC_*` from step 1, set `AUTH_ALLOWED_EMAIL_DOMAINS` to the tenant's
-   domain(s).
+   `OIDC_ISSUER_URL` (the tenant realm) and `OIDC_CLIENT_ID`/`SECRET`, set
+   `AUTH_ALLOWED_EMAIL_DOMAINS` to the tenant's domain(s).
 3. DNS/TLS for the tenant domain; `OIDC_REDIRECT_URI` and
    `OIDC_POST_LOGOUT_REDIRECT_URI` use it.
 4. `fracture-ctl up`, then `fracture-ctl admin set <operator email>` for the
    platform-admin org inside that deployment.
-5. Verify the negative case: a user from another tenant's org cannot log in
-   (project grant missing → IdP refuses; wrong email domain → app refuses).
+5. Verify the negative case: a user from another tenant's realm cannot log in
+   (different realm/issuer → IdP won't authenticate them here; wrong email
+   domain → app refuses).
 
 ## Kubernetes later
 

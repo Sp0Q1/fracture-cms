@@ -1,150 +1,59 @@
 #!/bin/bash
 set -euo pipefail
 
+# Dev environment setup for the Keycloak-based stack.
+#
+# Realms are imported declaratively by Keycloak on boot (see
+# dev/keycloak/import), so there is no admin-API provisioning here — this
+# script only starts the services, waits for readiness, and writes .env with
+# the (static, dev-only) client credentials baked into the import files.
+
 COMPOSE="podman compose"
-ZITADEL_API="http://localhost:8080"
+TENANT_REALM="tenant-acme"
+ISSUER="http://localhost:8080/realms/${TENANT_REALM}"
 
-# Authenticated API helper — passes PAT automatically.
-zapi() {
-    local method="$1" path="$2"
-    shift 2
-    curl -s -X "$method" "$ZITADEL_API$path" \
-        -H "Authorization: Bearer $PAT" \
-        -H "Content-Type: application/json" \
-        "$@"
-}
+# These are the dev-only static values defined in the realm import JSON.
+CLIENT_ID="fracture-cms"
+CLIENT_SECRET="fracture-dev-secret"
 
-# --- 1. Start Zitadel + Postgres ---
-echo "==> Starting Zitadel and database..."
-$COMPOSE up -d zitadel-db zitadel
+echo "==> Starting Keycloak and MailCrab..."
+$COMPOSE up -d keycloak mailcrab
 
-echo "    Waiting for readiness..."
-until curl -s "$ZITADEL_API/debug/ready" > /dev/null 2>&1; do sleep 2; done
-echo "    Zitadel is ready."
-
-# --- 2. Get PAT from logs ---
-echo "==> Retrieving admin PAT..."
-# Zitadel prints the machine user PAT as a raw token on its own line
-PAT=""
-for _ in $(seq 1 10); do
-    PAT=$($COMPOSE logs zitadel 2>&1 \
-        | grep -E '^[A-Za-z0-9_-]{30,}$' \
-        | head -1) || true
-    if [ -n "$PAT" ]; then break; fi
+echo "    Waiting for Keycloak to import realms and serve discovery..."
+until curl -sf "${ISSUER}/.well-known/openid-configuration" > /dev/null 2>&1; do
     sleep 2
 done
+echo "    Keycloak is ready (realm '${TENANT_REALM}' discoverable)."
 
-if [ -z "$PAT" ]; then
-    echo "ERROR: Could not find PAT in Zitadel logs."
-    echo "       Check: podman compose logs zitadel"
-    exit 1
-fi
-echo "    PAT retrieved."
-
-# --- 3. Use v1 login UI (v2 is not bundled in self-hosted image) ---
-echo "==> Configuring login UI..."
-zapi PUT /v2/features/instance \
-    -d '{"loginV2":{"required":false}}' > /dev/null
-
-# --- 3b. Configure SMTP (env vars only apply on first-ever init) ---
-echo "==> Configuring SMTP for MailCrab..."
-SMTP_ID=$(curl -s -X POST "$ZITADEL_API/admin/v1/smtp" \
-    -H "Authorization: Bearer $PAT" \
-    -H "Content-Type: application/json" \
-    -d '{
-        "senderAddress": "noreply@fracture-cms.local",
-        "senderName": "Fracture CMS",
-        "host": "mailcrab:1025",
-        "user": "",
-        "password": "",
-        "tls": false
-    }' | jq -r '.id')
-curl -s -X POST "$ZITADEL_API/admin/v1/smtp/$SMTP_ID/_activate" \
-    -H "Authorization: Bearer $PAT" \
-    -H "Content-Type: application/json" > /dev/null
-echo "    SMTP configured (mailcrab:1025)."
-
-# --- 4. Create project ---
-echo "==> Creating project 'Fracture CMS'..."
-PROJECT_ID=$(zapi POST /management/v1/projects \
-    -d '{"name":"Fracture CMS"}' | jq -r '.id')
-echo "    Project ID: $PROJECT_ID"
-
-# --- 5. Create OIDC application ---
-echo "==> Creating OIDC application..."
-APP_RESPONSE=$(zapi POST "/management/v1/projects/$PROJECT_ID/apps/oidc" \
-    -d '{
-        "name": "Fracture CMS",
-        "redirectUris": ["http://localhost:5150/api/auth/oidc/callback"],
-        "responseTypes": ["OIDC_RESPONSE_TYPE_CODE"],
-        "grantTypes": ["OIDC_GRANT_TYPE_AUTHORIZATION_CODE"],
-        "appType": "OIDC_APP_TYPE_WEB",
-        "authMethodType": "OIDC_AUTH_METHOD_TYPE_BASIC",
-        "postLogoutRedirectUris": ["http://localhost:5150"],
-        "devMode": true,
-        "idTokenUserinfoAssertion": true,
-        "backChannelLogoutUri": "http://host.containers.internal:5150/api/auth/oidc/backchannel-logout"
-    }')
-
-CLIENT_ID=$(echo "$APP_RESPONSE" | jq -r '.clientId')
-CLIENT_SECRET=$(echo "$APP_RESPONSE" | jq -r '.clientSecret')
-echo "    Client ID: $CLIENT_ID"
-
-# Zitadel reaches the host via host.containers.internal, which arrives on a
-# NON-loopback address — the default loopback-bound app refuses it.
-if [ "${SERVER_BINDING:-127.0.0.1}" = "127.0.0.1" ]; then
-    echo "    NOTE: back-channel logout is registered but unreachable while the app"
-    echo "    binds 127.0.0.1 (the default). App-initiated logout still works; to"
-    echo "    test IdP-initiated logout run:"
-    echo "        SERVER_BINDING=0.0.0.0 podman compose up -d app"
-fi
-
-# --- 6. Create test user ---
-echo "==> Creating test user..."
-TEST_PASS="TestPassword1!"
-zapi POST /management/v1/users/human \
-    -d "{
-        \"userName\": \"testuser\",
-        \"profile\": {
-            \"firstName\": \"Test\",
-            \"lastName\": \"User\",
-            \"displayName\": \"Test User\"
-        },
-        \"email\": {
-            \"email\": \"testuser@example.com\",
-            \"isEmailVerified\": true
-        },
-        \"initialPassword\": \"$TEST_PASS\"
-    }" > /dev/null
-
-# --- 7. Write .env ---
 echo "==> Writing .env..."
 JWT_SECRET=$(openssl rand -base64 32)
-# Create the file with restrictive permissions before writing secrets into it,
-# so JWT_SECRET / OIDC_CLIENT_SECRET are never world-readable (matches the 0600
-# that `fracture-ctl init` sets for the prod .env).
+# Restrictive perms before writing secrets (matches fracture-ctl init's 0600).
 install -m 600 /dev/null .env
 cat > .env <<EOF
-JWT_SECRET=$JWT_SECRET
-OIDC_PROJECT_ID=$PROJECT_ID
-OIDC_CLIENT_ID=$CLIENT_ID
-OIDC_CLIENT_SECRET=$CLIENT_SECRET
+JWT_SECRET=${JWT_SECRET}
+OIDC_PROJECT_ID=
+OIDC_CLIENT_ID=${CLIENT_ID}
+OIDC_CLIENT_SECRET=${CLIENT_SECRET}
 EOF
 
-# --- Done ---
 echo ""
 echo "========================================"
 echo "  Dev Environment Setup Complete"
 echo "========================================"
 echo ""
-echo "  Zitadel (IdP):   http://localhost:8080"
-echo "  MailCrab (Email): http://localhost:1080"
-echo "  App:             http://localhost:5150"
+echo "  Keycloak (IdP):   http://localhost:8080  (admin / admin)"
+echo "  MailCrab (email): http://localhost:1080"
+echo "  App:              http://localhost:5150"
 echo ""
-echo "  Test user:       testuser"
-echo "  Test password:   $TEST_PASS"
+echo "  Tenant realm:     ${TENANT_REALM}"
+echo "    Tenant user:    owner@acme.example / password"
+echo "  Staff realm:      staff (brokered into the tenant realm)"
+echo "    Staff user:     staff@example.com / password"
+echo "                    → on the app login page, choose \"Staff sign-in\""
 echo ""
-echo "  Next steps:"
-echo "    podman compose up -d mailcrab app"
-echo "    curl http://localhost:5150/api/auth/oidc/providers"
-echo "========================================"
+echo "  Start the app:    podman compose up -d app   (or run it locally)"
+echo ""
+echo "  Note: Keycloak supports back-channel logout; the app's"
+echo "  /api/auth/oidc/backchannel-logout endpoint is registered on the"
+echo "  fracture-cms client. To exercise it, bind the app on all interfaces:"
+echo "      SERVER_BINDING=0.0.0.0 podman compose up -d app"

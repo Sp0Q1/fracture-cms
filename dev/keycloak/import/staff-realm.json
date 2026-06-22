@@ -1,0 +1,53 @@
+{
+  "realm": "staff",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "roles": {
+    "realm": [
+      { "name": "platform-staff", "description": "Cross-tenant staff; brokered into tenant realms" }
+    ]
+  },
+  "users": [
+    {
+      "username": "staff",
+      "email": "staff@example.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Staff",
+      "lastName": "Member",
+      "credentials": [ { "type": "password", "value": "password", "temporary": false } ],
+      "realmRoles": [ "platform-staff" ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "tenant-acme-broker",
+      "name": "tenant-acme broker",
+      "description": "OIDC client used by the tenant-acme realm to broker staff logins",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "broker-dev-secret",
+      "standardFlowEnabled": true,
+      "redirectUris": [ "http://localhost:8080/realms/tenant-acme/broker/staff/endpoint" ],
+      "webOrigins": [ "+" ],
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

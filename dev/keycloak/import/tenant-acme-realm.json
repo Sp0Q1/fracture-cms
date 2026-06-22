@@ -1,0 +1,82 @@
+{
+  "realm": "tenant-acme",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "verifyEmail": false,
+  "users": [
+    {
+      "username": "owner@acme.example",
+      "email": "owner@acme.example",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Acme",
+      "lastName": "Owner",
+      "credentials": [ { "type": "password", "value": "password", "temporary": false } ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "fracture-cms",
+      "name": "Fracture CMS",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "fracture-dev-secret",
+      "standardFlowEnabled": true,
+      "redirectUris": [ "http://localhost:5150/api/auth/oidc/callback" ],
+      "webOrigins": [ "+" ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:5150",
+        "backchannel.logout.url": "http://localhost:5150/api/auth/oidc/backchannel-logout",
+        "backchannel.logout.session.required": "true"
+      }
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "staff",
+      "displayName": "Staff sign-in",
+      "providerId": "keycloak-oidc",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "tenant-acme-broker",
+        "clientSecret": "broker-dev-secret",
+        "issuer": "http://localhost:8080/realms/staff",
+        "authorizationUrl": "http://localhost:8080/realms/staff/protocol/openid-connect/auth",
+        "tokenUrl": "http://localhost:8080/realms/staff/protocol/openid-connect/token",
+        "userInfoUrl": "http://localhost:8080/realms/staff/protocol/openid-connect/userinfo",
+        "jwksUrl": "http://localhost:8080/realms/staff/protocol/openid-connect/certs",
+        "logoutUrl": "http://localhost:8080/realms/staff/protocol/openid-connect/logout",
+        "useJwksUrl": "true",
+        "validateSignature": "true",
+        "defaultScope": "openid email profile",
+        "syncMode": "FORCE"
+      }
+    }
+  ],
+  "identityProviderMappers": [
+    {
+      "name": "staff-role-import",
+      "identityProviderAlias": "staff",
+      "identityProviderMapper": "oidc-role-idp-mapper",
+      "config": {
+        "syncMode": "FORCE",
+        "claim": "roles",
+        "claim.value": "platform-staff",
+        "role": "platform-staff"
+      }
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "platform-staff", "description": "Brokered cross-tenant staff (maps to platform admin in-app)" }
+    ]
+  }
+}
