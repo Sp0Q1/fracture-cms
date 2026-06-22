@@ -10,7 +10,7 @@ use crate::models::_entities::notes::{ActiveModel, Model};
 use crate::models::org_members::OrgRole;
 use crate::models::organizations as org_model;
 use crate::models::projects;
-use crate::{require_capability, require_role, require_user, views};
+use crate::{require_capability, require_platform_admin, require_role, require_user, views};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Params {
@@ -50,10 +50,11 @@ pub async fn new(
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
-    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
-        .await
-        .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
+    // Notes are staff-authored; clients have read-only access. Creation is
+    // therefore staff-only (an app that wants org authoring relaxes this).
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+    require_platform_admin!(org_ctx);
+    let org_ctx = org_ctx.ok_or_else(|| Error::NotFound)?;
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
@@ -75,10 +76,10 @@ pub async fn add(
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
-    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
-        .await
-        .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
+    // Staff-only authoring (see `new`).
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+    require_platform_admin!(org_ctx);
+    let org_ctx = org_ctx.ok_or_else(|| Error::NotFound)?;
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
 
     // SeaORM generates multiple default() impls for ActiveModel
@@ -88,13 +89,8 @@ pub async fn add(
     item.project_id = Set(project.id);
     item.org_id = Set(org_ctx.org.id);
     item.created_by = Set(Some(user.id));
-    // A platform admin authoring in a client org creates staff-owned content
-    // that org members (even the org Owner) can't edit; otherwise it's org-owned.
-    item.owner_tier = Set(if org_ctx.is_platform_admin {
-        "staff".to_string()
-    } else {
-        "org".to_string()
-    });
+    // Authored by staff, so it's staff-owned: clients keep read-only access.
+    item.owner_tier = Set("staff".to_string());
     item.insert(&ctx.db).await?;
     Ok(Redirect::to(&format!("/projects/{project_pid}")).into_response())
 }
@@ -147,12 +143,11 @@ pub async fn edit(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
-    // Staff-owned notes can't be edited by org members (even the Owner).
+    // Notes are read-only for clients; only staff (or a per-record grant) edit.
     let caps = middleware::capabilities(&ctx.db, &org_ctx, user.id, &item).await?;
     require_capability!(caps, EDIT);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
@@ -178,12 +173,11 @@ pub async fn update(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
     let _project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
-    // Enforce edit capability: org members can't edit staff-owned notes.
+    // Notes are read-only for clients; only staff (or a per-record grant) edit.
     let caps = middleware::capabilities(&ctx.db, &org_ctx, user.id, &item).await?;
     require_capability!(caps, EDIT);
     let mut item = item.into_active_model();
@@ -208,12 +202,11 @@ pub async fn remove(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
     let _project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let item = Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
         .ok_or_else(|| Error::NotFound)?;
-    // Enforce delete capability: org members can't delete staff-owned notes.
+    // Notes are read-only for clients; only staff (or a per-record grant) delete.
     let caps = middleware::capabilities(&ctx.db, &org_ctx, user.id, &item).await?;
     require_capability!(caps, DELETE);
     item.delete(&ctx.db).await?;

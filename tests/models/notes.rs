@@ -228,14 +228,14 @@ async fn test_note_requires_valid_project_id() {
     );
 }
 
-/// The authority guarantee: an org member (even the org Owner) cannot edit or
-/// delete a staff-owned note, but can edit org-owned notes; a platform admin
-/// and the note's own creator always can.
+/// The notes policy: clients (org users) are read-only — even the org Owner,
+/// on either owner tier — while staff (platform admin) and a record's own
+/// creator can edit/delete.
 #[tokio::test]
 #[serial]
-async fn org_members_cannot_edit_staff_owned_notes() {
+async fn notes_are_read_only_for_org_users_staff_full() {
     use fracture_cms::models::org_members::OrgRole;
-    use fracture_cms::permissions::{capabilities, DELETE, EDIT};
+    use fracture_cms::permissions::{capabilities, DELETE, EDIT, VIEW};
 
     let boot = boot_test::<App>().await.unwrap();
     let db = &boot.app_context.db;
@@ -248,7 +248,7 @@ async fn org_members_cannot_edit_staff_owned_notes() {
         .remove(0);
     let project = create_project(db, "Auth Project", org.id).await;
 
-    // A staff-owned note (as if authored by a platform admin).
+    // A staff-authored note, and an org-owned one created by someone else.
     let staff_note = NoteActiveModel {
         title: Set("staff note".to_string()),
         project_id: Set(project.id),
@@ -260,43 +260,37 @@ async fn org_members_cannot_edit_staff_owned_notes() {
     .insert(db)
     .await
     .unwrap();
-
-    // An org-owned note authored by the org owner.
     let org_note = NoteActiveModel {
         title: Set("org note".to_string()),
         project_id: Set(project.id),
         org_id: Set(org.id),
         owner_tier: Set("org".to_string()),
-        created_by: Set(Some(owner.id)),
+        created_by: Set(Some(staff.id)),
         ..Default::default()
     }
     .insert(db)
     .await
     .unwrap();
 
-    // Org Owner (not a platform admin) cannot edit/delete the staff-owned note.
-    let caps = capabilities(db, owner.id, false, OrgRole::Owner, &staff_note)
-        .await
-        .unwrap();
-    assert!(
-        !caps.allows(EDIT),
-        "org owner must not edit a staff-owned note"
-    );
-    assert!(!caps.allows(DELETE));
+    // Clients are read-only on notes — even the org Owner, on either owner tier.
+    for note in [&staff_note, &org_note] {
+        let caps = capabilities(db, owner.id, false, OrgRole::Owner, note)
+            .await
+            .unwrap();
+        assert!(caps.allows(VIEW), "clients can read notes");
+        assert!(
+            !caps.allows(EDIT) && !caps.allows(DELETE),
+            "clients must not edit/delete notes by default"
+        );
+    }
 
-    // But can edit/delete an org-owned note.
-    let caps = capabilities(db, owner.id, false, OrgRole::Owner, &org_note)
+    // Staff (platform admin) is the ceiling — edits/deletes anything.
+    let caps = capabilities(db, owner.id, true, OrgRole::Viewer, &org_note)
         .await
         .unwrap();
     assert!(caps.allows(EDIT) && caps.allows(DELETE));
 
-    // A platform admin is the ceiling.
-    let caps = capabilities(db, owner.id, true, OrgRole::Viewer, &staff_note)
-        .await
-        .unwrap();
-    assert!(caps.allows(EDIT));
-
-    // The staff creator controls their own note even without platform admin.
+    // A record's creator controls their own record.
     let caps = capabilities(db, staff.id, false, OrgRole::Member, &staff_note)
         .await
         .unwrap();

@@ -10,33 +10,39 @@
 //! See `docs/ADDING_RESOURCES.md`.
 
 use fracture_core::models::org_members::OrgRole;
-use fracture_core::permissions::{Authorizable, OwnerTier, ResourcePolicy, DELETE, EDIT, VIEW};
+use fracture_core::permissions::{Authorizable, OwnerTier, ResourcePolicy, VIEW};
 
 use crate::models::_entities::notes;
 
 /// `resource_type` key for note grants in `resource_assignments`.
 pub const NOTE: &str = "note";
 
-/// Capability policy for notes:
-/// - **Org-owned** (a client member created it): viewers read; members also
-///   edit; admins/owners also delete.
-/// - **Staff-owned** (a platform admin created it): the local tiers — *including
-///   the org Owner* — can only read. Clients can't edit staff notes.
+/// Capability policy for notes.
+///
+/// Org (client) users get **read-only** access by default; staff (platform
+/// admin) are the ceiling and bypass the policy, so they edit/delete anything.
+///
+/// This is the per-model knob an app tunes. To give org users more on a
+/// resource, return extra capabilities per `(owner, role)` — for example:
+///
+/// ```ignore
+/// match (owner, role) {
+///     (OwnerTier::Org, OrgRole::Member) => vec![VIEW, COMMENT, EDIT],
+///     (OwnerTier::Org, OrgRole::Admin | OrgRole::Owner) => vec![VIEW, COMMENT, EDIT, DELETE],
+///     (OwnerTier::Org, _) => vec![VIEW, COMMENT],
+///     (OwnerTier::Staff, _) => vec![VIEW],   // clients never edit staff content
+/// }
+/// ```
+///
+/// Capabilities are open strings, so a form-style resource can grant a custom
+/// `"submit"` action to org members the same way.
 #[derive(Default)]
 pub struct NotePolicy;
 
 impl ResourcePolicy for NotePolicy {
-    // The org-Viewer and staff-owned arms both yield `[VIEW]` today but model
-    // distinct cases; keep them spelled out so the policy table reads clearly.
-    #[allow(clippy::match_same_arms)] // Reason: explicit policy rows, not a copy bug.
-    fn caps_for(&self, owner: OwnerTier, role: OrgRole) -> Vec<&'static str> {
-        match (owner, role) {
-            (OwnerTier::Org, OrgRole::Viewer) => vec![VIEW],
-            (OwnerTier::Org, OrgRole::Member) => vec![VIEW, EDIT],
-            (OwnerTier::Org, OrgRole::Admin | OrgRole::Owner) => vec![VIEW, EDIT, DELETE],
-            // Staff-owned: even the local Owner is capped to read-only.
-            (OwnerTier::Staff, _) => vec![VIEW],
-        }
+    fn caps_for(&self, _owner: OwnerTier, _role: OrgRole) -> Vec<&'static str> {
+        // Read-only for every org role, on both org- and staff-owned notes.
+        vec![VIEW]
     }
 }
 

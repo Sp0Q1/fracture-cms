@@ -91,24 +91,31 @@ Ownership is binary: `OwnerTier::Org` (a client created it) or `OwnerTier::Staff
    `created_by = Some(user.id)`.
 2. **Policy + `Authorizable`** (in `src/authz.rs`): one match table maps
    *(owner tier, role) → capabilities*; the `Authorizable` impl tells the
-   framework where `owner_tier`/`created_by`/`resource_id` live.
+   framework where `owner_tier`/`created_by`/`resource_id` live. Staff (platform
+   admin) and a record's own creator bypass the policy (full control), so the
+   table only governs other org users.
+
+   The bundled `notes` resource ships **read-only for clients** (`caps_for`
+   returns just `vec![VIEW]`). The example below is the *richer* form — grant
+   org users more per role, including custom capability strings for
+   form/comment-style resources:
 
    ```rust
    #[derive(Default)]
-   pub struct NotePolicy;
-   impl ResourcePolicy for NotePolicy {
+   pub struct MyResourcePolicy;
+   impl ResourcePolicy for MyResourcePolicy {
        fn caps_for(&self, owner: OwnerTier, role: OrgRole) -> Vec<&'static str> {
            match (owner, role) {
-               (OwnerTier::Org, OrgRole::Member) => vec![VIEW, EDIT],
-               (OwnerTier::Org, OrgRole::Admin | OrgRole::Owner) => vec![VIEW, EDIT, DELETE],
+               (OwnerTier::Org, OrgRole::Member) => vec![VIEW, COMMENT, EDIT],
+               (OwnerTier::Org, OrgRole::Admin | OrgRole::Owner) => vec![VIEW, COMMENT, EDIT, DELETE],
+               (OwnerTier::Org, OrgRole::Viewer) => vec![VIEW, COMMENT],
                (OwnerTier::Staff, _) => vec![VIEW],   // clients can't edit staff content
-               (OwnerTier::Org, OrgRole::Viewer) => vec![VIEW],
            }
        }
    }
-   impl Authorizable for notes::Model {
-       type Policy = NotePolicy;
-       fn resource_type() -> &'static str { "note" }
+   impl Authorizable for my_resource::Model {
+       type Policy = MyResourcePolicy;
+       fn resource_type() -> &'static str { "my_resource" }
        fn resource_id(&self) -> i32 { self.id }
        fn owner_tier(&self) -> OwnerTier { /* map the string column */ }
        fn created_by(&self) -> Option<i32> { self.created_by }
