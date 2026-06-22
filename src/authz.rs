@@ -1,21 +1,20 @@
-//! Reference example: wiring `fracture_core::permissions` into a concrete
-//! resource (the demo `projects`).
+//! Per-resource authorization glue: wires `fracture_core::permissions` into the
+//! demo resources (`projects`, `notes`).
 //!
-//! This is the per-resource glue a downstream app writes for each resource
-//! type it wants capability-based access on: a [`ResourcePolicy`] (what each
-//! tier may do, in each ownership direction) and a small helper that builds
-//! the [`Actor`], reads per-user grants from `resource_assignments`, and
-//! calls [`resolve`]. Controllers then gate on the returned [`Capabilities`]
-//! instead of a blanket `require_role!`. See `docs/ADDING_RESOURCES.md`.
+//! For each resource type an app wants capability-based access on, it writes a
+//! [`ResourcePolicy`]. `notes` uses the newer [`Authorizable`] trait +
+//! `middleware::capabilities` + `require_capability!`; `projects` shows the
+//! lower-level `resolve` helper. See `docs/ADDING_RESOURCES.md`.
 
 use fracture_core::models::org_members::OrgRole;
 use fracture_core::models::resource_assignments;
 use fracture_core::permissions::{
-    resolve, Actor, Capabilities, OwnerTier, ResourcePolicy, COMMENT, DELETE, EDIT, VIEW,
+    resolve, Actor, Authorizable, Capabilities, OwnerTier, ResourcePolicy, COMMENT, DELETE, EDIT,
+    VIEW,
 };
 use sea_orm::DatabaseConnection;
 
-use crate::models::_entities::projects;
+use crate::models::_entities::{notes, projects};
 
 /// `resource_type` key for project assignments in `resource_assignments`.
 pub const PROJECT: &str = "project";
@@ -23,7 +22,7 @@ pub const PROJECT: &str = "project";
 /// Capability policy for projects, demonstrating both directions:
 /// - **Org-owned** (a member created it): viewers read; members also comment
 ///   and edit; admins/owners also delete.
-/// - **Platform-owned** (staff/platform-admin created it): the local tiers —
+/// - **Staff-owned** (a staff/platform admin created it): the local tiers —
 ///   *including the org Owner* — are capped at view + comment.
 pub struct ProjectPolicy;
 
@@ -36,14 +35,16 @@ impl ResourcePolicy for ProjectPolicy {
                 vec![VIEW, COMMENT, EDIT, DELETE]
             }
             // Staff-owned: even the local Owner only views and comments.
-            (OwnerTier::Platform, _) => vec![VIEW, COMMENT],
+            (OwnerTier::Staff, _) => vec![VIEW, COMMENT],
         }
     }
 }
 
-fn owner_tier(project: &projects::Model) -> OwnerTier {
-    if project.owner_tier == "platform" {
-        OwnerTier::Platform
+fn project_owner_tier(project: &projects::Model) -> OwnerTier {
+    // Projects store "platform" for staff-created rows (original demo
+    // convention); treat that as the Staff tier.
+    if project.owner_tier == "platform" || project.owner_tier == "staff" {
+        OwnerTier::Staff
     } else {
         OwnerTier::Org
     }
@@ -51,9 +52,8 @@ fn owner_tier(project: &projects::Model) -> OwnerTier {
 
 /// Resolves what `user_id` may do with `project`.
 ///
-/// Folds in any per-user grants from `resource_assignments` (a grant's
-/// opaque `role_key` is treated as a capability string — the app defines
-/// that mapping).
+/// Folds in any per-user grants from `resource_assignments` (a grant's opaque
+/// `role_key` is treated as a capability string — the app defines that mapping).
 ///
 /// # Errors
 ///
@@ -79,8 +79,51 @@ pub async fn project_capabilities(
     };
     Ok(resolve(
         &actor,
-        owner_tier(project),
+        project_owner_tier(project),
         &ProjectPolicy,
         &granted,
     ))
+}
+
+/// `resource_type` key for note grants in `resource_assignments`.
+pub const NOTE: &str = "note";
+
+/// Capability policy for notes.
+///
+/// Org (client) users get **read-only** access by default; staff (platform
+/// admin) are the ceiling and bypass the policy, so they edit/delete anything.
+/// This is the per-model knob an app tunes (add capabilities per `(owner, role)`
+/// to let org users do more — comment, edit, custom actions).
+#[derive(Default)]
+pub struct NotePolicy;
+
+impl ResourcePolicy for NotePolicy {
+    fn caps_for(&self, _owner: OwnerTier, _role: OrgRole) -> Vec<&'static str> {
+        // Read-only for every org role, on both org- and staff-owned notes.
+        vec![VIEW]
+    }
+}
+
+impl Authorizable for notes::Model {
+    type Policy = NotePolicy;
+
+    fn resource_type() -> &'static str {
+        NOTE
+    }
+
+    fn resource_id(&self) -> i32 {
+        self.id
+    }
+
+    fn owner_tier(&self) -> OwnerTier {
+        if self.owner_tier == "staff" {
+            OwnerTier::Staff
+        } else {
+            OwnerTier::Org
+        }
+    }
+
+    fn created_by(&self) -> Option<i32> {
+        self.created_by
+    }
 }

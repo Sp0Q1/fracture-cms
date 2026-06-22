@@ -32,10 +32,14 @@ pub fn show(
     user_orgs: &[organizations::Model],
     project: &projects::Model,
     item: &notes::Model,
+    caps: &fracture_core::permissions::Capabilities,
 ) -> Result<Response> {
+    use fracture_core::permissions::{DELETE, EDIT};
     let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
     ctx["project"] = serde_json::json!(project);
     ctx["item"] = serde_json::json!(item);
+    ctx["can_edit"] = serde_json::json!(caps.allows(EDIT));
+    ctx["can_delete"] = serde_json::json!(caps.allows(DELETE));
     format::render().view(v, "note/show.html", data!(ctx))
 }
 

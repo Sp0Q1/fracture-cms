@@ -16,6 +16,9 @@ pub struct Model {
     pub org_id: i32,
     pub title: String,
     pub body: Option<String>,
+    #[sea_orm(default_value = "org")]
+    pub owner_tier: String,
+    pub created_by: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
