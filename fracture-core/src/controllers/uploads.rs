@@ -148,10 +148,10 @@ pub async fn show(
                 return Err(Error::NotFound);
             };
 
-            let is_platform_admin =
-                crate::models::organizations::Model::is_user_platform_admin(&ctx.db, user.id).await;
+            let is_staff =
+                crate::models::organizations::Model::is_user_staff(&ctx.db, user.id).await;
 
-            if !is_platform_admin {
+            if !is_staff {
                 let is_org_member = crate::models::_entities::org_members::Entity::find()
                     .filter(crate::models::_entities::org_members::Column::OrgId.eq(upload.org_id))
                     .filter(crate::models::_entities::org_members::Column::UserId.eq(user.id))
@@ -220,10 +220,9 @@ pub async fn destroy(
     // by overriding the upload routes.
     let is_uploader = upload.uploaded_by == user.id;
     if !is_uploader {
-        let is_platform_admin =
-            crate::models::organizations::Model::is_user_platform_admin(&ctx.db, user.id).await;
+        let is_staff = crate::models::organizations::Model::is_user_staff(&ctx.db, user.id).await;
 
-        if !is_platform_admin {
+        if !is_staff {
             let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
             let is_org_admin = org_ctx
                 .as_ref()

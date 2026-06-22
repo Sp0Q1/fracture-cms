@@ -47,7 +47,7 @@ async fn mk_blog_org(
         name: Set("Test Blog Org".into()),
         slug: Set("test-blog".into()),
         is_personal: Set(false),
-        is_platform_admin: Set(true),
+        is_staff: Set(true),
         settings: Set(None),
         ..Default::default()
     }
@@ -176,7 +176,7 @@ async fn republish_preserves_first_published_date() {
 
 #[tokio::test]
 #[serial]
-async fn preview_and_delete_are_platform_admin_only() {
+async fn preview_and_delete_are_staff_only() {
     request::<App, _, _>(|request, ctx| async move {
         let admin = mk_user(&ctx.db, "gate-admin").await;
         let outsider = mk_user(&ctx.db, "gate-outsider").await;

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::controllers::middleware;
 use crate::models::{contact_messages, organizations as org_model};
 use crate::views;
-use crate::{captcha, require_platform_admin, require_user};
+use crate::{captcha, require_staff, require_user};
 
 const MAX_NAME: usize = 200;
 const MAX_EMAIL: usize = 320;
@@ -105,7 +105,7 @@ pub async fn admin_index(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -129,7 +129,7 @@ pub async fn admin_delete(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
 
     let message = contact_messages::Model::find_by_pid(&ctx.db, &pid)
         .await?

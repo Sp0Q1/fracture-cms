@@ -61,7 +61,7 @@ fn project_owner_tier(project: &projects::Model) -> OwnerTier {
 pub async fn project_capabilities(
     db: &DatabaseConnection,
     user_id: i32,
-    is_platform_admin: bool,
+    is_staff: bool,
     role: OrgRole,
     project: &projects::Model,
 ) -> Result<Capabilities, sea_orm::DbErr> {
@@ -73,7 +73,7 @@ pub async fn project_capabilities(
             .map(|a| a.role_key)
             .collect();
     let actor = Actor {
-        is_platform_admin,
+        is_staff,
         role,
         owns_resource: project.created_by == Some(user_id),
     };

@@ -1383,8 +1383,7 @@ fn cmd_admin(action: AdminAction) {
             // Find the platform admin org. `= true` is portable across SQLite
             // (>= 3.23 maps true to 1) and PostgreSQL (native boolean); the old
             // `= 1` failed against a PostgreSQL boolean column.
-            let org_query =
-                "SELECT id, name FROM organizations WHERE is_platform_admin = true LIMIT 1";
+            let org_query = "SELECT id, name FROM organizations WHERE is_staff = true LIMIT 1";
             let mut org_result = run_db_query(org_query).trim().to_string();
             if org_result.is_empty() {
                 // Bootstrap: no platform admin org exists yet, so create one.
@@ -1405,7 +1404,7 @@ fn cmd_admin(action: AdminAction) {
                 };
                 run_db_query(&format!(
                     "INSERT INTO organizations \
-                     (pid, name, slug, is_personal, is_platform_admin, created_at, updated_at) \
+                     (pid, name, slug, is_personal, is_staff, created_at, updated_at) \
                      VALUES ({pid_literal}, 'Platform Admin', 'platform-admin', false, true, \
                      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
                 ));
@@ -1446,7 +1445,7 @@ fn cmd_admin(action: AdminAction) {
                  FROM users u \
                  JOIN org_members om ON om.user_id = u.id \
                  JOIN organizations o ON o.id = om.org_id \
-                 WHERE o.is_platform_admin = true \
+                 WHERE o.is_staff = true \
                  ORDER BY om.role, u.name",
             );
             let result = result.trim();

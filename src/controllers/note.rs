@@ -11,7 +11,7 @@ use crate::models::_entities::users as users_entity;
 use crate::models::org_members::OrgRole;
 use crate::models::organizations as org_model;
 use crate::models::{note_comments, projects};
-use crate::{require_capability, require_platform_admin, require_role, require_user, views};
+use crate::{require_capability, require_role, require_staff, require_user, views};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Params {
@@ -54,7 +54,7 @@ pub async fn new(
     // Notes are staff-authored; clients have read-only access. Creation is
     // therefore staff-only (an app that wants org authoring relaxes this).
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let org_ctx = org_ctx.ok_or_else(|| Error::NotFound)?;
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
@@ -79,7 +79,7 @@ pub async fn add(
     let user = require_user!(user);
     // Staff-only authoring (see `new`).
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let org_ctx = org_ctx.ok_or_else(|| Error::NotFound)?;
     let project = resolve_project(&ctx.db, &project_pid, org_ctx.org.id).await?;
 

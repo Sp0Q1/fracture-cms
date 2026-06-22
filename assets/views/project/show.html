@@ -63,7 +63,7 @@
         <div>
             <h2>Notes <span class="badge secondary">{{ notes | length }}</span></h2>
         </div>
-        {% if is_platform_admin %}
+        {% if is_staff %}
         <a href="/projects/{{ item.pid }}/notes/new" class="button">Add Note</a>
         {% endif %}
     </div>
@@ -88,7 +88,7 @@
     <article class="card empty-state">
         <h3>No Notes Yet</h3>
         <p>Add a note to this project.</p>
-        {% if is_platform_admin %}
+        {% if is_staff %}
         <a href="/projects/{{ item.pid }}/notes/new" class="button">Add Note</a>
         {% endif %}
     </article>

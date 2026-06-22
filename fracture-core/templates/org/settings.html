@@ -35,7 +35,7 @@
     <a href="/orgs/{{ org.pid }}/members" class="button outline">Manage Members</a>
 </div>
 
-{% if is_platform_admin and not org.is_personal and not org.is_platform_admin_org %}
+{% if is_staff and not org.is_personal and not org.is_staff_org %}
 <article class="card form-card mt-6 danger-zone">
     <h2>Danger Zone</h2>
     <p>Deleting an organization is permanent. All members will be removed and all associated data will be lost.</p>

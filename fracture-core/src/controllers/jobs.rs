@@ -17,7 +17,7 @@ use crate::models::{
     organizations as org_model,
 };
 use crate::views;
-use crate::{require_platform_admin, require_role, require_user};
+use crate::{require_role, require_staff, require_user};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewJobParams {
@@ -39,7 +39,7 @@ async fn find_definition_for_view(
     if let Some(definition) = job_def_model::Model::find_by_pid_and_org(db, pid, org_id).await? {
         return Ok(definition);
     }
-    if org_ctx.is_some_and(|oc| oc.is_platform_admin) {
+    if org_ctx.is_some_and(|oc| oc.is_staff) {
         if let Some(definition) = job_def_model::Model::find_by_pid(db, pid).await? {
             return Ok(definition);
         }
@@ -332,7 +332,7 @@ pub async fn admin_index(
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
-    require_platform_admin!(org_ctx);
+    require_staff!(org_ctx);
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();

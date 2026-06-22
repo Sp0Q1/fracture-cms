@@ -72,7 +72,7 @@ pub fn settings(
         "pid": org.pid.to_string(),
         "slug": org.slug,
         "is_personal": org.is_personal,
-        "is_platform_admin_org": org.is_platform_admin,
+        "is_staff_org": org.is_staff,
     });
     format::render().view(v, "org/settings.html", data!(ctx))
 }

@@ -47,7 +47,7 @@ async fn comment_edit_delete_is_author_or_staff_only() {
         name: Set("Auth Org".to_string()),
         slug: Set("auth-comments".to_string()),
         is_personal: Set(false),
-        is_platform_admin: Set(false),
+        is_staff: Set(false),
         ..Default::default()
     }
     .insert(db)

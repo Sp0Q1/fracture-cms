@@ -48,7 +48,7 @@
                 {% endfor %}
                 <hr>
                 {% endif %}
-                {% if is_platform_admin %}
+                {% if is_staff %}
                 <a href="/orgs/new" role="menuitem">Create Organization</a>
                 {% endif %}
                 <a href="/orgs" role="menuitem">Manage Organizations</a>
@@ -63,7 +63,7 @@
         {% block nav_public %}
         <a href="/blog">Blog</a>
         {% endblock nav_public %}
-        {% if is_platform_admin %}
+        {% if is_staff %}
         <a href="/admin">Admin</a>
         {% endif %}
         <ot-dropdown class="nav-end">
@@ -87,7 +87,7 @@
                 <hr>
                 {% block account_menu_items %}
                 <a href="/orgs" role="menuitem">Organizations</a>
-                {% if is_platform_admin %}
+                {% if is_staff %}
                 <hr>
                 <a href="/admin" role="menuitem">Platform Admin</a>
                 {% endif %}

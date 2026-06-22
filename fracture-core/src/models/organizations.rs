@@ -48,7 +48,7 @@ impl Model {
                     name: sea_orm::ActiveValue::Set(name.to_string()),
                     slug: sea_orm::ActiveValue::Set(slug.to_string()),
                     is_personal: sea_orm::ActiveValue::Set(false),
-                    is_platform_admin: sea_orm::ActiveValue::Set(false),
+                    is_staff: sea_orm::ActiveValue::Set(false),
                     settings: sea_orm::ActiveValue::Set(None),
                     ..Default::default()
                 }
@@ -127,12 +127,12 @@ impl Model {
         Ok(false)
     }
 
-    /// Returns true if the user is a member of any org with `is_platform_admin`.
-    pub async fn is_user_platform_admin(db: &DatabaseConnection, user_id: i32) -> bool {
+    /// Returns true if the user is a member of any org with `is_staff`.
+    pub async fn is_user_staff(db: &DatabaseConnection, user_id: i32) -> bool {
         Entity::find()
             .inner_join(org_members::Entity)
             .filter(org_members::Column::UserId.eq(user_id))
-            .filter(Column::IsPlatformAdmin.eq(true))
+            .filter(Column::IsStaff.eq(true))
             .count(db)
             .await
             .unwrap_or(0)
@@ -210,7 +210,7 @@ impl Model {
         db: &DatabaseConnection,
         user_id: i32,
     ) -> Result<Vec<Self>, DbErr> {
-        if Self::is_user_platform_admin(db, user_id).await {
+        if Self::is_user_staff(db, user_id).await {
             Entity::find().order_by_asc(Column::Name).all(db).await
         } else {
             Self::find_orgs_for_user(db, user_id).await

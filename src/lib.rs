@@ -11,4 +11,4 @@ pub mod views;
 pub mod workers;
 
 pub use fracture_core::permissions;
-pub use fracture_core::{require_capability, require_platform_admin, require_role, require_user};
+pub use fracture_core::{require_capability, require_role, require_staff, require_user};

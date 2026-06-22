@@ -80,7 +80,7 @@ impl Model {
         if let Some(m) = Self::find_membership(db, org_id, user_id).await? {
             return Ok(Some(m));
         }
-        if super::organizations::Model::is_user_platform_admin(db, user_id).await {
+        if super::organizations::Model::is_user_staff(db, user_id).await {
             return Ok(Some(Self::virtual_admin(org_id, user_id)));
         }
         Ok(None)
