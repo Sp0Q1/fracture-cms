@@ -39,16 +39,15 @@ pub async fn page(
     if !valid_page_slug(&slug) {
         return Err(Error::NotFound);
     }
-    let user = middleware::get_current_user(&jar, &ctx).await;
-    let user_name = user.map(|u| u.name);
+    let nav = middleware::public_nav_context(&jar, &ctx).await;
     let base_url = ctx.config.server.host.clone();
-    let res = views::site::page(&v, &slug, user_name.as_deref(), &base_url).map_err(|e| {
+    let res = views::site::page(&v, &slug, nav.as_ref(), &base_url).map_err(|e| {
         // A missing fragment template is the normal 404 path; real template
         // errors surface in the log without leaking internals.
         tracing::debug!(slug, error = %e, "static page not rendered");
         Error::NotFound
     })?;
-    Ok(if user_name.is_none() {
+    Ok(if nav.is_none() {
         super::cache_public(res, 300)
     } else {
         res

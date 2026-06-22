@@ -45,12 +45,10 @@ pub async fn show(
     Query(query): Query<ContactQuery>,
     jar: CookieJar,
 ) -> Result<Response> {
-    let user_name = middleware::get_current_user(&jar, &ctx)
-        .await
-        .map(|u| u.name);
+    let nav = middleware::public_nav_context(&jar, &ctx).await;
     // Not cacheable even for guests: the embedded state (sent banner) and
     // the single-use captcha challenge flow make it per-visit.
-    views::contact::form(&v, user_name.as_deref(), query.sent == Some(1))
+    views::contact::form(&v, nav.as_ref(), query.sent == Some(1))
 }
 
 /// POST /contact — submit the form. The Altcha payload is verified

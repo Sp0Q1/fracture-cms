@@ -27,12 +27,12 @@ pub fn landing(v: &impl ViewRenderer, user_name: Option<&str>) -> Result<Respons
 pub fn page(
     v: &impl ViewRenderer,
     slug: &str,
-    user_name: Option<&str>,
+    nav: Option<&serde_json::Value>,
     base_url: &str,
 ) -> Result<Response> {
     let body = v.render(
         &format!("site/pages/{slug}.html"),
-        data!({ "user_name": user_name }),
+        data!(super::with_nav(serde_json::json!({}), nav)),
     )?;
     let title = slug
         .split('-')
@@ -44,15 +44,14 @@ pub fn page(
         })
         .collect::<Vec<_>>()
         .join(" ");
-    format::render().view(
-        v,
-        "site/page_frame.html",
-        data!({
+    let ctx = super::with_nav(
+        serde_json::json!({
             "body": body,
             "title": title,
             "slug": slug,
-            "user_name": user_name,
             "base_url": base_url,
         }),
-    )
+        nav,
+    );
+    format::render().view(v, "site/page_frame.html", data!(ctx))
 }
