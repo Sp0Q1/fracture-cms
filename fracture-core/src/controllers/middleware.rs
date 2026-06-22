@@ -123,6 +123,26 @@ pub async fn get_org_context_or_default(
     })
 }
 
+/// Builds the navigation context for a *public* page.
+///
+/// Returns `None` for guests — the caller keeps the page a cacheable marketing
+/// shell. For a signed-in visitor it returns the full authenticated nav context
+/// (the same shape [`crate::views::base_context`] builds for in-app pages: org
+/// switcher, account menu, admin link), so public pages reachable while logged
+/// in (e.g. the blog) keep nav continuity instead of dropping the switcher.
+pub async fn public_nav_context(jar: &CookieJar, ctx: &AppContext) -> Option<serde_json::Value> {
+    let user = get_current_user(jar, ctx).await?;
+    let org_ctx = get_org_context_or_default(jar, &ctx.db, &user).await;
+    let user_orgs = organizations::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+    Some(crate::views::base_context(
+        &user,
+        org_ctx.as_ref(),
+        &user_orgs,
+    ))
+}
+
 /// Macro to require platform admin. Returns 403 if the user is not a platform admin.
 #[macro_export]
 macro_rules! require_platform_admin {

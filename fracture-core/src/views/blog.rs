@@ -34,18 +34,17 @@ pub fn public_index(
     v: &impl ViewRenderer,
     posts: &[blog_posts::Model],
     base_url: &str,
-    user_name: Option<&str>,
+    nav: Option<&serde_json::Value>,
 ) -> Result<Response> {
     let posts_json: Vec<_> = posts.iter().map(post_json).collect();
-    format::render().view(
-        v,
-        "blog/public_index.html",
-        data!({
+    let ctx = super::with_nav(
+        json!({
             "posts": posts_json,
             "base_url": base_url,
-            "user_name": user_name,
         }),
-    )
+        nav,
+    );
+    format::render().view(v, "blog/public_index.html", data!(ctx))
 }
 
 /// Renders a single blog post with the public template. `preview` shows the
@@ -60,20 +59,19 @@ pub fn public_show(
     author_name: &str,
     base_url: &str,
     preview: bool,
-    user_name: Option<&str>,
+    nav: Option<&serde_json::Value>,
 ) -> Result<Response> {
     let post_data = post_json(post);
-    format::render().view(
-        v,
-        "blog/public_show.html",
-        data!({
+    let ctx = super::with_nav(
+        json!({
             "post": post_data,
             "author_name": author_name,
             "base_url": base_url,
             "preview": preview,
-            "user_name": user_name,
         }),
-    )
+        nav,
+    );
+    format::render().view(v, "blog/public_show.html", data!(ctx))
 }
 
 /// Minimal XML text escaping for the Atom feed.

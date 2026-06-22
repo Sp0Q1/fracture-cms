@@ -238,14 +238,18 @@ async fn public_pages_show_dashboard_cta_when_authenticated() {
         let admin = mk_user(&ctx.db, "nav-admin").await;
         mk_blog_org(&ctx.db, &admin).await;
 
-        // Guest: Sign in CTA, cacheable.
+        // Guest: Sign in CTA, no org switcher, cacheable.
         let response = request.get("/blog").await;
         let body = response.text();
         assert!(body.contains("Sign in"));
         assert!(!body.contains(">Dashboard<"));
+        assert!(
+            !body.contains("id=\"org-switcher\""),
+            "guests get no org switcher"
+        );
         assert!(response.headers().get("cache-control").is_some());
 
-        // Authenticated: Dashboard CTA, NOT cacheable.
+        // Authenticated: full app nav (org switcher + account menu), NOT cacheable.
         let response = request
             .get("/blog")
             .add_cookie(jwt_cookie(&ctx, &admin))
@@ -254,6 +258,10 @@ async fn public_pages_show_dashboard_cta_when_authenticated() {
         let body = response.text();
         assert!(body.contains(">Dashboard<"), "authed nav must link the app");
         assert!(!body.contains("Sign in"));
+        assert!(
+            body.contains("id=\"org-switcher\""),
+            "authed visitors keep the org switcher on public pages"
+        );
         assert!(
             response.headers().get("cache-control").is_none(),
             "session-aware variant must not be publicly cacheable"

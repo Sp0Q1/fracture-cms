@@ -32,3 +32,18 @@ pub fn base_context(
         })).collect::<Vec<_>>(),
     })
 }
+
+/// Merges an optional authenticated-nav context into a page's template data.
+///
+/// The nav is built by [`base_context`]. Guests pass `None` and the page
+/// renders the minimal marketing shell; signed-in visitors get the full nav.
+#[must_use]
+pub fn with_nav(mut page: Value, nav: Option<&Value>) -> Value {
+    if let (Some(nav_obj), Some(page_obj)) = (nav.and_then(Value::as_object), page.as_object_mut())
+    {
+        for (key, value) in nav_obj {
+            page_obj.insert(key.clone(), value.clone());
+        }
+    }
+    page
+}

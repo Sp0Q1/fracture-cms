@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-{# Marketing/public layout: no org chrome, no JavaScript. The only session
-   awareness is the nav CTA (Dashboard for signed-in visitors, Sign in
-   otherwise), driven by `user_name` in the render context — handlers only
-   set Cache-Control: public on the guest variant. Apps override this file
-   by placing their own assets/views/public_base.html. #}
+{# Public layout. For guests it's a minimal marketing shell (no org chrome,
+   no JS) that handlers may cache. For a signed-in visitor it renders the
+   same app nav as base.html — org switcher, account menu, admin link — so
+   public pages reachable from the app (e.g. the blog) keep continuity
+   instead of dropping the switcher. Handlers pass the authenticated nav
+   context (via middleware::public_nav_context) only when signed in, and
+   only the guest variant is cached. Apps override this file by placing
+   their own assets/views/public_base.html. #}
 <html lang="en" data-theme="dark">
 
 <head>
@@ -22,7 +25,7 @@
   {% block head %}{% endblock head %}
 </head>
 
-<body>
+<body{% if user_name %} data-authenticated{% endif %}>
     <a href="#main-content" class="skip-link">Skip to main content</a>
     <nav data-topnav aria-label="Main navigation">
         <span>
@@ -35,17 +38,56 @@
                 <strong class="gradient-text">{% block brand_name %}Fracture CMS{% endblock brand_name %}</strong>
             </a>
         </span>
+        {% if user_name %}
+        <ot-dropdown class="org-switcher-nav">
+            <button class="org-badge" popovertarget="org-switcher" aria-label="Switch organization">
+                {{ org_name | default(value="No Org") | truncate(length=20, end="...") }}
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="org-switcher" popover>
+                {% if user_orgs %}
+                {% for org in user_orgs %}
+                <a href="/orgs/switch/{{ org.pid }}" role="menuitem"{% if org.pid == org_pid %} class="active"{% endif %}>
+                    {{ org.name }}{% if org.is_personal %} <small>(Personal)</small>{% endif %}
+                </a>
+                {% endfor %}
+                <hr>
+                {% endif %}
+                {% if is_platform_admin %}
+                <a href="/orgs/new" role="menuitem">Create Organization</a>
+                {% endif %}
+                <a href="/orgs" role="menuitem">Manage Organizations</a>
+            </div>
+        </ot-dropdown>
+        {% endif %}
         {% block nav_public %}
         <a href="/blog">Blog</a>
         {% endblock nav_public %}
+        {% if is_platform_admin %}
+        <a href="/admin">Admin</a>
+        {% endif %}
         <span class="nav-end">
-            {% block nav_cta %}
             {% if user_name %}
-            <a href="/" class="button small">Dashboard</a>
+            <ot-dropdown>
+                <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">
+                    <span class="user-avatar">{{ user_name | truncate(length=1, end="") | upper }}</span>
+                </button>
+                <div id="account-menu" popover>
+                    <span role="menuitem">{{ user_name }}</span>
+                    <hr>
+                    <a href="/" role="menuitem">Dashboard</a>
+                    <a href="/orgs" role="menuitem">Organizations</a>
+                    {% if is_platform_admin %}
+                    <a href="/admin" role="menuitem">Platform Admin</a>
+                    {% endif %}
+                    <a href="/api/auth/oidc/logout" role="menuitem">Sign out</a>
+                </div>
+            </ot-dropdown>
             {% else %}
+            {% block nav_cta %}
             <a href="/api/auth/oidc/authorize" class="button small">Sign in</a>
-            {% endif %}
             {% endblock nav_cta %}
+            {% endif %}
         </span>
     </nav>
     <main id="main-content" class="container">
@@ -67,6 +109,11 @@
         </div>
         {% endblock footer %}
     </footer>
+    {# JS only for signed-in visitors (the nav dropdowns); guests stay JS-free. #}
+    {% if user_name %}
+    <script src="/static/oat.min.js" integrity="{{ sri(path='/static/oat.min.js') }}" crossorigin="anonymous"></script>
+    <script src="/static/app.js" integrity="{{ sri(path='/static/app.js') }}" crossorigin="anonymous"></script>
+    {% endif %}
     {% block scripts %}{% endblock scripts %}
 </body>
 

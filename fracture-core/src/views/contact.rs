@@ -11,12 +11,13 @@ use crate::models::_entities::{contact_messages, organizations, users};
 /// # Errors
 ///
 /// Returns an error if template rendering fails.
-pub fn form(v: &impl ViewRenderer, user_name: Option<&str>, sent: bool) -> Result<Response> {
-    format::render().view(
-        v,
-        "site/contact.html",
-        data!({ "user_name": user_name, "sent": sent }),
-    )
+pub fn form(
+    v: &impl ViewRenderer,
+    nav: Option<&serde_json::Value>,
+    sent: bool,
+) -> Result<Response> {
+    let ctx = super::with_nav(json!({ "sent": sent }), nav);
+    format::render().view(v, "site/contact.html", data!(ctx))
 }
 
 /// Renders the admin contact inbox.

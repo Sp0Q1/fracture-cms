@@ -54,13 +54,11 @@ pub async fn public_index(
         None => vec![],
     };
     let base_url = ctx.config.server.host.clone();
-    // Signed-in visitors get the Dashboard CTA in the nav; only the guest
-    // variant (identical for everyone) is cacheable.
-    let user_name = middleware::get_current_user(&jar, &ctx)
-        .await
-        .map(|u| u.name);
-    let res = views::blog::public_index(&v, &posts, &base_url, user_name.as_deref())?;
-    Ok(if user_name.is_none() {
+    // Signed-in visitors get the full app nav (org switcher + account menu);
+    // only the guest variant (identical for everyone) is cacheable.
+    let nav = middleware::public_nav_context(&jar, &ctx).await;
+    let res = views::blog::public_index(&v, &posts, &base_url, nav.as_ref())?;
+    Ok(if nav.is_none() {
         super::cache_public(res, 60)
     } else {
         res
@@ -111,18 +109,9 @@ pub async fn public_show(
         .await?;
     let author_name = author.map_or_else(|| "Unknown".to_string(), |a| a.name);
     let base_url = ctx.config.server.host.clone();
-    let user_name = middleware::get_current_user(&jar, &ctx)
-        .await
-        .map(|u| u.name);
-    let res = views::blog::public_show(
-        &v,
-        &post,
-        &author_name,
-        &base_url,
-        false,
-        user_name.as_deref(),
-    )?;
-    Ok(if user_name.is_none() {
+    let nav = middleware::public_nav_context(&jar, &ctx).await;
+    let res = views::blog::public_show(&v, &post, &author_name, &base_url, false, nav.as_ref())?;
+    Ok(if nav.is_none() {
         super::cache_public(res, 60)
     } else {
         res
@@ -390,7 +379,11 @@ pub async fn admin_preview(
         .await?;
     let author_name = author.map_or_else(|| "Unknown".to_string(), |a| a.name);
     let base_url = ctx.config.server.host.clone();
-    views::blog::public_show(&v, &post, &author_name, &base_url, true, Some(&user.name))
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+    let nav = views::base_context(&user, org_ctx.as_ref(), &user_orgs);
+    views::blog::public_show(&v, &post, &author_name, &base_url, true, Some(&nav))
 }
 
 /// POST /admin/blog/:pid/delete — permanently delete a blog post.
