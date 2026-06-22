@@ -119,6 +119,48 @@ pub async fn get_org_context_or_default(
     })
 }
 
+/// Resolves the actor's capabilities on `resource` in the current org context.
+///
+/// The ergonomic wrapper around [`crate::permissions::capabilities`] that pulls
+/// `is_platform_admin`/`role` from the [`OrgContext`]. Pair with
+/// `require_capability!` to enforce.
+///
+/// # Errors
+///
+/// Returns an error if reading per-user grants fails.
+pub async fn capabilities<R>(
+    db: &DatabaseConnection,
+    org_ctx: &OrgContext,
+    user_id: i32,
+    resource: &R,
+) -> Result<crate::permissions::Capabilities, sea_orm::DbErr>
+where
+    R: crate::permissions::Authorizable + Sync,
+{
+    crate::permissions::capabilities(
+        db,
+        user_id,
+        org_ctx.is_platform_admin,
+        org_ctx.role,
+        resource,
+    )
+    .await
+}
+
+/// Enforce a capability on an already-resolved set of capabilities.
+///
+/// Returns 404 (not 403) on denial so resource existence isn't leaked — the
+/// project convention. Use instead of an inline `if` in the handler:
+/// `require_capability!(caps, EDIT);`
+#[macro_export]
+macro_rules! require_capability {
+    ($caps:expr, $cap:expr) => {
+        if !$caps.allows($cap) {
+            return Err(loco_rs::Error::NotFound);
+        }
+    };
+}
+
 /// Macro to require platform admin. Returns 403 if the user is not a platform admin.
 #[macro_export]
 macro_rules! require_platform_admin {

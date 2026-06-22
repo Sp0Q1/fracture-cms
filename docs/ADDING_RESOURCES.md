@@ -76,6 +76,60 @@ Create `src/controllers/<resource>.rs`:
 
 Register in `src/controllers/mod.rs` and `src/app.rs`.
 
+### Per-resource authorization (capabilities)
+
+`require_role!` gates on the actor's org-wide role. When access also depends on
+*who owns a specific record* — e.g. a client (even an org Owner) must not edit
+content created by staff — use the capability resolver instead of inline checks.
+
+Ownership is binary: `OwnerTier::Org` (a client created it) or `OwnerTier::Staff`
+(a platform admin created it). Wire a resource in three small steps:
+
+1. **Columns**: add `owner_tier` (string, default `"org"`) and `created_by`
+   (nullable user id) to the table (migration) and the entity. Set them on
+   create: `owner_tier = if org_ctx.is_platform_admin { "staff" } else { "org" }`,
+   `created_by = Some(user.id)`.
+2. **Policy + `Authorizable`** (in `src/authz.rs`): one match table maps
+   *(owner tier, role) → capabilities*; the `Authorizable` impl tells the
+   framework where `owner_tier`/`created_by`/`resource_id` live.
+
+   ```rust
+   #[derive(Default)]
+   pub struct NotePolicy;
+   impl ResourcePolicy for NotePolicy {
+       fn caps_for(&self, owner: OwnerTier, role: OrgRole) -> Vec<&'static str> {
+           match (owner, role) {
+               (OwnerTier::Org, OrgRole::Member) => vec![VIEW, EDIT],
+               (OwnerTier::Org, OrgRole::Admin | OrgRole::Owner) => vec![VIEW, EDIT, DELETE],
+               (OwnerTier::Staff, _) => vec![VIEW],   // clients can't edit staff content
+               (OwnerTier::Org, OrgRole::Viewer) => vec![VIEW],
+           }
+       }
+   }
+   impl Authorizable for notes::Model {
+       type Policy = NotePolicy;
+       fn resource_type() -> &'static str { "note" }
+       fn resource_id(&self) -> i32 { self.id }
+       fn owner_tier(&self) -> OwnerTier { /* map the string column */ }
+       fn created_by(&self) -> Option<i32> { self.created_by }
+   }
+   ```
+
+3. **Gate in the controller** — resolve, then enforce with the macro (never an
+   inline `if`):
+
+   ```rust
+   let caps = middleware::capabilities(&ctx.db, &org_ctx, user.id, &item).await?;
+   require_capability!(caps, EDIT);
+   ```
+
+The resolver also folds in per-user grants from `resource_assignments` (a
+grant's `role_key` maps to capabilities; override `Authorizable::grant_capabilities`
+to expand a named grant like `"reviewer"` → `["view", "comment"]`), and
+short-circuits to all capabilities for platform admins and a record's own
+creator. Pass the resolved `Capabilities` to the view to hide actions the user
+can't perform.
+
 ## 5. View
 
 Create `src/views/<resource>.rs`:

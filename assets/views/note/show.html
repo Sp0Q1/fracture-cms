@@ -28,11 +28,11 @@
     </div>
 
     <div class="form-actions">
-        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        {% if can_edit %}
         <a href="/projects/{{ project.pid }}/notes/{{ item.pid }}/edit" class="button">Edit</a>
         {% endif %}
         <a href="/projects/{{ project.pid }}" class="button" data-variant="secondary">Back to Project</a>
-        {% if user_role == "member" or user_role == "admin" or user_role == "owner" %}
+        {% if can_delete %}
         <span class="spacer"></span>
         <button class="outline" data-variant="danger"
                 data-delete-url="/projects/{{ project.pid }}/notes/{{ item.pid }}"

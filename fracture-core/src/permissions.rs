@@ -26,7 +26,10 @@
 
 use std::collections::BTreeSet;
 
+use sea_orm::{DatabaseConnection, DbErr};
+
 use crate::models::org_members::OrgRole;
+use crate::models::resource_assignments;
 
 /// Built-in capabilities. Domain code may use any additional string.
 pub const VIEW: &str = "view";
@@ -34,12 +37,15 @@ pub const COMMENT: &str = "comment";
 pub const EDIT: &str = "edit";
 pub const DELETE: &str = "delete";
 
-/// Who created a resource — sets the baseline authority for the local tiers.
+/// Who owns a resource — sets the baseline authority for the local tiers.
+/// Ownership is binary: the org (a client created it) or staff (a
+/// platform/cross-tenant admin created it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OwnerTier {
-    /// Created by platform/cross-tenant staff. Local tiers get only what the
-    /// policy explicitly grants (often read/comment).
-    Platform,
+    /// Created by platform/cross-tenant staff. Local (org) tiers get only what
+    /// the policy explicitly grants (often read/comment) — even the org Owner
+    /// cannot edit staff-owned content unless the policy says so.
+    Staff,
     /// Created within the org by a member. Local tiers get the org policy.
     Org,
 }
@@ -113,7 +119,7 @@ pub fn resolve(
         return Capabilities::All;
     }
     // You fully control what you created (the "user CRUDs their own docs"
-    // direction). A platform-owned resource's creator is platform and was
+    // direction). A staff-owned resource's creator is a platform admin and was
     // already handled above, so this only lifts an org member on their own row.
     if actor.owns_resource {
         return Capabilities::All;
@@ -135,13 +141,79 @@ pub fn resolve(
     Capabilities::Only(set)
 }
 
+/// A resource type that supports capability-based authorization.
+///
+/// Implement this once per org-scoped resource (alongside its
+/// [`ResourcePolicy`]). The framework's [`capabilities`] helper then resolves
+/// an actor's [`Capabilities`] with no per-resource glue, and controllers gate
+/// with the `require_capability!` macro — never an inline `if` in the handler.
+pub trait Authorizable {
+    /// The capability policy for this resource type.
+    type Policy: ResourcePolicy + Default;
+    /// Stable key under which per-user grants for this type are stored in
+    /// `resource_assignments`.
+    fn resource_type() -> &'static str;
+    /// This record's id (used for per-user grant lookup).
+    fn resource_id(&self) -> i32;
+    /// Whether this record is owned by the org or by staff.
+    fn owner_tier(&self) -> OwnerTier;
+    /// The user id that created this record, if recorded (gets full control).
+    fn created_by(&self) -> Option<i32>;
+    /// Maps a per-user grant's opaque `role_key` to capability strings. The
+    /// default treats the key itself as a single capability; override to expand
+    /// a named grant (e.g. `"reviewer"` → `["view", "comment"]`).
+    #[must_use]
+    fn grant_capabilities(role_key: &str) -> Vec<String> {
+        vec![role_key.to_string()]
+    }
+}
+
+/// Resolves what `user_id` may do with `resource`.
+///
+/// Folds the actor's org role, resource ownership, the platform-admin ceiling,
+/// and per-user grants from `resource_assignments`. This is the single entry
+/// point controllers call; pair it with `require_capability!` to enforce.
+///
+/// # Errors
+///
+/// Returns an error if reading the per-user grants fails.
+pub async fn capabilities<R: Authorizable + Sync>(
+    db: &DatabaseConnection,
+    user_id: i32,
+    is_platform_admin: bool,
+    role: OrgRole,
+    resource: &R,
+) -> Result<Capabilities, DbErr> {
+    let granted: Vec<String> = resource_assignments::Model::list_for_resource(
+        db,
+        R::resource_type(),
+        resource.resource_id(),
+    )
+    .await?
+    .into_iter()
+    .filter(|a| a.user_id == user_id)
+    .flat_map(|a| R::grant_capabilities(&a.role_key))
+    .collect();
+    let actor = Actor {
+        is_platform_admin,
+        role,
+        owns_resource: resource.created_by() == Some(user_id),
+    };
+    Ok(resolve(
+        &actor,
+        resource.owner_tier(),
+        &R::Policy::default(),
+        &granted,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// Example policy exercising both directions:
     /// - Org-owned: members edit, viewers read, everyone comments.
-    /// - Platform-owned (staff docs): local tiers get only view+comment,
+    /// - Staff-owned (staff docs): local tiers get only view+comment,
     ///   *including* Owner/Admin — the downward cap.
     struct DemoPolicy;
     impl ResourcePolicy for DemoPolicy {
@@ -153,7 +225,7 @@ mod tests {
                     vec![VIEW, COMMENT, EDIT, DELETE]
                 }
                 // Staff-owned: even local Owner is capped to read + comment.
-                (OwnerTier::Platform, _) => vec![VIEW, COMMENT],
+                (OwnerTier::Staff, _) => vec![VIEW, COMMENT],
             }
         }
     }
@@ -170,7 +242,7 @@ mod tests {
     fn platform_admin_is_the_ceiling() {
         let caps = resolve(
             &actor(true, OrgRole::Viewer, false),
-            OwnerTier::Platform,
+            OwnerTier::Staff,
             &DemoPolicy,
             &[],
         );
@@ -195,7 +267,7 @@ mod tests {
         // views and comments.
         let caps = resolve(
             &actor(false, OrgRole::Owner, false),
-            OwnerTier::Platform,
+            OwnerTier::Staff,
             &DemoPolicy,
             &[],
         );
@@ -242,7 +314,7 @@ mod tests {
         let granted = vec!["approve".to_string()];
         let caps = resolve(
             &actor(false, OrgRole::Viewer, false),
-            OwnerTier::Platform,
+            OwnerTier::Staff,
             &DemoPolicy,
             &granted,
         );
