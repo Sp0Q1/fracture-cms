@@ -1,0 +1,58 @@
+{# Shared list/changelist renderer. Inputs (set by the including template):
+   - base_url : path the search/sort/pagination links point at
+   - page     : a serialized ListPage { columns, rows, total, page, per_page,
+                total_pages, sort, desc, q }
+   Rows with a "_url" key render as clickable rows. #}
+<form action="{{ base_url }}" method="get" class="changelist-search">
+    {% if page.sort %}<input type="hidden" name="sort" value="{{ page.sort }}">{% endif %}
+    {% if page.desc %}<input type="hidden" name="dir" value="desc">{% endif %}
+    <input type="search" name="q" value="{{ page.q | default(value='') }}" placeholder="Search…" aria-label="Search">
+    <button type="submit">Search</button>
+    {% if page.q %}<a class="button outline small" href="{{ base_url }}">Clear</a>{% endif %}
+</form>
+
+{% if page.rows %}
+<table class="clickable-rows">
+    <thead>
+        <tr>
+            {% for col in page.columns %}
+            <th>
+                {% if col.sortable %}
+                    {% if page.sort == col.key and not page.desc %}{% set nextdir = "desc" %}{% set arrow = " ▲" %}
+                    {% elif page.sort == col.key and page.desc %}{% set nextdir = "asc" %}{% set arrow = " ▼" %}
+                    {% else %}{% set nextdir = "asc" %}{% set arrow = "" %}{% endif %}
+                    <a href="{{ base_url }}?sort={{ col.key }}&dir={{ nextdir }}{% if page.q %}&q={{ page.q }}{% endif %}">{{ col.label }}{{ arrow }}</a>
+                {% else %}{{ col.label }}{% endif %}
+            </th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in page.rows %}
+        <tr{% if row._url %} data-href="{{ row._url }}"{% endif %}>
+            {% for col in page.columns %}
+            <td>{{ row[col.key] | default(value="") }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if page.total_pages > 1 %}
+<nav class="pagination" aria-label="Pagination">
+    {% if page.page > 1 %}
+    <a class="button outline small" href="{{ base_url }}?page={{ page.page - 1 }}{% if page.sort %}&sort={{ page.sort }}&dir={% if page.desc %}desc{% else %}asc{% endif %}{% endif %}{% if page.q %}&q={{ page.q }}{% endif %}">← Prev</a>
+    {% endif %}
+    <span class="pagination-info">Page {{ page.page }} of {{ page.total_pages }} · {{ page.total }} total</span>
+    {% if page.page < page.total_pages %}
+    <a class="button outline small" href="{{ base_url }}?page={{ page.page + 1 }}{% if page.sort %}&sort={{ page.sort }}&dir={% if page.desc %}desc{% else %}asc{% endif %}{% endif %}{% if page.q %}&q={{ page.q }}{% endif %}">Next →</a>
+    {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<article class="card empty-state">
+    <h3>Nothing here</h3>
+    <p>{% if page.q %}No results match “{{ page.q }}”.{% else %}Nothing yet.{% endif %}</p>
+</article>
+{% endif %}

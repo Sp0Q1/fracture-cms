@@ -2,7 +2,7 @@ use fracture_core::permissions::{Capabilities, COMMENT, DELETE, EDIT};
 use loco_rs::prelude::*;
 
 use crate::controllers::middleware::OrgContext;
-use crate::models::_entities::{notes, organizations, projects, users};
+use crate::models::_entities::{organizations, projects, users};
 
 /// Render the project list page.
 ///
@@ -14,10 +14,10 @@ pub fn list(
     user: &users::Model,
     org_ctx: &OrgContext,
     user_orgs: &[organizations::Model],
-    items: &[projects::Model],
+    page: &fracture_core::listing::ListPage,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
-    ctx["items"] = serde_json::json!(items);
+    ctx["page"] = serde_json::json!(page);
     format::render().view(v, "project/list.html", data!(ctx))
 }
 
@@ -32,12 +32,12 @@ pub fn show(
     org_ctx: &OrgContext,
     user_orgs: &[organizations::Model],
     item: &projects::Model,
-    notes: &[notes::Model],
+    page: &fracture_core::listing::ListPage,
     caps: &Capabilities,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, Some(org_ctx), user_orgs);
     ctx["item"] = serde_json::json!(item);
-    ctx["notes"] = serde_json::json!(notes);
+    ctx["page"] = serde_json::json!(page);
     // Capability flags drive which actions the template offers — the same
     // resolver result the controller gates on (see src/authz.rs).
     ctx["can_edit"] = serde_json::json!(caps.allows(EDIT));

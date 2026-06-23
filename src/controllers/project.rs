@@ -1,8 +1,13 @@
+use std::collections::HashMap;
+
+use axum::extract::Query;
 use axum::response::Redirect;
 use axum_extra::extract::{CookieJar, Form};
 use loco_rs::prelude::*;
+use sea_orm::{ColumnTrait, Condition, Order, QueryFilter, QueryOrder};
 use serde::{Deserialize, Serialize};
 
+use fracture_core::listing::{paginate_models, ListColumn, ListQuery};
 use fracture_core::permissions::{DELETE, EDIT, VIEW};
 
 use super::middleware;
@@ -31,22 +36,57 @@ impl Params {
 ///
 /// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
+#[allow(clippy::implicit_hasher)] // axum's Query extractor requires a concrete HashMap.
 pub async fn list(
+    Query(params): Query<HashMap<String, String>>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
 ) -> Result<Response> {
+    use crate::models::_entities::projects::{Column, Entity};
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Viewer);
-    let items = Model::find_by_org(&ctx.db, org_ctx.org.id).await?;
+
+    // Org-scoped, searchable, sortable, paginated — through the same shared
+    // listing framework as every other table (admin changelist included).
+    let q = ListQuery::from_params(&params);
+    let mut query = Entity::find().filter(Column::OrgId.eq(org_ctx.org.id));
+    if let Some(s) = &q.q {
+        query = query.filter(
+            Condition::any()
+                .add(Column::Title.contains(s))
+                .add(Column::Description.contains(s)),
+        );
+    }
+    let dir = if q.desc { Order::Desc } else { Order::Asc };
+    query = match q.sort.as_deref() {
+        Some("description") => query.order_by(Column::Description, dir),
+        Some("created_at") => query.order_by(Column::CreatedAt, dir),
+        _ => query.order_by(Column::Title, dir),
+    };
+    let columns = vec![
+        ListColumn::sortable("title", "Title"),
+        ListColumn::plain("description", "Description"),
+        ListColumn::sortable("created_at", "Created"),
+    ];
+    let page = paginate_models(&ctx.db, query, &q, columns, |m| {
+        serde_json::json!({
+            "title": m.title,
+            "description": m.description,
+            "created_at": m.created_at.format("%Y-%m-%d").to_string(),
+            "_url": format!("/projects/{}", m.pid),
+        })
+    })
+    .await?;
+
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
-    views::project::list(&v, &user, &org_ctx, &user_orgs, &items)
+    views::project::list(&v, &user, &org_ctx, &user_orgs, &page)
 }
 
 /// `GET /projects/new` -- new project form.
@@ -114,8 +154,10 @@ pub async fn add(
 ///
 /// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
+#[allow(clippy::implicit_hasher)] // axum's Query extractor requires a concrete HashMap.
 pub async fn show(
     Path(pid): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
@@ -135,13 +177,42 @@ pub async fn show(
     if !caps.allows(VIEW) {
         return Err(Error::NotFound);
     }
-    let notes =
-        crate::models::notes::Model::find_by_project_and_org(&ctx.db, item.id, org_ctx.org.id)
-            .await?;
+
+    // The project's notes render through the same shared listing framework
+    // (search + sort + paginate), scoped to this project.
+    let q = ListQuery::from_params(&params);
+    let project_pid = item.pid.to_string();
+    let notes_page = {
+        use crate::models::_entities::notes::{Column, Entity};
+        let mut query = Entity::find()
+            .filter(Column::ProjectId.eq(item.id))
+            .filter(Column::OrgId.eq(org_ctx.org.id));
+        if let Some(s) = &q.q {
+            query = query.filter(Column::Title.contains(s));
+        }
+        let dir = if q.desc { Order::Desc } else { Order::Asc };
+        query = match q.sort.as_deref() {
+            Some("created_at") => query.order_by(Column::CreatedAt, dir),
+            _ => query.order_by(Column::Title, dir),
+        };
+        let columns = vec![
+            ListColumn::sortable("title", "Title"),
+            ListColumn::sortable("created_at", "Created"),
+        ];
+        paginate_models(&ctx.db, query, &q, columns, |m| {
+            serde_json::json!({
+                "title": m.title,
+                "created_at": m.created_at.format("%Y-%m-%d").to_string(),
+                "_url": format!("/projects/{project_pid}/notes/{}", m.pid),
+            })
+        })
+        .await?
+    };
+
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
-    views::project::show(&v, &user, &org_ctx, &user_orgs, &item, &notes, &caps)
+    views::project::show(&v, &user, &org_ctx, &user_orgs, &item, &notes_page, &caps)
 }
 
 /// `GET /projects/:pid/edit` -- edit project form.
