@@ -1,3 +1,4 @@
+mod admin_list;
 mod blog;
 mod jobs;
 mod note_comments;
