@@ -1,4 +1,5 @@
 mod admin_list;
+mod admin_org_crud;
 mod blog;
 mod jobs;
 mod note_comments;

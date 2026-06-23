@@ -10,7 +10,12 @@
 </nav>
 
 <div class="page-header">
-    <h1>{{ title }} <span class="badge secondary">{{ page.total }}</span></h1>
+    <div class="hstack">
+        <h1>{{ title }} <span class="badge secondary">{{ page.total }}</span></h1>
+        {% if creatable %}
+        <a href="/admin/list/{{ slug }}/new" class="button">Add {{ title }}</a>
+        {% endif %}
+    </div>
 </div>
 
 {% set base_url = "/admin/list/" ~ slug %}

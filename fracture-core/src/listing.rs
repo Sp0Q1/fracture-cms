@@ -44,6 +44,102 @@ impl ListColumn {
     }
 }
 
+/// The widget kind a form field renders as (Django's form widgets).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldKind {
+    /// Single-line `<input type="text">`.
+    Text,
+    /// Multi-line `<textarea>`.
+    Textarea,
+    /// `<input type="checkbox">` (submitted value `"on"` ⇒ true).
+    Checkbox,
+    /// `<input type="number">`.
+    Number,
+}
+
+/// One editable field on a create/edit form (Django's form field).
+///
+/// A resource declares its fields via [`AdminEntity::form_fields`]; the generic
+/// form template renders them and the generic controller collects the POST.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct FormField {
+    /// Form name and key into the submitted body / prefill JSON.
+    pub name: &'static str,
+    /// Human label shown beside the input.
+    pub label: &'static str,
+    /// Which widget to render.
+    pub kind: FieldKind,
+    /// Whether the field is required (client + server hint).
+    pub required: bool,
+    /// Help text shown under the input (empty = none).
+    pub help: &'static str,
+    /// Pre-filled value, set per-request for the edit form (empty on create).
+    pub value: String,
+}
+
+impl FormField {
+    /// A required single-line text field.
+    #[must_use]
+    pub const fn text(name: &'static str, label: &'static str) -> Self {
+        Self {
+            name,
+            label,
+            kind: FieldKind::Text,
+            required: true,
+            help: "",
+            value: String::new(),
+        }
+    }
+
+    /// A multi-line text field (optional by default).
+    #[must_use]
+    pub const fn textarea(name: &'static str, label: &'static str) -> Self {
+        Self {
+            name,
+            label,
+            kind: FieldKind::Textarea,
+            required: false,
+            help: "",
+            value: String::new(),
+        }
+    }
+
+    /// A boolean checkbox field.
+    #[must_use]
+    pub const fn checkbox(name: &'static str, label: &'static str) -> Self {
+        Self {
+            name,
+            label,
+            kind: FieldKind::Checkbox,
+            required: false,
+            help: "",
+            value: String::new(),
+        }
+    }
+
+    /// Mark this field optional.
+    #[must_use]
+    pub const fn optional(mut self) -> Self {
+        self.required = false;
+        self
+    }
+
+    /// Attach help text.
+    #[must_use]
+    pub const fn with_help(mut self, help: &'static str) -> Self {
+        self.help = help;
+        self
+    }
+
+    /// Set the pre-filled value (used by the edit form).
+    #[must_use]
+    pub fn with_value(mut self, value: impl Into<String>) -> Self {
+        self.value = value.into();
+        self
+    }
+}
+
 /// Parsed list query parameters (search, sort, pagination).
 #[derive(Debug, Clone)]
 pub struct ListQuery {

@@ -247,14 +247,14 @@ To make a model listable, implement the changelist hooks on its `AdminEntity`
 ```rust
 fn slug(&self) -> &'static str { "widgets" }              // → /admin/list/widgets
 
-fn columns(&self) -> Vec<AdminColumn> {                    // Django: list_display
+fn columns(&self) -> Vec<ListColumn> {                     // Django: list_display
     vec![
-        AdminColumn::sortable("name", "Name"),            // sortable header
-        AdminColumn::plain("status", "Status"),           // display-only
+        ListColumn::sortable("name", "Name"),             // sortable header
+        ListColumn::plain("status", "Status"),            // display-only
     ]
 }
 
-async fn list(&self, db, q: &ListQuery) -> Result<AdminListPage, DbErr> {
+async fn list(&self, db, q: &ListQuery) -> Result<ListPage, DbErr> {
     use crate::models::_entities::widgets::{Column, Entity};
     let mut query = Entity::find();
     if let Some(s) = &q.q {                                // Django: search_fields
@@ -280,3 +280,54 @@ the `match` (only declared columns sort — no SQL injection via `?sort=`), and
 **End users** get one consistent table UX across every model; **developers**
 write a policy (`ResourcePolicy`, for per-group permissions) plus this small
 changelist declaration — no bespoke list controller or template per model.
+
+## Admin CRUD forms (Django-style add / change / delete)
+
+A listable entity can also opt into generic **detail / create / edit / delete**
+pages — the rest of Django's `ModelAdmin`. List rows become clickable to a
+detail page, which offers Edit and Delete; an "Add" button appears on the list.
+All of it is staff-only and routes through the shared form templates, so you
+declare the fields and the persistence, not the HTML or the controller:
+
+```rust
+fn form_fields(&self) -> Vec<FormField> {                 // Django: fields
+    vec![
+        FormField::text("name", "Name"),                  // required text input
+        FormField::textarea("notes", "Notes").optional(), // optional <textarea>
+        FormField::checkbox("active", "Active"),           // boolean
+    ]
+}
+
+// Opt out of the generic "Add" form when creation needs more than the form
+// (e.g. assigning an owner). Defaults to `editable()`.
+fn creatable(&self) -> bool { false }
+
+// Detail page + edit prefill. Return ONLY safe fields (never secrets).
+async fn load(&self, db, pid: &str) -> Result<Option<serde_json::Value>, DbErr> {
+    Ok(Model::find_by_pid(db, pid).await?.map(|m| serde_json::json!({
+        "pid": m.pid.to_string(), "name": m.name, "active": m.active,
+    })))
+}
+
+async fn create(&self, db, actor_user_id: i32, form: &HashMap<String, String>)
+    -> Result<(), DbErr> { /* insert from form; actor available for ownership */ }
+
+async fn update(&self, db, pid: &str, form: &HashMap<String, String>)
+    -> Result<(), DbErr> { /* load, apply fields, save */ }
+
+async fn delete(&self, db, pid: &str) -> Result<(), DbErr> {
+    // Enforce invariants here and return DbErr::Custom("…") with a
+    // user-visible message; the controller surfaces it on the form/detail page.
+}
+```
+
+The route table (`/admin/list/{slug}/…`) and templates (`admin/detail.html`,
+`admin/form.html`) are provided by the framework. Validation failures re-render
+the form with the submitted values and the `DbErr::Custom` message; `load`
+returning `None` and unknown slugs both 404. The defaults reject every write,
+so a list-only entity stays read-only until it implements these hooks.
+
+`OrgsEntity` is the worked example: editable name, derived slug left untouched,
+`creatable() == false` (org creation assigns an owner via `/orgs/new`), and a
+`delete` that refuses the staff org, personal orgs, and any org whose removal
+would leave a member with no organization.

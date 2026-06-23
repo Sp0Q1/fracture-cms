@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit{% else %}Add{% endif %} {{ title }} — Admin — Fracture CMS{% endblock title %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/admin">Platform Admin</a>
+    <span class="separator" aria-hidden="true">/</span>
+    <a href="/admin/list/{{ slug }}">{{ title }}</a>
+    <span class="separator" aria-hidden="true">/</span>
+    <span aria-current="page">{% if is_edit %}Edit{% else %}Add{% endif %}</span>
+</nav>
+
+<div class="page-header">
+    <h1>{% if is_edit %}Edit{% else %}Add{% endif %} {{ title }}</h1>
+</div>
+
+{% if error %}
+<article class="card" data-variant="danger"><p>{{ error }}</p></article>
+{% endif %}
+
+<article class="card">
+    <form method="post"
+          action="{% if is_edit %}/admin/list/{{ slug }}/{{ pid }}{% else %}/admin/list/{{ slug }}{% endif %}">
+        {% for field in fields %}
+        <div class="form-group">
+            {% if field.kind == "checkbox" %}
+            <label class="checkbox-label">
+                <input type="checkbox" name="{{ field.name }}"{% if field.value == "on" %} checked{% endif %}>
+                {{ field.label }}
+            </label>
+            {% else %}
+            <label for="field-{{ field.name }}">{{ field.label }}{% if field.required %} <span class="required">*</span>{% endif %}</label>
+            {% if field.kind == "textarea" %}
+            <textarea id="field-{{ field.name }}" name="{{ field.name }}"{% if field.required %} required{% endif %}>{{ field.value }}</textarea>
+            {% else %}
+            <input id="field-{{ field.name }}"
+                   type="{% if field.kind == 'number' %}number{% else %}text{% endif %}"
+                   name="{{ field.name }}" value="{{ field.value }}"{% if field.required %} required{% endif %}>
+            {% endif %}
+            {% endif %}
+            {% if field.help %}<small class="form-help">{{ field.help }}</small>{% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="form-actions">
+            <button type="submit" class="button">Save</button>
+            <a href="/admin/list/{{ slug }}{% if is_edit %}/{{ pid }}{% endif %}" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+{% endblock content %}
