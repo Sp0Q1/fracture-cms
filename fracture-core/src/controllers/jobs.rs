@@ -27,6 +27,76 @@ pub struct NewJobParams {
     pub config: Option<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EditJobParams {
+    pub name: String,
+    pub schedule: Option<String>,
+    pub config: Option<String>,
+}
+
+/// A validated set of editable job fields, or a user-facing error message.
+struct ValidatedEdit {
+    name: String,
+    schedule: Option<String>,
+    config: String,
+}
+
+/// Validates the common name/schedule/config fields shared by create and edit.
+/// `exclude_id` skips the row being edited in the duplicate-name check.
+async fn validate_job_fields(
+    db: &sea_orm::DatabaseConnection,
+    org_id: i32,
+    name: &str,
+    schedule: Option<String>,
+    config: Option<String>,
+    exclude_id: Option<i32>,
+) -> std::result::Result<ValidatedEdit, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("job name must not be empty".to_string());
+    }
+    let schedule = schedule
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if let Some(s) = &schedule {
+        if cron::Schedule::from_str(s).is_err() {
+            return Err(format!(
+                "invalid cron schedule '{s}' (expected e.g. '0 0 * * * *' — sec min hour dom mon dow)"
+            ));
+        }
+    }
+    let config = config
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .unwrap_or_else(|| "{}".to_string());
+    if serde_json::from_str::<serde_json::Value>(&config).is_err() {
+        return Err("config must be valid JSON".to_string());
+    }
+    // Friendly error for the unique (org_id, name) index; the constraint
+    // itself remains the race-safe backstop.
+    let mut dup_query = job_definitions::Entity::find()
+        .filter(job_definitions::Column::OrgId.eq(org_id))
+        .filter(job_definitions::Column::Name.eq(&name));
+    if let Some(id) = exclude_id {
+        dup_query = dup_query.filter(job_definitions::Column::Id.ne(id));
+    }
+    let duplicate = dup_query
+        .one(db)
+        .await
+        .map_err(|_| "database error".to_string())?
+        .is_some();
+    if duplicate {
+        return Err(format!(
+            "a job named '{name}' already exists in this organization"
+        ));
+    }
+    Ok(ValidatedEdit {
+        name,
+        schedule,
+        config,
+    })
+}
+
 /// Resolves a definition for read-only pages: org-scoped for members, with a
 /// global fallback for platform admins (the /admin/jobs list links to
 /// definitions in other orgs).
@@ -149,10 +219,6 @@ pub async fn org_create(
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Admin);
 
-    let name = params.name.trim();
-    if name.is_empty() {
-        return Err(Error::BadRequest("job name must not be empty".to_string()));
-    }
     // Only registered job types may be created — an unknown type would
     // produce runs that can only ever fail.
     let known = try_job_registry().is_some_and(|r| r.get(&params.job_type).is_some());
@@ -162,46 +228,24 @@ pub async fn org_create(
             params.job_type
         )));
     }
-    let schedule = params
-        .schedule
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
-    if let Some(s) = &schedule {
-        if cron::Schedule::from_str(s).is_err() {
-            return Err(Error::BadRequest(format!(
-                "invalid cron schedule '{s}' (expected e.g. '0 0 * * * *' — sec min hour dom mon dow)"
-            )));
-        }
-    }
-    let config = params
-        .config
-        .map(|c| c.trim().to_string())
-        .filter(|c| !c.is_empty())
-        .unwrap_or_else(|| "{}".to_string());
-    if serde_json::from_str::<serde_json::Value>(&config).is_err() {
-        return Err(Error::BadRequest("config must be valid JSON".to_string()));
-    }
-    // Friendly error for the unique (org_id, name) index; the constraint
-    // itself remains the race-safe backstop.
-    let duplicate = job_definitions::Entity::find()
-        .filter(job_definitions::Column::OrgId.eq(org_ctx.org.id))
-        .filter(job_definitions::Column::Name.eq(name))
-        .one(&ctx.db)
-        .await?
-        .is_some();
-    if duplicate {
-        return Err(Error::BadRequest(format!(
-            "a job named '{name}' already exists in this organization"
-        )));
-    }
+    let valid = validate_job_fields(
+        &ctx.db,
+        org_ctx.org.id,
+        &params.name,
+        params.schedule,
+        params.config,
+        None,
+    )
+    .await
+    .map_err(Error::BadRequest)?;
 
     job_definitions::ActiveModel {
         org_id: sea_orm::ActiveValue::Set(org_ctx.org.id),
-        name: sea_orm::ActiveValue::Set(name.to_string()),
+        name: sea_orm::ActiveValue::Set(valid.name),
         job_type: sea_orm::ActiveValue::Set(params.job_type),
-        schedule: sea_orm::ActiveValue::Set(schedule),
+        schedule: sea_orm::ActiveValue::Set(valid.schedule),
         enabled: sea_orm::ActiveValue::Set(true),
-        config: sea_orm::ActiveValue::Set(config),
+        config: sea_orm::ActiveValue::Set(valid.config),
         ..Default::default()
     }
     .insert(&ctx.db)
@@ -274,6 +318,123 @@ pub async fn org_trigger(
     }
 
     Ok(Redirect::to(&format!("/jobs/{pid}")).into_response())
+}
+
+/// GET `/jobs/:pid/edit` — edit form for a job definition (org admins only).
+///
+/// # Errors
+///
+/// Returns an error if the definition is not found or the user is not authenticated.
+#[debug_handler]
+pub async fn org_edit(
+    Path(pid): Path<String>,
+    ViewEngine(v): ViewEngine<TeraView>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    require_role!(org_ctx, OrgRole::Admin);
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+
+    let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
+        .await?
+        .ok_or_else(|| Error::NotFound)?;
+    views::jobs::org_edit(&v, &user, Some(&org_ctx), &user_orgs, &definition, None)
+}
+
+/// POST `/jobs/:pid/edit` — apply an edit to a job definition (org admins only).
+///
+/// # Errors
+///
+/// Returns an error if the definition is not found or the user is not authenticated.
+#[debug_handler]
+pub async fn org_update(
+    Path(pid): Path<String>,
+    ViewEngine(v): ViewEngine<TeraView>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+    Form(params): Form<EditJobParams>,
+) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    require_role!(org_ctx, OrgRole::Admin);
+
+    let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
+        .await?
+        .ok_or_else(|| Error::NotFound)?;
+
+    match validate_job_fields(
+        &ctx.db,
+        org_ctx.org.id,
+        &params.name,
+        params.schedule,
+        params.config,
+        Some(definition.id),
+    )
+    .await
+    {
+        Ok(valid) => {
+            let mut active: job_definitions::ActiveModel = definition.into();
+            active.name = sea_orm::ActiveValue::Set(valid.name);
+            active.schedule = sea_orm::ActiveValue::Set(valid.schedule);
+            active.config = sea_orm::ActiveValue::Set(valid.config);
+            active.update(&ctx.db).await?;
+            Ok(Redirect::to(&format!("/jobs/{pid}")).into_response())
+        }
+        Err(msg) => {
+            // Re-render the form with the error (the submitted definition still
+            // carries the old persisted values for any untouched fields).
+            let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+                .await
+                .unwrap_or_default();
+            views::jobs::org_edit(
+                &v,
+                &user,
+                Some(&org_ctx),
+                &user_orgs,
+                &definition,
+                Some(&msg),
+            )
+        }
+    }
+}
+
+/// POST `/jobs/:pid/delete` — delete a job definition and its run history
+/// (org admins only). Runs and diffs cascade via their foreign keys.
+///
+/// # Errors
+///
+/// Returns an error if the definition is not found or the user is not authenticated.
+#[debug_handler]
+pub async fn org_delete(
+    Path(pid): Path<String>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    require_role!(org_ctx, OrgRole::Admin);
+
+    let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
+        .await?
+        .ok_or_else(|| Error::NotFound)?;
+    job_definitions::Entity::delete_by_id(definition.id)
+        .exec(&ctx.db)
+        .await?;
+
+    Ok(Redirect::to("/jobs").into_response())
 }
 
 /// GET `/jobs/:pid/runs/:run_pid` — show a specific run and its diffs.
@@ -361,6 +522,8 @@ pub fn org_routes() -> Routes {
         .add("/", get(org_index))
         .add("/", post(org_create))
         .add("/{pid}", get(org_show))
+        .add("/{pid}/edit", get(org_edit).post(org_update))
+        .add("/{pid}/delete", post(org_delete))
         .add("/{pid}/toggle", post(org_toggle))
         .add("/{pid}/run", post(org_trigger))
         .add("/{pid}/runs/{run_pid}", get(org_run_show))

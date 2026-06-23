@@ -284,6 +284,41 @@ async fn due_schedule_enqueues_exactly_one_run() {
     );
 }
 
+/// The demo `write_note` template job writes a note into the org and reports a
+/// `created` diff — the end-to-end PoC of a side-effecting executor.
+#[tokio::test]
+#[serial]
+async fn write_note_job_creates_a_note() {
+    use fracture_cms::jobs::WriteNoteJob;
+    use fracture_cms::models::_entities::notes;
+    use sea_orm::{ColumnTrait, PaginatorTrait, QueryFilter};
+
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+    let org = mk_org(db, "writenote").await;
+    let def = mk_definition(db, org.id, "write_note", None, true).await;
+
+    let before = notes::Entity::find()
+        .filter(notes::Column::OrgId.eq(org.id))
+        .count(db)
+        .await
+        .unwrap();
+    let result = WriteNoteJob.execute(db, &def, None).await.unwrap();
+    let after = notes::Entity::find()
+        .filter(notes::Column::OrgId.eq(org.id))
+        .count(db)
+        .await
+        .unwrap();
+
+    assert_eq!(after, before + 1, "a note must be written");
+    assert_eq!(result.diffs.len(), 1);
+    assert_eq!(result.diffs[0].diff_type, "created");
+    assert!(
+        result.summary["note_pid"].is_string(),
+        "summary reports the new note's pid"
+    );
+}
+
 #[test]
 fn is_due_logic() {
     let now = chrono::Utc::now();

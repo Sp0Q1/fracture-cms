@@ -349,7 +349,16 @@ settings:
 
 ### Authorization
 
-Viewing jobs and runs requires org membership (Viewer+). Triggering a run requires Member+. Creating a definition (`POST /jobs`, validated against registered job types and cron syntax) and enabling/disabling (`POST /jobs/{pid}/toggle`) require Admin+. Platform admins can additionally open any org's definitions read-only from `/admin/jobs`.
+Viewing jobs and runs requires org membership (Viewer+). Triggering a run requires Member+. The full CRUD on a definition — create (`POST /jobs`), edit (`GET`/`POST /jobs/{pid}/edit`), delete (`POST /jobs/{pid}/delete`, runs/diffs cascade), and enable/disable (`POST /jobs/{pid}/toggle`) — requires Admin+. Create and edit share one validator (registered job type, cron syntax with a seconds field, JSON config, unique name per org); the job type is fixed once created. Platform admins can additionally open any org's definitions read-only from `/admin/jobs`.
+
+### Example executors (reference app)
+
+The demo crate registers two executors in `src/jobs.rs` as templates for consumers:
+
+- **`content_stats`** — read-only: counts the org's projects and notes and diffs against the previous run. Shows the summary + diff contract without side effects.
+- **`write_note`** — side-effecting: each run writes a note into the org (creating a holding project if none exists) and reports a `created` diff. The smallest end-to-end proof of the lifecycle — run it manually from a job's page and watch the queued run execute, persist a row, and surface the diff on the run page. Optional config `{ "title": "…" }` sets the note title prefix.
+
+Consuming apps add their own executors the same way (`registry.register(Box::new(MyJob))`); fracture-core imposes no limit on what an executor does.
 
 ### Tables
 

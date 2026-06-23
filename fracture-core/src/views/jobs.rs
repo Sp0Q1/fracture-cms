@@ -117,6 +117,28 @@ pub fn org_show(
     format::render().view(v, "jobs/org_show.html", data!(ctx))
 }
 
+/// Renders the edit form for a job definition.
+///
+/// `error` is a user-visible validation message shown above the form.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
+pub fn org_edit(
+    v: &impl ViewRenderer,
+    user: &users::Model,
+    org_ctx: Option<&OrgContext>,
+    user_orgs: &[organizations::Model],
+    definition: &job_definitions::Model,
+    error: Option<&str>,
+) -> Result<Response> {
+    let mut ctx = super::base_context(user, org_ctx, user_orgs);
+    ctx["definition"] = definition_json(definition);
+    ctx["error"] = json!(error);
+    add_capabilities(&mut ctx, org_ctx);
+    format::render().view(v, "jobs/org_edit.html", data!(ctx))
+}
+
 /// Renders a single job run with its diffs.
 ///
 /// # Errors

@@ -174,3 +174,105 @@ async fn member_cannot_create_definition_and_unknown_type_rejected() {
     })
     .await;
 }
+
+/// An Admin can edit a definition (rename + reschedule) and delete it; an
+/// invalid cron is rejected and leaves the definition unchanged.
+#[tokio::test]
+#[serial]
+async fn admin_can_edit_and_delete_definition() {
+    request::<App, _, _>(|request, ctx| async move {
+        let owner = mk_user(&ctx.db, "edit-owner").await;
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
+        let def = mk_definition(&ctx.db, org.id).await;
+
+        // Rename + reschedule.
+        let response = request
+            .post(&format!("/jobs/{}/edit", def.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .add_cookie(org_cookie(org))
+            .form(&[("name", "renamed"), ("schedule", "0 0 * * * *")])
+            .await;
+        assert_eq!(response.status_code(), 303);
+        let reloaded = fracture_core::models::job_definitions::Model::find_by_pid(
+            &ctx.db,
+            &def.pid.to_string(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(reloaded.name, "renamed");
+        assert_eq!(reloaded.schedule.as_deref(), Some("0 0 * * * *"));
+
+        // Invalid cron: re-renders the form (200), name unchanged.
+        let response = request
+            .post(&format!("/jobs/{}/edit", def.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .add_cookie(org_cookie(org))
+            .form(&[("name", "should-not-stick"), ("schedule", "not a cron")])
+            .await;
+        assert_eq!(response.status_code(), 200);
+        let reloaded = fracture_core::models::job_definitions::Model::find_by_pid(
+            &ctx.db,
+            &def.pid.to_string(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(reloaded.name, "renamed", "invalid edit must not persist");
+
+        // Delete.
+        let response = request
+            .post(&format!("/jobs/{}/delete", def.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .add_cookie(org_cookie(org))
+            .await;
+        assert_eq!(response.status_code(), 303);
+        let defs = fracture_core::models::job_definitions::Model::find_all_by_org(&ctx.db, org.id)
+            .await
+            .unwrap();
+        assert!(defs.is_empty(), "definition must be deleted");
+    })
+    .await;
+}
+
+/// A Member must not be able to edit or delete a definition (Admin+ actions).
+#[tokio::test]
+#[serial]
+async fn member_cannot_edit_or_delete_definition() {
+    request::<App, _, _>(|request, ctx| async move {
+        let owner = mk_user(&ctx.db, "ed-owner").await;
+        let member = mk_user(&ctx.db, "ed-member").await;
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
+        org_members::Model::add_member(&ctx.db, org.id, member.id, OrgRole::Member)
+            .await
+            .unwrap();
+        let def = mk_definition(&ctx.db, org.id).await;
+
+        let edit = request
+            .post(&format!("/jobs/{}/edit", def.pid))
+            .add_cookie(jwt_cookie(&ctx, &member))
+            .add_cookie(org_cookie(org))
+            .form(&[("name", "hijacked")])
+            .await;
+        assert_eq!(edit.status_code(), 403);
+
+        let delete = request
+            .post(&format!("/jobs/{}/delete", def.pid))
+            .add_cookie(jwt_cookie(&ctx, &member))
+            .add_cookie(org_cookie(org))
+            .await;
+        assert_eq!(delete.status_code(), 403);
+
+        // The definition still exists and is unchanged.
+        let reloaded = fracture_core::models::job_definitions::Model::find_by_pid(
+            &ctx.db,
+            &def.pid.to_string(),
+        )
+        .await
+        .unwrap();
+        assert!(reloaded.is_some(), "member must not delete the definition");
+    })
+    .await;
+}
