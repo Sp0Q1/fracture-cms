@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — Admin — Fracture CMS{% endblock title %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/admin">Platform Admin</a>
+    <span class="separator" aria-hidden="true">/</span>
+    <span aria-current="page">{{ title }}</span>
+</nav>
+
+<div class="page-header">
+    <div class="hstack">
+        <div>
+            <h1>{{ title }} <span class="badge secondary">{{ page.total }}</span></h1>
+        </div>
+        <form action="/admin/list/{{ slug }}" method="get" class="changelist-search">
+            {% if page.sort %}<input type="hidden" name="sort" value="{{ page.sort }}">{% endif %}
+            {% if page.desc %}<input type="hidden" name="dir" value="desc">{% endif %}
+            <input type="search" name="q" value="{{ page.q | default(value='') }}" placeholder="Search…" aria-label="Search {{ title }}">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+</div>
+
+{% if page.rows %}
+<table class="clickable-rows">
+    <thead>
+        <tr>
+            {% for col in page.columns %}
+            <th>
+                {% if col.sortable %}
+                    {% if page.sort == col.key and not page.desc %}
+                        {% set nextdir = "desc" %}{% set arrow = " ▲" %}
+                    {% elif page.sort == col.key and page.desc %}
+                        {% set nextdir = "asc" %}{% set arrow = " ▼" %}
+                    {% else %}
+                        {% set nextdir = "asc" %}{% set arrow = "" %}
+                    {% endif %}
+                    <a href="/admin/list/{{ slug }}?sort={{ col.key }}&dir={{ nextdir }}{% if page.q %}&q={{ page.q }}{% endif %}">{{ col.label }}{{ arrow }}</a>
+                {% else %}
+                    {{ col.label }}
+                {% endif %}
+            </th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in page.rows %}
+        <tr>
+            {% for col in page.columns %}
+            <td>{{ row[col.key] | default(value="") }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if page.total_pages > 1 %}
+<nav class="pagination" aria-label="Pagination">
+    {% if page.page > 1 %}
+    <a class="button outline small" href="/admin/list/{{ slug }}?page={{ page.page - 1 }}{% if page.sort %}&sort={{ page.sort }}&dir={% if page.desc %}desc{% else %}asc{% endif %}{% endif %}{% if page.q %}&q={{ page.q }}{% endif %}">← Prev</a>
+    {% endif %}
+    <span class="pagination-info">Page {{ page.page }} of {{ page.total_pages }}</span>
+    {% if page.page < page.total_pages %}
+    <a class="button outline small" href="/admin/list/{{ slug }}?page={{ page.page + 1 }}{% if page.sort %}&sort={{ page.sort }}&dir={% if page.desc %}desc{% else %}asc{% endif %}{% endif %}{% if page.q %}&q={{ page.q }}{% endif %}">Next →</a>
+    {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<article class="card empty-state">
+    <h3>Nothing here</h3>
+    <p>{% if page.q %}No {{ title }} match “{{ page.q }}”.{% else %}No {{ title }} yet.{% endif %}</p>
+</article>
+{% endif %}
+{% endblock content %}

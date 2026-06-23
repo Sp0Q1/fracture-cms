@@ -3,6 +3,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::controllers::middleware::OrgContext;
+use crate::entity_registry::AdminListPage;
 use crate::models::_entities::{organizations, users};
 
 /// A single entity stat for the admin dashboard.
@@ -30,6 +31,27 @@ pub fn dashboard(
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["entity_stats"] = json!(stats);
     format::render().view(v, "admin/dashboard.html", data!(ctx))
+}
+
+/// Renders a generic admin changelist (search + sortable columns + pagination).
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
+pub fn list(
+    v: &impl ViewRenderer,
+    user: &users::Model,
+    org_ctx: Option<&OrgContext>,
+    user_orgs: &[organizations::Model],
+    slug: &str,
+    title: &str,
+    page: &AdminListPage,
+) -> Result<Response> {
+    let mut ctx = super::base_context(user, org_ctx, user_orgs);
+    ctx["slug"] = json!(slug);
+    ctx["title"] = json!(title);
+    ctx["page"] = json!(page);
+    format::render().view(v, "admin/list.html", data!(ctx))
 }
 
 /// Renders the admin organizations list.

@@ -233,3 +233,50 @@ The recipe:
 
 Field-level rules (e.g. "may submit only this one field") live in that
 action's handler, gated on a named capability — not in the resolver.
+
+## Admin changelist (Django-style list/filter/sort)
+
+Registered entities get a generic, staff-only **changelist** at
+`/admin/list/{slug}` — search box, sortable column headers, and pagination —
+and their count on `/admin` links to it. This mirrors Django's `ModelAdmin`
+changelist: you declare *what* to show, the framework renders it.
+
+To make a model listable, implement the changelist hooks on its `AdminEntity`
+(in `fracture-core/src/entity_registry.rs`, or your app's registry):
+
+```rust
+fn slug(&self) -> &'static str { "widgets" }              // → /admin/list/widgets
+
+fn columns(&self) -> Vec<AdminColumn> {                    // Django: list_display
+    vec![
+        AdminColumn::sortable("name", "Name"),            // sortable header
+        AdminColumn::plain("status", "Status"),           // display-only
+    ]
+}
+
+async fn list(&self, db, q: &ListQuery) -> Result<AdminListPage, DbErr> {
+    use crate::models::_entities::widgets::{Column, Entity};
+    let mut query = Entity::find();
+    if let Some(s) = &q.q {                                // Django: search_fields
+        query = query.filter(Column::Name.contains(s));
+    }
+    let dir = if q.desc { Order::Desc } else { Order::Asc };
+    query = match q.sort.as_deref() {                      // allow-listed sort columns
+        Some("name") => query.order_by(Column::Name, dir),
+        _ => query.order_by(Column::Name, Order::Asc),     // Django: ordering (default)
+    };
+    // `row_fn` projects each model to the row JSON — list ONLY safe fields
+    // (never password hashes / api keys), the way `UsersEntity` does.
+    paginate_models(db, query, q, self.columns(), |m| serde_json::json!({
+        "name": m.name, "status": m.status,
+    })).await
+}
+```
+
+Then `registry.register(Box::new(WidgetsEntity));`. Sorting is allow-listed by
+the `match` (only declared columns sort — no SQL injection via `?sort=`), and
+`paginate_models` handles the count/offset/limit and page math.
+
+**End users** get one consistent table UX across every model; **developers**
+write a policy (`ResourcePolicy`, for per-group permissions) plus this small
+changelist declaration — no bespoke list controller or template per model.
