@@ -3,9 +3,10 @@ use sea_orm::{
     ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, Order, PaginatorTrait,
     QueryFilter, QueryOrder,
 };
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
-pub use crate::listing::{paginate_models, ListColumn, ListPage, ListQuery};
+pub use crate::listing::{paginate_models, FieldKind, FormField, ListColumn, ListPage, ListQuery};
 
 /// Trait for entities that appear on the admin dashboard.
 #[async_trait]
@@ -47,6 +48,68 @@ pub trait AdminEntity: Send + Sync {
     /// listable entities; the default rejects.
     async fn list(&self, _db: &DatabaseConnection, _query: &ListQuery) -> Result<ListPage, DbErr> {
         Err(DbErr::Custom("this entity has no generic list view".into()))
+    }
+
+    // -- Generic CRUD (Django's add / change / delete views) ----------------
+    //
+    // An entity opts into the generic forms by returning a non-empty
+    // `form_fields()` and implementing `load`/`create`/`update`/`delete`.
+    // The defaults reject, so a list-only entity stays read-only.
+
+    /// Editable fields for the create/edit form (Django's `fields`).
+    /// Empty (the default) means the entity has no generic create/edit form.
+    fn form_fields(&self) -> Vec<FormField> {
+        Vec::new()
+    }
+
+    /// Whether this entity exposes generic edit/detail forms.
+    fn editable(&self) -> bool {
+        !self.form_fields().is_empty()
+    }
+
+    /// Whether the generic "Add" form is offered. Defaults to [`editable`],
+    /// but an entity whose creation needs more than the form (e.g. assigning
+    /// an owner through a dedicated flow) can return false to hide it.
+    fn creatable(&self) -> bool {
+        self.editable()
+    }
+
+    /// Load a single row by pid for the detail page and edit prefill.
+    /// Returns the field values as a flat JSON object (no secrets).
+    async fn load(
+        &self,
+        _db: &DatabaseConnection,
+        _pid: &str,
+    ) -> Result<Option<serde_json::Value>, DbErr> {
+        Ok(None)
+    }
+
+    /// Create a row from submitted form values. `actor_user_id` is the staff
+    /// member performing the action (so the new row can record ownership).
+    async fn create(
+        &self,
+        _db: &DatabaseConnection,
+        _actor_user_id: i32,
+        _form: &HashMap<String, String>,
+    ) -> Result<(), DbErr> {
+        Err(DbErr::Custom("this entity cannot be created here".into()))
+    }
+
+    /// Update the row identified by `pid` from submitted form values.
+    async fn update(
+        &self,
+        _db: &DatabaseConnection,
+        _pid: &str,
+        _form: &HashMap<String, String>,
+    ) -> Result<(), DbErr> {
+        Err(DbErr::Custom("this entity cannot be edited here".into()))
+    }
+
+    /// Delete the row identified by `pid`. Implementations enforce their own
+    /// invariants (e.g. refuse to delete the last org) and return a
+    /// `DbErr::Custom` message the controller surfaces to the user.
+    async fn delete(&self, _db: &DatabaseConnection, _pid: &str) -> Result<(), DbErr> {
+        Err(DbErr::Custom("this entity cannot be deleted here".into()))
     }
 }
 
@@ -174,9 +237,89 @@ impl AdminEntity for OrgsEntity {
                 "slug": m.slug,
                 "is_staff": m.is_staff,
                 "is_personal": m.is_personal,
+                "_url": format!("/admin/list/orgs/{}", m.pid),
             })
         })
         .await
+    }
+
+    fn form_fields(&self) -> Vec<FormField> {
+        // Only the display name is editable here; the slug is derived (renaming
+        // it would break existing references) and the is_staff / is_personal
+        // flags are structural, set by dedicated flows.
+        vec![FormField::text("name", "Name")
+            .with_help("Display name. The URL slug is generated from this.")]
+    }
+
+    // Org creation assigns an owner, which the dedicated `/orgs/new` flow does;
+    // the generic "Add" form would leave the org ownerless, so hide it.
+    fn creatable(&self) -> bool {
+        false
+    }
+
+    async fn load(
+        &self,
+        db: &DatabaseConnection,
+        pid: &str,
+    ) -> Result<Option<serde_json::Value>, DbErr> {
+        let Some(org) = crate::models::organizations::Model::find_by_pid(db, pid).await? else {
+            return Ok(None);
+        };
+        Ok(Some(serde_json::json!({
+            "pid": org.pid.to_string(),
+            "name": org.name,
+            "slug": org.slug,
+            "is_staff": org.is_staff,
+            "is_personal": org.is_personal,
+        })))
+    }
+
+    async fn update(
+        &self,
+        db: &DatabaseConnection,
+        pid: &str,
+        form: &HashMap<String, String>,
+    ) -> Result<(), DbErr> {
+        use crate::models::_entities::organizations::Entity;
+        use sea_orm::{ActiveModelTrait, ActiveValue::Set};
+        let org = crate::models::organizations::Model::find_by_pid(db, pid)
+            .await?
+            .ok_or_else(|| DbErr::Custom("organization not found".into()))?;
+        let name = form
+            .get("name")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| DbErr::Custom("Name is required.".into()))?
+            .to_string();
+        let mut active: <Entity as EntityTrait>::ActiveModel = org.into();
+        active.name = Set(name);
+        active.update(db).await?;
+        Ok(())
+    }
+
+    async fn delete(&self, db: &DatabaseConnection, pid: &str) -> Result<(), DbErr> {
+        use crate::models::organizations::Model;
+        use sea_orm::ModelTrait;
+        let org = Model::find_by_pid(db, pid)
+            .await?
+            .ok_or_else(|| DbErr::Custom("organization not found".into()))?;
+        if org.is_staff {
+            return Err(DbErr::Custom(
+                "Cannot delete the staff organization.".into(),
+            ));
+        }
+        if org.is_personal {
+            return Err(DbErr::Custom(
+                "Cannot delete a personal organization.".into(),
+            ));
+        }
+        if Model::has_member_whose_only_org_is(db, org.id).await? {
+            return Err(DbErr::Custom(
+                "Cannot delete: a member has no other organization.".into(),
+            ));
+        }
+        org.delete(db).await?;
+        Ok(())
     }
 }
 

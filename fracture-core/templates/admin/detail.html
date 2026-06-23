@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — Admin — Fracture CMS{% endblock title %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/admin">Platform Admin</a>
+    <span class="separator" aria-hidden="true">/</span>
+    <a href="/admin/list/{{ slug }}">{{ title }}</a>
+    <span class="separator" aria-hidden="true">/</span>
+    <span aria-current="page">{{ record.name | default(value=record.pid) }}</span>
+</nav>
+
+<article class="card detail-card">
+    <header><h2>{{ record.name | default(value=record.pid) }}</h2></header>
+
+    {% for key, value in record %}
+    {% if key != "_url" %}
+    <div class="detail-row">
+        <span class="detail-label">{{ key }}</span>
+        <span class="detail-value">{{ value }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <div class="form-actions">
+        {% if editable %}
+        <a href="/admin/list/{{ slug }}/{{ record.pid }}/edit" class="button">Edit</a>
+        {% endif %}
+        <a href="/admin/list/{{ slug }}" class="button" data-variant="secondary">Back to {{ title }}</a>
+        {% if deletable %}
+        <span class="spacer"></span>
+        <form action="/admin/list/{{ slug }}/{{ record.pid }}/delete" method="post" class="inline-form">
+            <button type="submit" class="outline" data-variant="danger">Delete</button>
+        </form>
+        {% endif %}
+    </div>
+</article>
+{% endblock content %}
