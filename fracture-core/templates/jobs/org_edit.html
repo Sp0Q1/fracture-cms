@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ definition.name }} — Jobs — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/jobs">Jobs</a>
+    <span class="separator">/</span>
+    <a href="/jobs/{{ definition.pid }}">{{ definition.name }}</a>
+    <span class="separator">/</span>
+    <span>Edit</span>
+</nav>
+
+<div class="page-header">
+    <h1>Edit Job</h1>
+</div>
+
+{% if error %}
+<article class="card" data-variant="danger"><p>{{ error }}</p></article>
+{% endif %}
+
+<article class="card">
+    <form action="/jobs/{{ definition.pid }}/edit" method="post" class="stack">
+        <label for="job-name">Name</label>
+        <input id="job-name" name="name" type="text" required maxlength="120" value="{{ definition.name }}">
+
+        <label>Type</label>
+        <p><span class="badge">{{ definition.job_type }}</span> <small>(the job type is fixed once created)</small></p>
+
+        <label for="job-schedule">Schedule (optional cron, with seconds — e.g. <code>0 0 * * * *</code> for hourly; leave empty for manual runs)</label>
+        <input id="job-schedule" name="schedule" type="text" value="{{ definition.schedule | default(value='') }}" placeholder="0 0 * * * *">
+
+        <label for="job-config">Config (JSON, optional)</label>
+        <textarea id="job-config" name="config" rows="3" placeholder="{}">{{ definition.config }}</textarea>
+
+        <div class="form-actions">
+            <button type="submit" class="button">Save</button>
+            <a href="/jobs/{{ definition.pid }}" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+{% endblock content %}

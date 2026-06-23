@@ -41,6 +41,10 @@
                         <button type="submit" class="button outline">Enable</button>
                     {% endif %}
                 </form>
+                <a href="/jobs/{{ definition.pid }}/edit" class="button outline">Edit</a>
+                <form action="/jobs/{{ definition.pid }}/delete" method="post" class="inline-form">
+                    <button type="submit" class="button outline" data-variant="danger">Delete</button>
+                </form>
             {% endif %}
         </div>
     </div>
