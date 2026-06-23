@@ -3,7 +3,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::controllers::middleware::OrgContext;
-use crate::entity_registry::AdminListPage;
+use crate::entity_registry::ListPage;
 use crate::models::_entities::{organizations, users};
 
 /// A single entity stat for the admin dashboard.
@@ -45,7 +45,7 @@ pub fn list(
     user_orgs: &[organizations::Model],
     slug: &str,
     title: &str,
-    page: &AdminListPage,
+    page: &ListPage,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["slug"] = json!(slug);
