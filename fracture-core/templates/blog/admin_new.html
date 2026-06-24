@@ -49,5 +49,5 @@
 {% endblock content %}
 
 {% block js %}
-<script src="/static/md-editor.js" integrity="{{ sri(path='/static/md-editor.js') }}" crossorigin="anonymous"></script>
+<script src="{{ asset(path='/static/md-editor.js') }}" integrity="{{ sri(path='/static/md-editor.js') }}" crossorigin="anonymous"></script>
 {% endblock js %}

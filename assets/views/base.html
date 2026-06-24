@@ -9,9 +9,9 @@
   {% block canonical %}{% endblock canonical %}
   {% block og_tags %}{% endblock og_tags %}
   {% block structured_data %}{% endblock structured_data %}
-  <link rel="stylesheet" href="/static/oat.min.css" integrity="{{ sri(path='/static/oat.min.css') }}" crossorigin="anonymous">
+  <link rel="stylesheet" href="{{ asset(path='/static/oat.min.css') }}" integrity="{{ sri(path='/static/oat.min.css') }}" crossorigin="anonymous">
   {% block stylesheets %}
-  <link rel="stylesheet" href="/static/app.css" integrity="{{ sri(path='/static/app.css') }}" crossorigin="anonymous">
+  <link rel="stylesheet" href="{{ asset(path='/static/app.css') }}" integrity="{{ sri(path='/static/app.css') }}" crossorigin="anonymous">
   {% endblock stylesheets %}
   {% block head %}
   {% endblock head %}
@@ -39,9 +39,9 @@
         </div>
         {% endblock footer %}
     </footer>
-  <script src="/static/oat.min.js" integrity="{{ sri(path='/static/oat.min.js') }}" crossorigin="anonymous"></script>
+  <script src="{{ asset(path='/static/oat.min.js') }}" integrity="{{ sri(path='/static/oat.min.js') }}" crossorigin="anonymous"></script>
   {% block scripts %}
-  <script src="/static/app.js" integrity="{{ sri(path='/static/app.js') }}" crossorigin="anonymous"></script>
+  <script src="{{ asset(path='/static/app.js') }}" integrity="{{ sri(path='/static/app.js') }}" crossorigin="anonymous"></script>
   {% endblock scripts %}
   {% block js %}
   {% endblock js %}

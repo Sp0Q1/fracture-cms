@@ -158,6 +158,31 @@ fn digest(bytes: &[u8]) -> String {
 /// to ask for an unregistered URL — that points at a typo or a missing
 /// asset, both of which deserve a loud failure.
 pub fn register_sri_function(tera: &mut tera::Tera, index: SriIndex) {
+    // `asset(path=...)` returns the URL with a content-hash cache-buster, e.g.
+    // `/static/app.css?v=AbC123`. Because the URL changes whenever the file's
+    // content changes, a browser can never serve a stale copy under the new
+    // URL — which is essential alongside SRI: a stale cached asset would fail
+    // the integrity check and the whole stylesheet/script would be blocked.
+    let asset_index = index.clone();
+    tera.register_function(
+        "asset",
+        move |args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
+            let url = args
+                .get("path")
+                .and_then(tera::Value::as_str)
+                .ok_or_else(|| tera::Error::msg("asset(): missing required `path` argument"))?;
+            asset_index.get(url).map_or_else(
+                || {
+                    Err(tera::Error::msg(format!(
+                        "asset(): no asset registered at `{url}`. Check the path; the static \
+                         directory was scanned at boot and only css/js files are indexed."
+                    )))
+                },
+                |hash| Ok(tera::Value::String(format!("{url}?v={}", short_token(hash)))),
+            )
+        },
+    );
+
     tera.register_function(
         "sri",
         move |args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
@@ -176,6 +201,16 @@ pub fn register_sri_function(tera: &mut tera::Tera, index: SriIndex) {
             )
         },
     );
+}
+
+/// A short, URL-safe cache-busting token derived from an asset's SRI hash.
+/// Changes whenever the content does; collisions are harmless (cache key only).
+fn short_token(hash: &str) -> String {
+    hash.trim_start_matches("sha384-")
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .take(10)
+        .collect()
 }
 
 #[cfg(test)]

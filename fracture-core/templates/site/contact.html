@@ -5,8 +5,8 @@
 {% block meta_description %}Get in touch with us.{% endblock meta_description %}
 
 {% block stylesheets %}
-<link rel="stylesheet" href="/static/app.css" integrity="{{ sri(path='/static/app.css') }}" crossorigin="anonymous">
-<link rel="stylesheet" href="/static/altcha.css" integrity="{{ sri(path='/static/altcha.css') }}" crossorigin="anonymous">
+<link rel="stylesheet" href="{{ asset(path='/static/app.css') }}" integrity="{{ sri(path='/static/app.css') }}" crossorigin="anonymous">
+<link rel="stylesheet" href="{{ asset(path='/static/altcha.css') }}" integrity="{{ sri(path='/static/altcha.css') }}" crossorigin="anonymous">
 {% endblock stylesheets %}
 
 {% block content %}
@@ -44,5 +44,5 @@
 {% endblock content %}
 
 {% block scripts %}
-<script type="module" src="/static/altcha.min.js" integrity="{{ sri(path='/static/altcha.min.js') }}" crossorigin="anonymous"></script>
+<script type="module" src="{{ asset(path='/static/altcha.min.js') }}" integrity="{{ sri(path='/static/altcha.min.js') }}" crossorigin="anonymous"></script>
 {% endblock scripts %}
