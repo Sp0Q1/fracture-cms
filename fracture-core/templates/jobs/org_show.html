@@ -85,26 +85,22 @@
 <h2>Recent Runs</h2>
 
 {% if runs %}
-    <table>
+    <table class="clickable-rows">
         <thead>
             <tr>
                 <th>Status</th>
                 <th>Created</th>
                 <th>Started</th>
                 <th>Completed</th>
-                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for run in runs %}
-            <tr>
+            <tr data-href="/jobs/{{ definition.pid }}/runs/{{ run.pid }}">
                 <td><span class="badge job-status-{{ run.status }}">{{ run.status }}</span></td>
                 <td>{{ run.created_at | truncate(length=16, end="") }}</td>
                 <td>{{ run.started_at | default(value="—") | truncate(length=16, end="") }}</td>
                 <td>{{ run.completed_at | default(value="—") | truncate(length=16, end="") }}</td>
-                <td>
-                    <a href="/jobs/{{ definition.pid }}/runs/{{ run.pid }}" class="button outline small">Details</a>
-                </td>
             </tr>
             {% endfor %}
         </tbody>

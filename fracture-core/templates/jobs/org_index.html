@@ -11,7 +11,7 @@
 </div>
 
 {% if definitions %}
-    <table>
+    <table class="clickable-rows">
         <thead>
             <tr>
                 <th>Name</th>
@@ -19,12 +19,11 @@
                 <th>Schedule</th>
                 <th>Enabled</th>
                 <th>Last Run</th>
-                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for def in definitions %}
-            <tr>
+            <tr data-href="/jobs/{{ def.pid }}">
                 <td><strong>{{ def.name }}</strong></td>
                 <td>{{ def.job_type }}</td>
                 <td>{{ def.schedule | default(value="Manual") }}</td>
@@ -42,9 +41,6 @@
                     {% else %}
                         <span class="badge">never run</span>
                     {% endif %}
-                </td>
-                <td>
-                    <a href="/jobs/{{ def.pid }}" class="button outline small">View</a>
                 </td>
             </tr>
             {% endfor %}
