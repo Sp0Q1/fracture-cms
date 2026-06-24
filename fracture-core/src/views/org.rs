@@ -82,6 +82,10 @@ pub struct MembersViewData<'a> {
     pub member_users: &'a [(org_members::Model, users::Model)],
     pub pending_invites: &'a [org_invites::Model],
     pub app_url: &'a str,
+    /// User ids that are platform staff. Staff are shown read-only — an org
+    /// admin can't change their org role or remove them, because staff power
+    /// comes from the platform-admin org, not their tenant-local role.
+    pub staff_user_ids: &'a std::collections::HashSet<i32>,
 }
 
 /// Renders the organization members page.
@@ -112,6 +116,7 @@ pub fn members(
                 "user_email": u.email,
                 "user_pid": u.pid.to_string(),
                 "role": m.role,
+                "is_staff": data.staff_user_ids.contains(&u.id),
             })
         })
         .collect::<Vec<_>>());

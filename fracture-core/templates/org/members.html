@@ -85,10 +85,18 @@
         <tr>
             <td>{{ member.user_name }}</td>
             <td>{{ member.user_email }}</td>
-            <td><span class="role-badge" data-role="{{ member.role }}">{{ member.role }}</span></td>
+            <td>
+                {% if member.is_staff %}
+                <span class="role-badge" data-role="staff" title="Platform staff — managed by the platform, not this organization">Staff</span>
+                {% else %}
+                <span class="role-badge" data-role="{{ member.role }}">{{ member.role }}</span>
+                {% endif %}
+            </td>
             {% if user_role == "admin" or user_role == "owner" %}
             <td>
-                {% if member.user_pid != user_pid %}
+                {% if member.is_staff %}
+                <span class="badge" title="Platform staff are managed via the platform admin, not the organization">Platform staff</span>
+                {% elif member.user_pid != user_pid %}
                 <div class="hstack">
                     <form action="/orgs/{{ org.pid }}/members/{{ member.user_pid }}/role" method="post">
                         <select name="role" aria-label="Role for {{ member.user_name }}" data-submit-on-change>
