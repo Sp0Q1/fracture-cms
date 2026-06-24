@@ -22,18 +22,27 @@
 {% endif %}
 
 <article class="card">
-    <form action="/jobs/{{ definition.pid }}/edit" method="post" class="stack">
-        <label for="job-name">Name</label>
-        <input id="job-name" name="name" type="text" required maxlength="120" value="{{ definition.name }}">
+    <form action="/jobs/{{ definition.pid }}/edit" method="post">
+        <div data-field>
+            <label for="job-name">Name</label>
+            <input id="job-name" name="name" type="text" required maxlength="120" value="{{ definition.name }}">
+        </div>
 
-        <label>Type</label>
-        <p><span class="badge">{{ definition.job_type }}</span> <small>(the job type is fixed once created)</small></p>
+        <div data-field>
+            <label>Type</label>
+            <p><span class="badge">{{ definition.job_type }}</span> <small data-hint>The job type is fixed once created.</small></p>
+        </div>
 
-        <label for="job-schedule">Schedule (optional cron, with seconds — e.g. <code>0 0 * * * *</code> for hourly; leave empty for manual runs)</label>
-        <input id="job-schedule" name="schedule" type="text" value="{{ definition.schedule | default(value='') }}" placeholder="0 0 * * * *">
+        <div data-field>
+            <label for="job-schedule">Schedule</label>
+            <input id="job-schedule" name="schedule" type="text" value="{{ definition.schedule | default(value='') }}" placeholder="0 0 * * * *">
+            <small data-hint>Optional cron, with seconds — e.g. <code>0 0 * * * *</code> for hourly; leave empty for manual runs.</small>
+        </div>
 
-        <label for="job-config">Config (JSON, optional)</label>
-        <textarea id="job-config" name="config" rows="3" placeholder="{}">{{ definition.config }}</textarea>
+        <div data-field>
+            <label for="job-config">Config (JSON, optional)</label>
+            <textarea id="job-config" name="config" rows="3" placeholder="{}">{{ definition.config }}</textarea>
+        </div>
 
         <div class="form-actions">
             <button type="submit" class="button">Save</button>

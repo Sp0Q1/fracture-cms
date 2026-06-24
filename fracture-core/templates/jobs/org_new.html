@@ -20,11 +20,11 @@
 {% endif %}
 
 <article class="card">
-    <form action="/jobs" method="post" class="stack">
+    <form action="/jobs" method="post">
         <input type="hidden" name="job_type" value="{{ job_type }}">
 
-        <div class="form-group">
-            <label for="job-name">Name <span class="required">*</span></label>
+        <div data-field>
+            <label for="job-name">Name</label>
             <input id="job-name" name="name" type="text" required maxlength="120"
                    value="{{ name | default(value='') }}" placeholder="My {{ job_label | lower }}">
         </div>
@@ -33,7 +33,7 @@
            executor's config_form() so each job type gets its own inputs. #}
         {% include "partials/form_fields.html" %}
 
-        <div class="form-group">
+        <div data-field>
             <label for="job-schedule">Run schedule</label>
             <select id="job-schedule" name="schedule">
                 <option value="">Manual only — run it yourself from this page</option>

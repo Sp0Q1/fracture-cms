@@ -15,8 +15,8 @@
 </div>
 
 <article class="card">
-    <form action="/admin/job-permissions" method="post" class="stack">
-        <div class="form-group">
+    <form action="/admin/job-permissions" method="post">
+        <div data-field>
             <label for="view">View jobs &amp; run history</label>
             <select id="view" name="view">
                 {% for lvl in levels %}
@@ -25,7 +25,7 @@
             </select>
         </div>
 
-        <div class="form-group">
+        <div data-field>
             <label for="run">Run jobs (trigger a run)</label>
             <select id="run" name="run">
                 {% for lvl in levels %}
@@ -34,7 +34,7 @@
             </select>
         </div>
 
-        <div class="form-group">
+        <div data-field>
             <label for="manage">Manage jobs (create, edit, delete, enable/disable)</label>
             <select id="manage" name="manage">
                 {% for lvl in levels %}

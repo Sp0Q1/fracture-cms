@@ -780,32 +780,12 @@ tbody tr[data-href]:hover {
    styled, unify focus/states, and round out the dark theme.
    ========================================================================== */
 
-/* --- Forms: field grouping, hints, required marker --- */
-.form-group {
-    margin-bottom: 1.1rem;
-}
-.form-group > label {
-    display: block;
-    margin-bottom: 0.35rem;
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-.form-group .checkbox-label {
+/* --- Forms: checkbox rows (oat handles [data-field]/[data-hint]) --- */
+.checkbox-label {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     font-weight: 500;
-    margin-bottom: 0;
-}
-.form-help {
-    display: block;
-    margin-top: 0.35rem;
-    font-size: 0.8rem;
-    color: var(--text-light, #9ca3af);
-}
-.required {
-    color: #ef8a8a;
-    font-weight: 700;
 }
 
 /* --- Changelist search (shared list_table partial) --- */
