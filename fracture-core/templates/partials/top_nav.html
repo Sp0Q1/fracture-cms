@@ -19,9 +19,14 @@
             <strong class="gradient-text">Fracture CMS</strong>
         </a>
     </span>
-    <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle menu" aria-controls="primary-nav" aria-expanded="false">
+    {# CSS-only mobile toggle: the label flips this checkbox, and
+       `.nav-toggle-cb:checked ~ .nav-links` reveals the menu — no JS, so it
+       works on public/guest pages too (which don't load app.js). The checkbox
+       is screen-reader hidden but focusable for keyboard use. #}
+    <input type="checkbox" id="nav-toggle" class="nav-toggle-cb" aria-label="Toggle menu" aria-controls="primary-nav">
+    <label class="mobile-menu-toggle" for="nav-toggle" aria-hidden="true">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
+    </label>
 
     <div class="nav-links" id="primary-nav">
         {% if user_name %}
