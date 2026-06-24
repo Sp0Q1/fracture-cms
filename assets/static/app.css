@@ -88,7 +88,9 @@ nav[data-topnav] a:hover {
     color: var(--foreground, #e5e7eb);
 }
 
-nav[data-topnav] > span {
+/* The brand sits in .nav-inner > .brand-wrap now; make it a centered flex
+   item so the logo lines up vertically with the menu items. */
+.brand-wrap {
     display: inline-flex;
     align-items: center;
 }
@@ -197,10 +199,26 @@ nav[data-topnav] a[aria-current="page"] {
 }
 
 /* --- Card Accent --- */
+/* Cards a touch more rounded than the oat default (--radius-medium), applied
+   to every card for consistency. */
+.card {
+    border-radius: var(--radius-large);
+}
+
+/* The gradient top accent is drawn as a clipped pseudo-element rather than a
+   `border-image` — border-image disables border-radius, which was squaring
+   the corners of every accent card. The card's overflow:hidden + radius clips
+   this bar to the rounded top corners. */
 .card-accent {
-    border-top: 3px solid transparent;
-    border-image: linear-gradient(90deg, #62cb98, #5a60ce) 1;
+    position: relative;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-accent::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(90deg, #62cb98, #5a60ce);
 }
 
 .card-accent:hover {
@@ -272,10 +290,18 @@ nav[data-topnav] a[aria-current="page"] {
 }
 
 /* --- Project Cards --- */
+/* Same gradient-top accent as .card-accent, via a clipped pseudo-element so
+   the rounded corners survive (see the note above). */
 .project-card {
+    position: relative;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
-    border-top: 3px solid transparent;
-    border-image: linear-gradient(90deg, #62cb98, #5a60ce) 1;
+}
+.project-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(90deg, #62cb98, #5a60ce);
 }
 
 .project-card:hover {
