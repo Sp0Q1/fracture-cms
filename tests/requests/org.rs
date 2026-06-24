@@ -159,6 +159,59 @@ async fn admin_cannot_remove_owner() {
     .await;
 }
 
+/// A tenant Owner/Admin cannot change the role of, or remove, a platform-staff
+/// member who also belongs to their org — staff are managed by the platform,
+/// not the tenant (the UI hides the controls; this guards the raw request too).
+#[tokio::test]
+#[serial]
+async fn staff_members_are_not_manageable_by_org_admins() {
+    request::<App, _, _>(|request, ctx| async move {
+        let owner = mk_user(&ctx.db, "stafflock-owner").await;
+        let staff = mk_user(&ctx.db, "stafflock-staff").await;
+        let org = crate::support::owned_org(&ctx.db, "stafflock", owner.id).await;
+        org_members::Model::add_member(&ctx.db, org.id, staff.id, OrgRole::Member)
+            .await
+            .unwrap();
+        // Make `staff` platform staff via membership in an is_staff org.
+        let staff_org = organizations::ActiveModel {
+            name: Set("Platform Admin".to_string()),
+            slug: Set(format!("platform-admin-{}", staff.id)),
+            is_personal: Set(false),
+            is_staff: Set(true),
+            ..Default::default()
+        }
+        .insert(&ctx.db)
+        .await
+        .unwrap();
+        org_members::Model::add_member(&ctx.db, staff_org.id, staff.id, OrgRole::Owner)
+            .await
+            .unwrap();
+
+        // Role change on the staff member is refused.
+        let response = request
+            .post(&format!("/orgs/{}/members/{}/role", org.pid, staff.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .form(&[("role", "viewer")])
+            .await;
+        assert_eq!(response.status_code(), 400);
+
+        // Removal of the staff member is refused.
+        let response = request
+            .post(&format!("/orgs/{}/members/{}/remove", org.pid, staff.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .await;
+        assert_eq!(response.status_code(), 400);
+
+        // The staff member is untouched: still a Member of the tenant org.
+        let membership = org_members::Model::find_membership(&ctx.db, org.id, staff.id)
+            .await
+            .unwrap()
+            .expect("staff is still a member");
+        assert_eq!(membership.role, "member");
+    })
+    .await;
+}
+
 /// Regression: a non-platform-admin member with NO `org_pid` cookie must still
 /// resolve an org context via the fallback. A prior `unwrap_or(... return None)`
 /// evaluated the bail eagerly and dropped every such member (404 everywhere).

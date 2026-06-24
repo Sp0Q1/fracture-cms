@@ -243,6 +243,14 @@ pub async fn members(
     let user_orgs = org_model::Model::find_visible_orgs(&ctx.db, user.id)
         .await
         .unwrap_or_default();
+    // Flag which members are platform staff so the template renders them
+    // read-only — a tenant admin can't manage a platform operator.
+    let mut staff_user_ids = std::collections::HashSet::new();
+    for (_, member) in &member_users {
+        if org_model::Model::is_user_staff(&ctx.db, member.id).await {
+            staff_user_ids.insert(member.id);
+        }
+    }
     let app_url = ctx.config.server.host.clone();
     views::org::members(
         &v,
@@ -254,6 +262,7 @@ pub async fn members(
             member_users: &member_users,
             pending_invites: &pending_invites,
             app_url: &app_url,
+            staff_user_ids: &staff_user_ids,
         },
     )
 }
@@ -338,6 +347,14 @@ pub async fn update_role(
     let target_user = users_entity::Model::find_by_pid(&ctx.db, &user_pid)
         .await
         .map_err(|_| Error::NotFound)?;
+    // Platform staff are managed by the platform, not by tenant admins — their
+    // org role is cosmetic next to the platform-admin ceiling. Refuse here too,
+    // not just in the UI, so a crafted request can't change it either.
+    if org_model::Model::is_user_staff(&ctx.db, target_user.id).await {
+        return Err(Error::BadRequest(
+            "staff members are managed by the platform, not the organization".to_string(),
+        ));
+    }
     let new_role = OrgRole::from_str_role(&params.role).unwrap_or(OrgRole::Member);
 
     // The role ceiling (an actor may not touch a member above their own rank,
@@ -377,6 +394,12 @@ pub async fn remove_member(
     let target_user = users_entity::Model::find_by_pid(&ctx.db, &user_pid)
         .await
         .map_err(|_| Error::NotFound)?;
+    // Tenant admins can't remove platform staff (see `update_role`).
+    if org_model::Model::is_user_staff(&ctx.db, target_user.id).await {
+        return Err(Error::BadRequest(
+            "staff members are managed by the platform, not the organization".to_string(),
+        ));
+    }
     // Role ceiling enforced in the model's transaction; see `update_role`.
     org_members::Model::remove_member(&ctx.db, org.id, target_user.id, org_ctx.role)
         .await
