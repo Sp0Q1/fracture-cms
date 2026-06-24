@@ -70,7 +70,10 @@
         {% endfor %}
     </ol>
     {% else %}
-    <p>No comments yet.</p>
+    <article class="card empty-state">
+        <h3>No activity yet</h3>
+        <p>Comments on this note will appear here as a timeline.</p>
+    </article>
     {% endif %}
 
     {% if can_comment %}
