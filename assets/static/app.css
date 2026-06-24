@@ -643,7 +643,9 @@ nav[data-topnav] a[aria-current="page"] {
 }
 
 /* --- Table Enhancements --- */
-table.clickable-rows tbody tr:hover {
+/* Any row with a data-href (list_table partial OR a bespoke table) gets the
+   same clickable affordance, for consistency across every list. */
+tbody tr[data-href]:hover {
     background: rgba(255, 255, 255, 0.04);
 }
 
@@ -939,10 +941,10 @@ textarea:focus-visible,
     border-radius: 4px;
 }
 /* Clickable rows show an inset ring so the outline isn't clipped by the cell. */
-table.clickable-rows tbody tr[data-href] {
+tbody tr[data-href] {
     cursor: pointer;
 }
-table.clickable-rows tbody tr[data-href]:focus-visible {
+tbody tr[data-href]:focus-visible {
     outline: 2px solid var(--ring, #62cb98);
     outline-offset: -2px;
 }
