@@ -39,6 +39,34 @@ These may require code changes in your app:
 
 ## Recent Breaking Changes
 
+### The top nav is now one shared partial (`partials/top_nav.html`)
+
+`base.html` and `public_base.html` used to each carry their own `<nav>` with
+overridable blocks (`brand_name`, `nav_authenticated`, `nav_public`,
+`nav_cta`, `account_menu_items`, …). They drifted — links present in one base
+were missing in the other (e.g. the blog, on `public_base.html`, lost the
+Projects/Jobs links). Both bases now `{% include "partials/top_nav.html" %}`,
+so there is a single menu component and it can't drift.
+
+Consequences for apps that customized the nav:
+
+- The per-block nav overrides (`brand_name`, `nav_authenticated`, etc.) no
+  longer exist. To customize the menu, **ship your own `partials/top_nav.html`**
+  (Tera resolves your app's copy first) — that's now the single override point.
+- Link visibility is driven by context (`user_name`, `is_staff`) plus the
+  `feature(name="…")` Tera function, so the menu reflects what's actually
+  reachable. Register feature flags by calling
+  `fracture_core::features::init_features(...)` in `Hooks::routes()` and
+  `fracture_core::features::register_feature_function(tera)` in your view
+  engine's `post_process` (next to `register_sri_function`).
+
+### The public blog can be switched off
+
+`settings.blog.enabled` (default true). When false, the blog routes 404 and
+the "Blog" nav link disappears. Wire it by passing config settings into
+`fracture_core::features::init_features(fracture_core::features::from_settings(
+ctx.config.settings.as_ref()))` in `Hooks::routes()`.
+
 ### The jobs system now has a runner — two wiring hooks are load-bearing
 
 Previously `JobExecutor`/`JobRegistry` existed but nothing executed queued

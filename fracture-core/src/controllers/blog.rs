@@ -48,6 +48,9 @@ pub async fn public_index(
     State(ctx): State<AppContext>,
     jar: CookieJar,
 ) -> Result<Response> {
+    if !crate::features::features().blog_enabled {
+        return Err(Error::NotFound);
+    }
     let org = resolve_blog_org(&ctx).await?;
     let posts = match org {
         Some(ref o) => blog_model::Model::find_published_by_org(&ctx.db, o.id).await?,
@@ -72,6 +75,9 @@ pub async fn public_index(
 /// Returns an error if the database query fails.
 #[debug_handler]
 pub async fn public_feed(State(ctx): State<AppContext>) -> Result<Response> {
+    if !crate::features::features().blog_enabled {
+        return Err(Error::NotFound);
+    }
     let org = resolve_blog_org(&ctx).await?;
     let posts = match org {
         Some(ref o) => blog_model::Model::find_published_by_org(&ctx.db, o.id).await?,
@@ -98,6 +104,9 @@ pub async fn public_show(
     State(ctx): State<AppContext>,
     jar: CookieJar,
 ) -> Result<Response> {
+    if !crate::features::features().blog_enabled {
+        return Err(Error::NotFound);
+    }
     let org = resolve_blog_org(&ctx)
         .await?
         .ok_or_else(|| Error::NotFound)?;
