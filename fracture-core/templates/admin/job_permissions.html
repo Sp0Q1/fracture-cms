@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Job Permissions — Admin — Fracture CMS{% endblock title %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/admin">Platform Admin</a>
+    <span class="separator" aria-hidden="true">/</span>
+    <span aria-current="page">Job Permissions</span>
+</nav>
+
+<div class="page-header">
+    <h1>Job Permissions</h1>
+    <p class="page-subtitle">Who, within each organization, can view, run, and manage jobs. Platform staff can always do everything.</p>
+</div>
+
+<article class="card">
+    <form action="/admin/job-permissions" method="post" class="stack">
+        <div class="form-group">
+            <label for="view">View jobs &amp; run history</label>
+            <select id="view" name="view">
+                {% for lvl in levels %}
+                <option value="{{ lvl.value }}"{% if lvl.value == view_level %} selected{% endif %}>{{ lvl.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="run">Run jobs (trigger a run)</label>
+            <select id="run" name="run">
+                {% for lvl in levels %}
+                <option value="{{ lvl.value }}"{% if lvl.value == run_level %} selected{% endif %}>{{ lvl.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="manage">Manage jobs (create, edit, delete, enable/disable)</label>
+            <select id="manage" name="manage">
+                {% for lvl in levels %}
+                <option value="{{ lvl.value }}"{% if lvl.value == manage_level %} selected{% endif %}>{{ lvl.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="button">Save</button>
+            <a href="/admin" class="button" data-variant="secondary">Back</a>
+        </div>
+    </form>
+</article>
+{% endblock content %}

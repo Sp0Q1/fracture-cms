@@ -127,6 +127,18 @@ impl Model {
         Ok(false)
     }
 
+    /// Finds the platform-admin (`is_staff`) organization, if one exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
+    pub async fn find_staff_org(db: &DatabaseConnection) -> Result<Option<Self>, DbErr> {
+        Entity::find()
+            .filter(Column::IsStaff.eq(true))
+            .one(db)
+            .await
+    }
+
     /// Returns true if the user is a member of any org with `is_staff`.
     pub async fn is_user_staff(db: &DatabaseConnection, user_id: i32) -> bool {
         Entity::find()

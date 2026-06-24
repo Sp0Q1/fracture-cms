@@ -5,7 +5,6 @@ use serde_json::json;
 
 use crate::controllers::middleware::OrgContext;
 use crate::models::_entities::{job_definitions, job_run_diffs, job_runs, organizations, users};
-use crate::models::org_members::OrgRole;
 
 /// Helper to serialize a job definition into JSON for templates.
 fn definition_json(def: &job_definitions::Model) -> serde_json::Value {
@@ -60,12 +59,12 @@ fn diff_json(diff: &job_run_diffs::Model) -> serde_json::Value {
     })
 }
 
-/// Capability flags for the jobs pages, derived from the org role so
-/// templates never re-encode the role hierarchy in string comparisons.
-fn add_capabilities(ctx: &mut serde_json::Value, org_ctx: Option<&OrgContext>) {
-    let role = org_ctx.map(|oc| oc.role);
-    ctx["can_trigger_jobs"] = json!(role.is_some_and(|r| r.at_least(OrgRole::Member)));
-    ctx["can_manage_jobs"] = json!(role.is_some_and(|r| r.at_least(OrgRole::Admin)));
+/// Capability flags for the jobs pages, taken from the resolved
+/// [`JobAccess`] (the configurable policy), so templates never re-encode the
+/// role hierarchy in string comparisons.
+fn add_capabilities(ctx: &mut serde_json::Value, access: crate::jobs::JobAccess) {
+    ctx["can_trigger_jobs"] = json!(access.can_run);
+    ctx["can_manage_jobs"] = json!(access.can_manage);
 }
 
 /// Renders the org job definitions list.
@@ -74,6 +73,7 @@ fn add_capabilities(ctx: &mut serde_json::Value, org_ctx: Option<&OrgContext>) {
 ///
 /// Returns an error if template rendering fails.
 #[allow(clippy::implicit_hasher)] // Reason: view-layer map, never hashed generically
+#[allow(clippy::too_many_arguments)] // View threads display context + capabilities.
 pub fn org_index(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -82,6 +82,7 @@ pub fn org_index(
     definitions: &[job_definitions::Model],
     latest_runs: &HashMap<i32, job_runs::Model>,
     job_types: &[crate::jobs::JobTypeInfo],
+    access: crate::jobs::JobAccess,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definitions"] = json!(definitions
@@ -89,7 +90,7 @@ pub fn org_index(
         .map(|d| definition_with_latest_json(d, latest_runs))
         .collect::<Vec<_>>());
     ctx["job_types"] = json!(job_types);
-    add_capabilities(&mut ctx, org_ctx);
+    add_capabilities(&mut ctx, access);
     format::render().view(v, "jobs/org_index.html", data!(ctx))
 }
 
@@ -122,6 +123,7 @@ pub fn org_new(
 /// # Errors
 ///
 /// Returns an error if template rendering fails.
+#[allow(clippy::too_many_arguments)] // View threads display context + capabilities.
 pub fn org_show(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -129,6 +131,7 @@ pub fn org_show(
     user_orgs: &[organizations::Model],
     definition: &job_definitions::Model,
     runs: &[job_runs::Model],
+    access: crate::jobs::JobAccess,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definition"] = definition_json(definition);
@@ -137,7 +140,7 @@ pub fn org_show(
     ctx["has_active_run"] = json!(runs
         .iter()
         .any(|r| r.status == "queued" || r.status == "running"));
-    add_capabilities(&mut ctx, org_ctx);
+    add_capabilities(&mut ctx, access);
     format::render().view(v, "jobs/org_show.html", data!(ctx))
 }
 
@@ -159,7 +162,6 @@ pub fn org_edit(
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definition"] = definition_json(definition);
     ctx["error"] = json!(error);
-    add_capabilities(&mut ctx, org_ctx);
     format::render().view(v, "jobs/org_edit.html", data!(ctx))
 }
 
@@ -168,6 +170,7 @@ pub fn org_edit(
 /// # Errors
 ///
 /// Returns an error if template rendering fails.
+#[allow(clippy::too_many_arguments)] // View threads display context + capabilities.
 pub fn org_run_show(
     v: &impl ViewRenderer,
     user: &users::Model,
@@ -176,13 +179,14 @@ pub fn org_run_show(
     definition: &job_definitions::Model,
     run: &job_runs::Model,
     diffs: &[job_run_diffs::Model],
+    access: crate::jobs::JobAccess,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definition"] = definition_json(definition);
     ctx["run"] = run_json(run);
     ctx["run_active"] = json!(run.status == "queued" || run.status == "running");
     ctx["diffs"] = json!(diffs.iter().map(diff_json).collect::<Vec<_>>());
-    add_capabilities(&mut ctx, org_ctx);
+    add_capabilities(&mut ctx, access);
     format::render().view(v, "jobs/org_run_show.html", data!(ctx))
 }
 

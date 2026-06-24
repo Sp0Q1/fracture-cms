@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use crate::listing::FormField;
 use crate::models::_entities::{job_definitions, job_runs};
 
+pub mod permissions;
 pub mod runner;
+
+pub use permissions::{JobAccess, JobAccessLevel, JobPermissions};
 
 /// The result of executing a job.
 #[derive(Debug, Clone, Serialize, Deserialize)]

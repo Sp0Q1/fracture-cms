@@ -9,16 +9,42 @@ use sea_orm::{EntityTrait, QueryOrder};
 use serde::{Deserialize, Serialize};
 
 use crate::controllers::middleware;
-use crate::jobs::try_job_registry;
+use crate::jobs::{try_job_registry, JobAccess, JobPermissions};
 use crate::listing::{FieldKind, FormField};
 use crate::models::_entities::{job_definitions, job_runs, organizations};
-use crate::models::org_members::OrgRole;
 use crate::models::{
     job_definitions as job_def_model, job_run_diffs as job_diff_model, job_runs as job_run_model,
     organizations as org_model,
 };
 use crate::views;
-use crate::{require_role, require_staff, require_user};
+use crate::{require_staff, require_user};
+
+/// A 403 response for a denied job action — mirrors `require_role!`, but the
+/// threshold is the configurable [`JobPermissions`] policy, not a fixed role.
+fn forbidden() -> Response {
+    axum::response::Response::builder()
+        .status(axum::http::StatusCode::FORBIDDEN)
+        .body(axum::body::Body::from("Forbidden"))
+        .unwrap()
+        .into_response()
+}
+
+/// Loads the policy and resolves it for the current org context. A missing
+/// context (no org) clears nothing.
+async fn job_access(
+    db: &sea_orm::DatabaseConnection,
+    org_ctx: Option<&middleware::OrgContext>,
+) -> JobAccess {
+    let perms = JobPermissions::load(db).await;
+    org_ctx.map_or(
+        JobAccess {
+            can_view: false,
+            can_run: false,
+            can_manage: false,
+        },
+        |oc| perms.access(oc.role, oc.is_staff),
+    )
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditJobParams {
@@ -149,6 +175,13 @@ pub async fn org_index(
         .await
         .unwrap_or_default();
 
+    let access = job_access(&ctx.db, org_ctx.as_ref()).await;
+    // A user with an org but below the configured view threshold is forbidden;
+    // a user with no org at all just sees an empty list.
+    if org_ctx.is_some() && !access.can_view {
+        return Ok(forbidden());
+    }
+
     let definitions = match org_ctx {
         Some(ref oc) => job_def_model::Model::find_all_by_org(&ctx.db, oc.org.id).await?,
         None => vec![],
@@ -165,6 +198,7 @@ pub async fn org_index(
         &definitions,
         &latest_runs,
         &job_types,
+        access,
     )
 }
 
@@ -187,10 +221,22 @@ pub async fn org_show(
         .await
         .unwrap_or_default();
 
+    let access = job_access(&ctx.db, org_ctx.as_ref()).await;
+    if !access.can_view {
+        return Ok(forbidden());
+    }
     let definition = find_definition_for_view(&ctx.db, &pid, org_ctx.as_ref()).await?;
 
     let runs = job_run_model::Model::find_by_definition(&ctx.db, definition.id).await?;
-    views::jobs::org_show(&v, &user, org_ctx.as_ref(), &user_orgs, &definition, &runs)
+    views::jobs::org_show(
+        &v,
+        &user,
+        org_ctx.as_ref(),
+        &user_orgs,
+        &definition,
+        &runs,
+        access,
+    )
 }
 
 /// Builds a definition's `config` JSON from the submitted form body, driven by
@@ -251,7 +297,9 @@ pub async fn org_new_form(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Admin);
+    if !job_access(&ctx.db, Some(&org_ctx)).await.can_manage {
+        return Ok(forbidden());
+    }
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -294,7 +342,9 @@ pub async fn org_create(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Admin);
+    if !job_access(&ctx.db, Some(&org_ctx)).await.can_manage {
+        return Ok(forbidden());
+    }
 
     let job_type = body.get("job_type").cloned().unwrap_or_default();
     // Only registered job types may be created — an unknown type would produce
@@ -385,7 +435,9 @@ pub async fn org_toggle(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Admin);
+    if !job_access(&ctx.db, Some(&org_ctx)).await.can_manage {
+        return Ok(forbidden());
+    }
 
     let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
@@ -416,7 +468,9 @@ pub async fn org_trigger(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Member);
+    if !job_access(&ctx.db, Some(&org_ctx)).await.can_run {
+        return Ok(forbidden());
+    }
 
     let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
@@ -452,7 +506,9 @@ pub async fn org_edit(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Admin);
+    if !job_access(&ctx.db, Some(&org_ctx)).await.can_manage {
+        return Ok(forbidden());
+    }
     let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
         .await
         .unwrap_or_default();
@@ -481,7 +537,9 @@ pub async fn org_update(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Admin);
+    if !job_access(&ctx.db, Some(&org_ctx)).await.can_manage {
+        return Ok(forbidden());
+    }
 
     let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
@@ -540,7 +598,9 @@ pub async fn org_delete(
     let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
         .await
         .ok_or_else(|| Error::NotFound)?;
-    require_role!(org_ctx, OrgRole::Admin);
+    if !job_access(&ctx.db, Some(&org_ctx)).await.can_manage {
+        return Ok(forbidden());
+    }
 
     let definition = job_def_model::Model::find_by_pid_and_org(&ctx.db, &pid, org_ctx.org.id)
         .await?
@@ -571,6 +631,10 @@ pub async fn org_run_show(
         .await
         .unwrap_or_default();
 
+    let access = job_access(&ctx.db, org_ctx.as_ref()).await;
+    if !access.can_view {
+        return Ok(forbidden());
+    }
     let definition = find_definition_for_view(&ctx.db, &pid, org_ctx.as_ref()).await?;
 
     let run = job_run_model::Model::find_by_pid(&ctx.db, &run_pid)
@@ -591,6 +655,7 @@ pub async fn org_run_show(
         &definition,
         &run,
         &diffs,
+        access,
     )
 }
 

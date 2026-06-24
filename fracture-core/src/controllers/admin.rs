@@ -404,11 +404,67 @@ fn db_err_message(e: &sea_orm::DbErr) -> String {
     }
 }
 
+/// `GET /admin/job-permissions` — staff form to view the job-permission policy.
+///
+/// # Errors
+///
+/// Returns an error if the user is not staff.
+#[debug_handler]
+pub async fn job_permissions_form(
+    ViewEngine(v): ViewEngine<TeraView>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+    require_staff!(org_ctx);
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+    let perms = crate::jobs::JobPermissions::load(&ctx.db).await;
+    views::admin::job_permissions(&v, &user, org_ctx.as_ref(), &user_orgs, perms)
+}
+
+/// `POST /admin/job-permissions` — staff saves the job-permission policy.
+///
+/// # Errors
+///
+/// Returns an error if the user is not staff or the write fails.
+#[debug_handler]
+#[allow(clippy::implicit_hasher)]
+pub async fn update_job_permissions(
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+    Form(body): Form<HashMap<String, String>>,
+) -> Result<Response> {
+    use crate::jobs::{JobAccessLevel, JobPermissions};
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user).await;
+    require_staff!(org_ctx);
+
+    let level = |key: &str, default: JobAccessLevel| {
+        JobAccessLevel::from_str_or(body.get(key).map_or("", String::as_str), default)
+    };
+    let perms = JobPermissions {
+        view: level("view", JobAccessLevel::Viewer),
+        run: level("run", JobAccessLevel::Staff),
+        manage: level("manage", JobAccessLevel::Staff),
+    };
+    perms.save(&ctx.db).await?;
+    Ok(Redirect::to("/admin/job-permissions").into_response())
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("/admin")
         .add("/", get(dashboard))
         .add("/orgs", get(orgs))
+        .add(
+            "/job-permissions",
+            get(job_permissions_form).post(update_job_permissions),
+        )
         .add("/list/{slug}", get(list).post(create))
         .add("/list/{slug}/new", get(new_form))
         .add("/list/{slug}/{pid}", get(detail).post(update))

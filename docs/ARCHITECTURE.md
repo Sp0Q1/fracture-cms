@@ -365,9 +365,11 @@ settings:
     poll_interval_seconds: 15  # default 15
 ```
 
-### Authorization
+### Authorization (configurable, staff-managed)
 
-Viewing jobs and runs requires org membership (Viewer+). Triggering a run requires Member+. The full CRUD on a definition — create (`POST /jobs`), edit (`GET`/`POST /jobs/{pid}/edit`), delete (`POST /jobs/{pid}/delete`, runs/diffs cascade), and enable/disable (`POST /jobs/{pid}/toggle`) — requires Admin+. Create and edit share one validator (registered job type, cron syntax with a seconds field, JSON config, unique name per org); the job type is fixed once created. Platform admins can additionally open any org's definitions read-only from `/admin/jobs`.
+Job actions fall into three buckets — **view** (list/detail/run history), **run** (trigger a run), and **manage** (create / edit / delete / enable-disable) — and each has a configurable minimum [`JobAccessLevel`] (`fracture_core::jobs::permissions`): Viewer / Member / Admin / Owner / **Staff** (platform-staff only). Platform staff clear every level (the unconditional ceiling). The policy is global and lives in the platform-admin org's settings (no new table); staff edit it at **`/admin/job-permissions`**, and the handlers + templates both gate on the resolved [`JobAccess`].
+
+**Default policy is tenant view-only:** `view = Viewer` (any member), `run = Staff`, `manage = Staff` — so out of the box, tenants can watch jobs but only platform staff run or manage them. Loosen per deployment as needed. Create and edit still share one validator (registered job type, cron-with-seconds, JSON config, unique name per org); the job type is fixed once created. Platform admins can additionally open any org's definitions read-only from `/admin/jobs`.
 
 ### Example executors (reference app)
 

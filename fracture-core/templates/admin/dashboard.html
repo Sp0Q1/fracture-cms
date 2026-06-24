@@ -43,6 +43,11 @@
         </tr>
         {% endif %}
         {% endfor %}
+        <tr>
+            <td><strong>Job Permissions</strong></td>
+            <td>Configure who can view, run, and manage jobs in each organization</td>
+            <td><a href="/admin/job-permissions" class="button outline small">Configure</a></td>
+        </tr>
         {% block admin_sections %}
         {% endblock admin_sections %}
     </tbody>
