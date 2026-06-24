@@ -1,23 +1,24 @@
-{# Shared form-field renderer. Input (set by the including template):
+{# Shared form-field renderer (oat `[data-field]` convention). Input set by the
+   including template:
    - fields : a serialized [FormField] { name, label, kind, required, help,
               value, options:[{value,label}] }
    Renders text / textarea / checkbox / number / select widgets. #}
 {% for field in fields %}
-<div class="form-group">
+<div data-field>
     {% if field.kind == "checkbox" %}
     <label class="checkbox-label">
         <input type="checkbox" name="{{ field.name }}"{% if field.value == "on" or field.value == "true" %} checked{% endif %}>
         {{ field.label }}
     </label>
     {% elif field.kind == "select" %}
-    <label for="field-{{ field.name }}">{{ field.label }}{% if field.required %} <span class="required">*</span>{% endif %}</label>
+    <label for="field-{{ field.name }}">{{ field.label }}</label>
     <select id="field-{{ field.name }}" name="{{ field.name }}"{% if field.required %} required{% endif %}>
         {% for opt in field.options %}
         <option value="{{ opt.value }}"{% if opt.value == field.value %} selected{% endif %}>{{ opt.label }}</option>
         {% endfor %}
     </select>
     {% else %}
-    <label for="field-{{ field.name }}">{{ field.label }}{% if field.required %} <span class="required">*</span>{% endif %}</label>
+    <label for="field-{{ field.name }}">{{ field.label }}</label>
     {% if field.kind == "textarea" %}
     <textarea id="field-{{ field.name }}" name="{{ field.name }}"{% if field.required %} required{% endif %}>{{ field.value }}</textarea>
     {% else %}
@@ -26,6 +27,6 @@
            name="{{ field.name }}" value="{{ field.value }}"{% if field.required %} required{% endif %}>
     {% endif %}
     {% endif %}
-    {% if field.help %}<small class="form-help">{{ field.help }}</small>{% endif %}
+    {% if field.help %}<small data-hint>{{ field.help }}</small>{% endif %}
 </div>
 {% endfor %}

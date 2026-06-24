@@ -22,15 +22,21 @@
 </article>
 {% else %}
 <article class="card">
-    <form action="/contact" method="post" class="stack">
-        <label for="contact-name">Name</label>
-        <input id="contact-name" name="name" type="text" required maxlength="200">
+    <form action="/contact" method="post">
+        <div data-field>
+            <label for="contact-name">Name</label>
+            <input id="contact-name" name="name" type="text" required maxlength="200">
+        </div>
 
-        <label for="contact-email">Email</label>
-        <input id="contact-email" name="email" type="email" required maxlength="320">
+        <div data-field>
+            <label for="contact-email">Email</label>
+            <input id="contact-email" name="email" type="email" required maxlength="320">
+        </div>
 
-        <label for="contact-message">Message</label>
-        <textarea id="contact-message" name="message" rows="8" required maxlength="10000"></textarea>
+        <div data-field>
+            <label for="contact-message">Message</label>
+            <textarea id="contact-message" name="message" rows="8" required maxlength="10000"></textarea>
+        </div>
 
         {# Self-hosted Altcha proof-of-work captcha: the widget fetches a
            challenge, solves it in a Web Worker, and fills the hidden
