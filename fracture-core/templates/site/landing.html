@@ -5,61 +5,101 @@
 {% block meta_description %}OIDC single sign-on, organizations with role-based access control, email invites, and org-scoped data isolation. Add your domain logic and ship.{% endblock meta_description %}
 
 {% block content %}
-<section class="hero">
-    <h1><span class="gradient-text">Multi-Tenant SaaS Starter</span><br>Built with Rust</h1>
-    <p class="subtitle">OIDC single sign-on, organizations with role-based access control, email invites, and org-scoped data isolation. Add your domain logic and ship.</p>
-    <div class="cta-group">
-        <a href="/api/auth/oidc/authorize" class="button large">Get Started</a>
-        <a href="#features" class="button outline large">Learn More</a>
+<section class="hero hero-landing">
+    <div class="hero-grid">
+        <div class="hero-copy">
+            <span class="eyebrow">Multi-tenant SaaS starter</span>
+            <h1><span class="gradient-text">Build secure SaaS,</span><br>in Rust.</h1>
+            <p class="subtitle">OIDC single sign-on, organizations with role-based access control, email invites, and org-scoped data isolation. Add your domain logic and ship.</p>
+            <div class="cta-group">
+                <a href="/api/auth/oidc/authorize" class="button large">Get Started</a>
+                <a href="#features" class="button outline large">Learn More</a>
+            </div>
+        </div>
+
+        {# Decorative faux-terminal — pure CSS/SVG, no script. #}
+        <div class="terminal-card" role="img" aria-label="Terminal: fracture-cms starting up with OIDC, org-scoped routing, and the job runner ready">
+            <div class="terminal-bar" aria-hidden="true">
+                <span></span><span></span><span></span>
+                <em>fracture-cms</em>
+            </div>
+            <pre class="terminal-body" aria-hidden="true"><span class="term-line"><span class="term-prompt">$</span> cargo run<span class="term-cursor"></span></span>
+<span class="term-line">  <span class="term-ok">&#10003;</span> migrations applied</span>
+<span class="term-line">  <span class="term-ok">&#10003;</span> OIDC + PKCE verified</span>
+<span class="term-line">  <span class="term-ok">&#10003;</span> org-scoped routing</span>
+<span class="term-line">  <span class="term-ok">&#10003;</span> job runner online</span>
+<span class="term-line">  <span class="term-accent">&#9656;</span> listening on http://0.0.0.0:5150</span></pre>
+    </div>
     </div>
 </section>
 
-<div class="row" id="features">
-    <div class="col-4">
-        <article class="card card-accent">
-            <div class="feature-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 2L3 7v6c0 5.25 3.75 10.14 9 11.43C17.25 23.14 21 18.25 21 13V7l-9-5z"/>
-                </svg>
-            </div>
-            <header>OIDC Authentication</header>
-            <p>Delegates all authentication to your identity provider. No passwords stored in the database. PKCE flow with signed token verification.</p>
-        </article>
-    </div>
-    <div class="col-4">
-        <article class="card card-accent">
-            <div class="feature-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                </svg>
-            </div>
-            <header>Organizations & RBAC</header>
-            <p>Personal and team orgs with four roles: Owner, Admin, Member, Viewer. All data queries scoped by org. Email invites with auto-accept.</p>
-        </article>
-    </div>
-    <div class="col-4">
-        <article class="card card-accent">
-            <div class="feature-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="16 18 22 12 16 6"/>
-                    <polyline points="8 6 2 12 8 18"/>
-                </svg>
-            </div>
-            <header>Library Architecture</header>
-            <p>Core infrastructure ships as a Cargo library crate. Depend on it, add your resources, get updates via cargo update.</p>
-        </article>
+<div class="container">
+    <div class="row" id="features">
+        <div class="col-4">
+            <article class="card card-accent">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L3 7v6c0 5.25 3.75 10.14 9 11.43C17.25 23.14 21 18.25 21 13V7l-9-5z"/>
+                    </svg>
+                </div>
+                <header>OIDC Authentication</header>
+                <p>Delegates all authentication to your identity provider. No passwords stored in the database. PKCE flow with signed token verification.</p>
+            </article>
+        </div>
+        <div class="col-4">
+            <article class="card card-accent">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                </div>
+                <header>Organizations &amp; RBAC</header>
+                <p>Personal and team orgs with four roles: Owner, Admin, Member, Viewer. All data queries scoped by org. Email invites with auto-accept.</p>
+            </article>
+        </div>
+        <div class="col-4">
+            <article class="card card-accent">
+                <div class="feature-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16 18 22 12 16 6"/>
+                        <polyline points="8 6 2 12 8 18"/>
+                    </svg>
+                </div>
+                <header>Library Architecture</header>
+                <p>Core infrastructure ships as a Cargo library crate. Depend on it, add your resources, get updates via cargo update.</p>
+            </article>
+        </div>
     </div>
 </div>
 
-<div class="trust-section">
-    <p>Built with</p>
-    <div class="trust-badges">
-        <span class="badge outline">Rust</span>
-        <span class="badge outline">Loco</span>
-        <span class="badge outline">Axum</span>
-        <span class="badge outline">OIDC</span>
-        <span class="badge outline">SQLite</span>
-        <span class="badge outline">SeaORM</span>
+{# Full-bleed stats band #}
+<section class="stats-band">
+    <div class="stats-band-inner">
+        <div class="stat-pill"><span class="stat-pill-num">5</span><span class="stat-pill-label">org roles, one resolver</span></div>
+        <div class="stat-pill"><span class="stat-pill-num">OIDC</span><span class="stat-pill-label">PKCE + JWKS verified</span></div>
+        <div class="stat-pill"><span class="stat-pill-num">0</span><span class="stat-pill-label">passwords stored</span></div>
+        <div class="stat-pill"><span class="stat-pill-num">100%</span><span class="stat-pill-label">org-scoped queries</span></div>
+    </div>
+</section>
+
+<div class="container">
+    <div class="trust-section">
+        <p>Built with</p>
+        <div class="trust-badges">
+            <span class="badge outline">Rust</span>
+            <span class="badge outline">Loco</span>
+            <span class="badge outline">Axum</span>
+            <span class="badge outline">OIDC</span>
+            <span class="badge outline">SQLite</span>
+            <span class="badge outline">SeaORM</span>
+        </div>
     </div>
 </div>
+
+{# Full-bleed CTA band #}
+<section class="cta-band">
+    <h2>Stop rebuilding auth and tenancy.</h2>
+    <p>Start from a secure, org-scoped foundation and ship your product.</p>
+    <a href="/api/auth/oidc/authorize" class="button large">Get Started</a>
+</section>
 {% endblock content %}
