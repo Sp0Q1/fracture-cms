@@ -83,6 +83,9 @@ settings:
     # per-resource authority still protects staff-owned data.
     default_role: member
   blog:
+    # Set to false to switch the public blog off: its routes 404 and the
+    # "Blog" link disappears from the nav. Defaults to true if omitted.
+    enabled: true
     org_slug: "platform-admin"
   # Login admission allowlist (see docs/FEDERATION.md). Unset in dev so any
   # IdP user can sign in; in production set AUTH_ALLOWED_EMAIL_DOMAINS.

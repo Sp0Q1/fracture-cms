@@ -1,0 +1,77 @@
+{# The one top-navigation component, included by every base layout (app and
+   public) so the menu never drifts between them. Visibility is driven entirely
+   by what the visitor can reach:
+     - Projects / Jobs : signed-in users (user_name)
+     - Blog            : when the blog feature is enabled
+     - Admin           : platform staff (is_staff)
+   Context vars used: user_name, is_staff, org_name, org_pid, user_orgs. #}
+<nav data-topnav aria-label="Main navigation">
+    <span>
+        <a href="/" class="brand">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="brand-shield">
+                <path d="M12 2L3 7v6c0 5.25 3.75 10.14 9 11.43C17.25 23.14 21 18.25 21 13V7l-9-5z"/>
+            </svg>
+            <strong class="gradient-text">Fracture CMS</strong>
+        </a>
+    </span>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+
+    {% if user_name %}
+    <ot-dropdown class="org-switcher-nav">
+        <button class="org-badge" popovertarget="org-switcher" aria-label="Switch organization">
+            {{ org_name | default(value="No Org") | truncate(length=20, end="...") }}
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div id="org-switcher" popover>
+            {% if user_orgs %}
+            {% for org in user_orgs %}
+            <a href="/orgs/switch/{{ org.pid }}" role="menuitem"{% if org.pid == org_pid %} class="active"{% endif %}>
+                {{ org.name }}{% if org.is_personal %} <small>(Personal)</small>{% endif %}
+            </a>
+            {% endfor %}
+            <hr>
+            {% endif %}
+            {% if is_staff %}
+            <a href="/orgs/new" role="menuitem">Create Organization</a>
+            {% endif %}
+            <a href="/orgs" role="menuitem">Manage Organizations</a>
+        </div>
+    </ot-dropdown>
+    {% endif %}
+
+    {# Primary sections — same list everywhere, shown by reachability. #}
+    {% if user_name %}
+    <a href="/projects">Projects</a>
+    <a href="/jobs">Jobs</a>
+    {% endif %}
+    {% if feature(name="blog") %}
+    <a href="/blog">Blog</a>
+    {% endif %}
+    {% if is_staff %}
+    <a href="/admin">Admin</a>
+    {% endif %}
+
+    <span class="nav-end">
+        {% if user_name %}
+        <ot-dropdown>
+            <button class="icon ghost" popovertarget="account-menu" aria-label="Account menu">
+                <span class="user-avatar">{{ user_name | truncate(length=1, end="") | upper }}</span>
+            </button>
+            <div id="account-menu" popover>
+                <span role="menuitem">{{ user_name }}</span>
+                <hr>
+                <a href="/" role="menuitem">Dashboard</a>
+                <a href="/orgs" role="menuitem">Organizations</a>
+                {% if is_staff %}
+                <a href="/admin" role="menuitem">Platform Admin</a>
+                {% endif %}
+                <a href="/api/auth/oidc/logout" role="menuitem">Sign out</a>
+            </div>
+        </ot-dropdown>
+        {% else %}
+        <a href="/api/auth/oidc/authorize" class="button small">Sign in</a>
+        {% endif %}
+    </span>
+</nav>

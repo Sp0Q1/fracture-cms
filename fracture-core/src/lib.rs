@@ -1,6 +1,7 @@
 pub mod captcha;
 pub mod controllers;
 pub mod entity_registry;
+pub mod features;
 pub mod initializers;
 pub mod jobs;
 pub mod listing;

@@ -57,6 +57,10 @@ settings:
   # Comma-separated; empty = no restriction.
   auth:
     allowed_email_domains: "{{ get_env(name='AUTH_ALLOWED_EMAIL_DOMAINS', default='') }}"
+  # Public blog. Set BLOG_ENABLED=false to switch it off: routes 404 and the
+  # "Blog" nav link disappears. Defaults to enabled.
+  blog:
+    enabled: {{ get_env(name="BLOG_ENABLED", default="true") }}
   # Background job runner (executes queued job_runs, evaluates cron schedules).
   jobs:
     enabled: {{ get_env(name="JOBS_RUNNER_ENABLED", default="true") }}
