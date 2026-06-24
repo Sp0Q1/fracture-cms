@@ -29,6 +29,18 @@
     --ring: #62cb98;
 }
 
+/* Softer, more rounded corners everywhere (oat components read these tokens). */
+:root {
+    --radius-small: 0.375rem;
+    --radius-medium: 0.625rem;
+    --radius-large: 1rem;
+}
+
+/* Avoid a horizontal scrollbar from full-bleed sections (see .hero). */
+body {
+    overflow-x: clip;
+}
+
 /* --- Layout --- */
 /* Fixed nav offset — OatCSS handles this natively inside
    [data-sidebar-layout], but we use a plain body>main layout. */
@@ -41,6 +53,28 @@ nav[data-topnav] {
     backdrop-filter: blur(12px);
     background-color: rgba(var(--background-rgb, 11, 13, 19), 0.85);
     border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+/* The bar stays full-bleed; its content aligns to the same width as the page
+   (oat's --container-max), so the logo/menu line up with the content below. */
+.nav-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: var(--container-max);
+    margin-inline: auto;
+    padding-inline: var(--container-pad);
+}
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex: 1;
+    min-width: 0;
+}
+.nav-links .nav-end {
+    margin-left: auto;
 }
 
 nav[data-topnav] a {
@@ -111,9 +145,13 @@ nav[data-topnav] a[aria-current="page"] {
 /* --- Hero Section --- */
 .hero {
     text-align: center;
-    padding: 4rem 1rem;
+    padding: 5rem 1rem;
     position: relative;
     overflow: hidden;
+    /* Full-bleed: break out of the centered container so the background
+       gradients reach both screen edges; inner text stays centered. */
+    width: 100vw;
+    margin-inline: calc(50% - 50vw);
 }
 
 .hero::before {
@@ -620,14 +658,22 @@ table.clickable-rows tbody tr:hover {
 .mobile-menu-toggle { display:none; background:none; border:none; color:var(--foreground); cursor:pointer; padding:.25rem; margin-left:auto }
 
 @media (max-width: 768px) {
-    .mobile-menu-toggle { display:inline-flex; align-items:center }
-    nav[data-topnav] { flex-wrap:wrap }
-    nav[data-topnav] > span:not(:first-child),
-    nav[data-topnav] > ot-dropdown:not(.nav-end) { display:none; width:100%; padding:.5rem 0 }
-    nav[data-topnav] > .nav-end { display:none; width:100%; padding:.5rem 0 }
-    nav[data-topnav].nav-open > span:not(:first-child),
-    nav[data-topnav].nav-open > ot-dropdown:not(.nav-end) { display:flex; flex-direction:column }
-    nav[data-topnav].nav-open > .nav-end { display:flex; justify-content:flex-start }
+    /* The hamburger collapses the ENTIRE link group — section links included
+       (the previous rules only targeted span/dropdown children, so the bare
+       <a> links, e.g. Blog, leaked out of the menu). */
+    .mobile-menu-toggle { display:inline-flex; align-items:center; margin-left:auto }
+    .nav-inner { flex-wrap: wrap }
+    .nav-links {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+        padding: 0.5rem 0;
+    }
+    nav[data-topnav].nav-open .nav-links { display: flex }
+    .nav-links .nav-end { margin-left: 0; width: 100% }
+    .nav-links .org-switcher-nav { width: 100% }
 
     .hero h1 {
         font-size: 2rem;
