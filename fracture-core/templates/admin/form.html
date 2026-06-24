@@ -22,26 +22,7 @@
 <article class="card">
     <form method="post"
           action="{% if is_edit %}/admin/list/{{ slug }}/{{ pid }}{% else %}/admin/list/{{ slug }}{% endif %}">
-        {% for field in fields %}
-        <div class="form-group">
-            {% if field.kind == "checkbox" %}
-            <label class="checkbox-label">
-                <input type="checkbox" name="{{ field.name }}"{% if field.value == "on" %} checked{% endif %}>
-                {{ field.label }}
-            </label>
-            {% else %}
-            <label for="field-{{ field.name }}">{{ field.label }}{% if field.required %} <span class="required">*</span>{% endif %}</label>
-            {% if field.kind == "textarea" %}
-            <textarea id="field-{{ field.name }}" name="{{ field.name }}"{% if field.required %} required{% endif %}>{{ field.value }}</textarea>
-            {% else %}
-            <input id="field-{{ field.name }}"
-                   type="{% if field.kind == 'number' %}number{% else %}text{% endif %}"
-                   name="{{ field.name }}" value="{{ field.value }}"{% if field.required %} required{% endif %}>
-            {% endif %}
-            {% endif %}
-            {% if field.help %}<small class="form-help">{{ field.help }}</small>{% endif %}
-        </div>
-        {% endfor %}
+        {% include "partials/form_fields.html" %}
 
         <div class="form-actions">
             <button type="submit" class="button">Save</button>

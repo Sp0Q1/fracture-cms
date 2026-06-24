@@ -56,6 +56,27 @@ pub enum FieldKind {
     Checkbox,
     /// `<input type="number">`.
     Number,
+    /// `<select>` populated from [`FormField::options`].
+    Select,
+}
+
+/// One `<option>` in a [`FieldKind::Select`] field.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct FormOption {
+    /// Submitted value.
+    pub value: String,
+    /// Human label shown in the dropdown.
+    pub label: String,
+}
+
+impl FormOption {
+    /// Build an option from any value/label pair.
+    pub fn new(value: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            label: label.into(),
+        }
+    }
 }
 
 /// One editable field on a create/edit form (Django's form field).
@@ -76,6 +97,8 @@ pub struct FormField {
     pub help: &'static str,
     /// Pre-filled value, set per-request for the edit form (empty on create).
     pub value: String,
+    /// Options for a [`FieldKind::Select`] field (empty otherwise).
+    pub options: Vec<FormOption>,
 }
 
 impl FormField {
@@ -89,6 +112,7 @@ impl FormField {
             required: true,
             help: "",
             value: String::new(),
+            options: Vec::new(),
         }
     }
 
@@ -102,6 +126,7 @@ impl FormField {
             required: false,
             help: "",
             value: String::new(),
+            options: Vec::new(),
         }
     }
 
@@ -115,6 +140,21 @@ impl FormField {
             required: false,
             help: "",
             value: String::new(),
+            options: Vec::new(),
+        }
+    }
+
+    /// A required dropdown populated from `options`.
+    #[must_use]
+    pub const fn select(name: &'static str, label: &'static str, options: Vec<FormOption>) -> Self {
+        Self {
+            name,
+            label,
+            kind: FieldKind::Select,
+            required: true,
+            help: "",
+            value: String::new(),
+            options,
         }
     }
 

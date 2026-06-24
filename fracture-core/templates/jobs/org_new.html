@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}New {{ job_label }} — Jobs — Fracture CMS{% endblock title %}
+
+{% block page_title_block %}{% endblock page_title_block %}
+
+{% block content %}
+<nav class="breadcrumb">
+    <a href="/jobs">Jobs</a>
+    <span class="separator">/</span>
+    <span>New {{ job_label }}</span>
+</nav>
+
+<div class="page-header">
+    <h1>New {{ job_label }}</h1>
+</div>
+
+{% if error %}
+<article class="card" data-variant="danger"><p>{{ error }}</p></article>
+{% endif %}
+
+<article class="card">
+    <form action="/jobs" method="post" class="stack">
+        <input type="hidden" name="job_type" value="{{ job_type }}">
+
+        <div class="form-group">
+            <label for="job-name">Name <span class="required">*</span></label>
+            <input id="job-name" name="name" type="text" required maxlength="120"
+                   value="{{ name | default(value='') }}" placeholder="My {{ job_label | lower }}">
+        </div>
+
+        {# Job-defined config fields (e.g. a project dropdown), declared by the
+           executor's config_form() so each job type gets its own inputs. #}
+        {% include "partials/form_fields.html" %}
+
+        <div class="form-group">
+            <label for="job-schedule">Run schedule</label>
+            <select id="job-schedule" name="schedule">
+                <option value="">Manual only — run it yourself from this page</option>
+                <option value="0 0 * * * *">Hourly</option>
+                <option value="0 0 0 * * *">Daily (midnight)</option>
+                <option value="0 0 0 * * 1">Weekly (Monday)</option>
+                <option value="0 0 0 1 * *">Monthly (1st)</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="button">Create job</button>
+            <a href="/jobs" class="button" data-variant="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+{% endblock content %}

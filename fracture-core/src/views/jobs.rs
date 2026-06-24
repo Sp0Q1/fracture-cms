@@ -81,7 +81,7 @@ pub fn org_index(
     user_orgs: &[organizations::Model],
     definitions: &[job_definitions::Model],
     latest_runs: &HashMap<i32, job_runs::Model>,
-    job_types: &[String],
+    job_types: &[crate::jobs::JobTypeInfo],
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definitions"] = json!(definitions
@@ -91,6 +91,30 @@ pub fn org_index(
     ctx["job_types"] = json!(job_types);
     add_capabilities(&mut ctx, org_ctx);
     format::render().view(v, "jobs/org_index.html", data!(ctx))
+}
+
+/// Renders the friendly create form for one job type.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
+#[allow(clippy::too_many_arguments)] // View threads display context + the job's fields.
+pub fn org_new(
+    v: &impl ViewRenderer,
+    user: &users::Model,
+    org_ctx: Option<&OrgContext>,
+    user_orgs: &[organizations::Model],
+    job_type: &str,
+    label: &str,
+    fields: &[crate::listing::FormField],
+    error: Option<&str>,
+) -> Result<Response> {
+    let mut ctx = super::base_context(user, org_ctx, user_orgs);
+    ctx["job_type"] = json!(job_type);
+    ctx["job_label"] = json!(label);
+    ctx["fields"] = json!(fields);
+    ctx["error"] = json!(error);
+    format::render().view(v, "jobs/org_new.html", data!(ctx))
 }
 
 /// Renders a single job definition with its runs.

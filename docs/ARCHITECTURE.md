@@ -306,6 +306,12 @@ fracture-core/src/jobs/
 #[async_trait]
 pub trait JobExecutor: Send + Sync {
     fn job_type(&self) -> &str;
+    fn label(&self) -> &str { self.job_type() }       // friendly name in the picker
+    fn description(&self) -> &'static str { "" }       // one-line picker blurb
+    // Per-job config form, built per-request so options can be dynamic
+    // (e.g. a dropdown of the org's projects). Empty = no custom form.
+    async fn config_form(&self, db: &DatabaseConnection, org_id: i32)
+        -> Result<Vec<FormField>, DbErr> { Ok(Vec::new()) }
     async fn execute(
         &self,
         db: &DatabaseConnection,
@@ -314,6 +320,18 @@ pub trait JobExecutor: Send + Sync {
     ) -> Result<JobResult, Box<dyn Error + Send + Sync>>;
 }
 ```
+
+**Friendly creation (no JSON/cron for end users).** A job type declares its
+config inputs via `config_form`, and the create flow renders them instead of a
+raw config textarea: `/jobs` shows a picker of registered types (label +
+description), and `/jobs/new/{job_type}` is that type's form. Submitted field
+values are collected into the definition's `config` JSON under each field's
+`name`, which `execute` reads back; the schedule is a friendly preset selector
+(Manual / Hourly / Daily / …) over cron expressions. A type that declares no
+`config_form` falls back to a raw JSON `config` field, so advanced or
+container-style jobs aren't constrained by a fixed UI. The reference app's
+`write_note` job is the worked example (a project dropdown + an optional
+title); `content_stats` declares no form and needs no config.
 
 **`JobRegistry`**: A global `OnceLock`-backed registry. Apps call `init_job_registry()` at startup with their registered executors. The registry maps `job_type` strings to executor instances.
 
