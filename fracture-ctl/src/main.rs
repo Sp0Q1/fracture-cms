@@ -1364,6 +1364,20 @@ fn cmd_admin(action: AdminAction) {
         AdminAction::Set { email } => {
             eprintln!("Promoting '{email}' to platform admin...");
 
+            // Reject anything that isn't a plain email before it reaches a SQL
+            // string. This CLI shells out to `sqlite3`/`psql -c`, so it can't
+            // use bound parameters the way the app's SeaORM layer does; the
+            // allow-list below + single-quote escaping is the sanctioned
+            // exception to the "no raw SQL" rule (operator-only, never
+            // web-reachable). See CLAUDE.md.
+            if !email
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "@._+-".contains(c))
+            {
+                eprintln!("Error: invalid characters in email '{email}'");
+                std::process::exit(1);
+            }
+
             // Find the user
             let result = run_db_query(&format!(
                 "SELECT id, name FROM users WHERE email = '{}'",
