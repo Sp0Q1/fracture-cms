@@ -183,14 +183,7 @@ macro_rules! require_capability {
 macro_rules! require_staff {
     ($org_ctx:expr) => {
         if !$org_ctx.as_ref().is_some_and(|ctx| ctx.is_staff) {
-            return Ok(axum::response::Response::builder()
-                .status(axum::http::StatusCode::FORBIDDEN)
-                .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
-                .body(axum::body::Body::from(
-                    "<h1>403 Forbidden</h1><p>You do not have admin access.</p>",
-                ))
-                .expect("static response body")
-                .into_response());
+            return Ok($crate::controllers::errors::forbidden());
         }
     };
 }
@@ -200,11 +193,7 @@ macro_rules! require_staff {
 macro_rules! require_role {
     ($org_ctx:expr, $minimum:expr) => {
         if !$org_ctx.role.at_least($minimum) {
-            return Ok(axum::response::Response::builder()
-                .status(axum::http::StatusCode::FORBIDDEN)
-                .body(axum::body::Body::from("Forbidden"))
-                .unwrap()
-                .into_response());
+            return Ok($crate::controllers::errors::forbidden());
         }
     };
 }

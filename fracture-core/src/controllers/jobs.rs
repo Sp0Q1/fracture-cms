@@ -22,11 +22,7 @@ use crate::{require_staff, require_user};
 /// A 403 response for a denied job action — mirrors `require_role!`, but the
 /// threshold is the configurable [`JobPermissions`] policy, not a fixed role.
 fn forbidden() -> Response {
-    axum::response::Response::builder()
-        .status(axum::http::StatusCode::FORBIDDEN)
-        .body(axum::body::Body::from("Forbidden"))
-        .unwrap()
-        .into_response()
+    crate::controllers::errors::forbidden()
 }
 
 /// Loads the policy and resolves it for the current org context. A missing
