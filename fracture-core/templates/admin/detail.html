@@ -30,7 +30,8 @@
         <a href="/admin/list/{{ slug }}" class="button" data-variant="secondary">Back to {{ title }}</a>
         {% if deletable %}
         <span class="spacer"></span>
-        <form action="/admin/list/{{ slug }}/{{ record.pid }}/delete" method="post" class="inline-form">
+        <form action="/admin/list/{{ slug }}/{{ record.pid }}/delete" method="post" class="inline-form"
+              data-confirm="Permanently delete this {{ title }} record? This cannot be undone.">
             <button type="submit" class="outline" data-variant="danger">Delete</button>
         </form>
         {% endif %}

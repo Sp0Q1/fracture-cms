@@ -52,7 +52,10 @@
 
 {% else %}
 <article class="card empty-state">
-    <h3>Nothing here</h3>
-    <p>{% if page.q %}No results match “{{ page.q }}”.{% else %}Nothing yet.{% endif %}</p>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>
+    </svg>
+    <h3>{% if page.q %}No matches{% else %}Nothing here yet{% endif %}</h3>
+    <p>{% if page.q %}No results match “{{ page.q }}”.{% else %}Items will show up here once created.{% endif %}</p>
 </article>
 {% endif %}

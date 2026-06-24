@@ -42,7 +42,8 @@
                     {% endif %}
                 </form>
                 <a href="/jobs/{{ definition.pid }}/edit" class="button outline">Edit</a>
-                <form action="/jobs/{{ definition.pid }}/delete" method="post" class="inline-form">
+                <form action="/jobs/{{ definition.pid }}/delete" method="post" class="inline-form"
+                      data-confirm="Delete the job '{{ definition.name }}' and its run history? This cannot be undone.">
                     <button type="submit" class="button outline" data-variant="danger">Delete</button>
                 </form>
             {% endif %}
