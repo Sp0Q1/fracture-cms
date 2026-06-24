@@ -876,3 +876,181 @@ table.clickable-rows tbody tr[data-href]:focus-visible {
         white-space: nowrap;
     }
 }
+
+/* ==========================================================================
+   Landing page — animated security/dev hero, terminal, full-bleed bands.
+   All CSS/SVG (CSP-safe). Motion is gated behind prefers-reduced-motion.
+   ========================================================================== */
+
+/* Animated gradient mesh behind the hero. */
+.hero-landing::before {
+    animation: meshDrift 18s ease-in-out infinite alternate;
+}
+@keyframes meshDrift {
+    from { transform: translate3d(-3%, -2%, 0) scale(1.05); }
+    to   { transform: translate3d(3%, 2%, 0) scale(1.15); }
+}
+
+/* Two-column hero content, constrained to the page width and left-aligned. */
+.hero-landing { text-align: left; }
+.hero-grid {
+    max-width: var(--container-max);
+    margin-inline: auto;
+    padding-inline: var(--container-pad);
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 3rem;
+    align-items: center;
+}
+.hero-landing h1 {
+    max-width: none;
+    margin: 0 0 1rem;
+    font-size: clamp(2.25rem, 5vw, 3.5rem);
+}
+.hero-landing .subtitle { margin-inline: 0; max-width: 46ch; }
+.hero-landing .cta-group { justify-content: flex-start; }
+.eyebrow {
+    display: inline-block;
+    margin-bottom: 1rem;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid rgba(98, 203, 152, 0.35);
+    border-radius: var(--radius-full, 999px);
+    background: rgba(98, 203, 152, 0.08);
+    color: #62cb98;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* Faux terminal. */
+.terminal-card {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #0a0c12;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(98, 203, 152, 0.06);
+}
+.terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.85rem;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.terminal-bar span {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+}
+.terminal-bar span:nth-child(1) { background: #ff5f57; }
+.terminal-bar span:nth-child(2) { background: #febc2e; }
+.terminal-bar span:nth-child(3) { background: #28c840; }
+.terminal-bar em {
+    margin-left: 0.5rem; font-style: normal;
+    color: var(--text-light, #9ca3af); font-size: 0.78rem;
+}
+.terminal-body {
+    margin: 0;
+    padding: 1.1rem 1.25rem 1.35rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: #cbd5e1;
+    white-space: pre;
+    overflow-x: auto;
+}
+.term-line {
+    display: block;
+    opacity: 0;
+    animation: termLineIn 0.45s ease forwards;
+}
+.term-line:nth-child(1) { animation-delay: 0.15s; }
+.term-line:nth-child(2) { animation-delay: 0.55s; }
+.term-line:nth-child(3) { animation-delay: 0.85s; }
+.term-line:nth-child(4) { animation-delay: 1.15s; }
+.term-line:nth-child(5) { animation-delay: 1.45s; }
+.term-line:nth-child(6) { animation-delay: 1.8s; }
+.term-prompt { color: #62cb98; }
+.term-ok { color: #62cb98; font-weight: 700; }
+.term-accent { color: #8b8ff5; }
+.term-cursor {
+    display: inline-block;
+    width: 8px; height: 1.05em;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    background: #62cb98;
+    animation: termBlink 1.1s step-end infinite;
+}
+@keyframes termLineIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+}
+@keyframes termBlink { 50% { opacity: 0; } }
+
+/* Full-bleed stats band. */
+.stats-band {
+    width: 100vw;
+    margin-inline: calc(50% - 50vw);
+    margin-block: 3.5rem 0;
+    padding: 2rem 1rem;
+    background:
+        linear-gradient(90deg, rgba(98, 203, 152, 0.10), rgba(90, 96, 206, 0.10)),
+        rgba(255, 255, 255, 0.02);
+    border-block: 1px solid rgba(255, 255, 255, 0.06);
+}
+.stats-band-inner {
+    max-width: var(--container-max);
+    margin-inline: auto;
+    padding-inline: var(--container-pad);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    gap: 1.5rem;
+}
+.stat-pill { text-align: center; }
+.stat-pill-num {
+    display: block;
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, #62cb98, #5a60ce);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.stat-pill-label {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-light, #9ca3af);
+}
+
+/* Full-bleed closing CTA band. */
+.cta-band {
+    width: 100vw;
+    margin-inline: calc(50% - 50vw);
+    margin-top: 3.5rem;
+    padding: 4rem 1rem;
+    text-align: center;
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(98, 203, 152, 0.12), transparent 60%),
+        rgba(255, 255, 255, 0.02);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cta-band h2 { font-size: clamp(1.6rem, 3.5vw, 2.4rem); margin-bottom: 0.5rem; }
+.cta-band p { color: var(--text-light, #9ca3af); margin-bottom: 1.5rem; }
+
+@media (max-width: 768px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 2rem; }
+    .hero-landing .cta-group { justify-content: center; }
+    .hero-landing { text-align: center; }
+    .hero-landing .subtitle { margin-inline: auto; }
+}
+
+/* Respect reduced-motion: no drift, no typing, no blink. */
+@media (prefers-reduced-motion: reduce) {
+    .hero-landing::before { animation: none; }
+    .term-line { opacity: 1; animation: none; }
+    .term-cursor { animation: none; }
+}
