@@ -682,11 +682,27 @@ table.clickable-rows tbody tr:hover {
 /* --- Responsive --- */
 /* --- Mobile navigation --- */
 .mobile-menu-toggle { display:none; background:none; border:none; color:var(--foreground); cursor:pointer; padding:.25rem; margin-left:auto }
+/* The toggle checkbox is screen-reader hidden but kept focusable for keyboard
+   use (clicking the label flips it). Never shown. */
+.nav-toggle-cb {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+.nav-toggle-cb:focus-visible ~ .mobile-menu-toggle {
+    outline: 2px solid var(--ring, #62cb98);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
 
 @media (max-width: 768px) {
-    /* The hamburger collapses the ENTIRE link group — section links included
-       (the previous rules only targeted span/dropdown children, so the bare
-       <a> links, e.g. Blog, leaked out of the menu). */
+    /* The hamburger collapses the ENTIRE link group — section links included.
+       Pure CSS (checkbox :checked), so it works without app.js (guest pages
+       don't load it). */
     .mobile-menu-toggle { display:inline-flex; align-items:center; margin-left:auto }
     .nav-inner { flex-wrap: wrap }
     .nav-links {
@@ -697,7 +713,7 @@ table.clickable-rows tbody tr:hover {
         gap: 0.25rem;
         padding: 0.5rem 0;
     }
-    nav[data-topnav].nav-open .nav-links { display: flex }
+    .nav-toggle-cb:checked ~ .nav-links { display: flex }
     .nav-links .nav-end { margin-left: 0; width: 100% }
     .nav-links .org-switcher-nav { width: 100% }
 

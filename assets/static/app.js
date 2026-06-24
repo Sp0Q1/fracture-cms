@@ -108,15 +108,8 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // Mobile menu toggle
-    var menuToggle = document.getElementById("mobile-menu-toggle");
-    if (menuToggle) {
-        menuToggle.addEventListener("click", function () {
-            var expanded = this.getAttribute("aria-expanded") === "true";
-            this.setAttribute("aria-expanded", expanded ? "false" : "true");
-            this.closest("nav").classList.toggle("nav-open");
-        });
-    }
+    // Mobile menu is now a CSS-only checkbox toggle (works without JS, so it
+    // functions on guest pages that don't load app.js) — no handler needed.
 
     // Session refresh: only runs when body has data-authenticated
     if (document.body.hasAttribute("data-authenticated")) {
