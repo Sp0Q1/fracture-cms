@@ -2,15 +2,12 @@
 
 {% block title %}Run {{ run.pid }} — {{ definition.name }} — Fracture CMS{% endblock title %}
 
-{% block head %}
-{% if run_active %}
-<meta http-equiv="refresh" content="5">
-{% endif %}
-{% endblock head %}
-
 {% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
+{# Live status: app.js polls while the run is active and refreshes once it
+   reaches a terminal state. #}
+<span data-poll-status="{{ run.status }}" hidden></span>
 <nav class="breadcrumb">
     <a href="/jobs">Jobs</a>
     <span class="separator">/</span>

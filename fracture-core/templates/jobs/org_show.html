@@ -2,15 +2,12 @@
 
 {% block title %}{{ definition.name }} — Jobs — Fracture CMS{% endblock title %}
 
-{% block head %}
-{% if has_active_run %}
-<meta http-equiv="refresh" content="5">
-{% endif %}
-{% endblock head %}
-
 {% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
+{# Live status: app.js polls while a run is active and refreshes once it
+   finishes — no jarring full-page reload every few seconds. #}
+<span data-poll-status="{% if has_active_run %}active{% else %}idle{% endif %}" hidden></span>
 <nav class="breadcrumb">
     <a href="/jobs">Jobs</a>
     <span class="separator">/</span>
