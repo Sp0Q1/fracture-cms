@@ -647,3 +647,186 @@ table.clickable-rows tbody tr:hover {
         --grid-cols: 1;
     }
 }
+
+/* ==========================================================================
+   Design-system pass — fill in classes referenced by templates but never
+   styled, unify focus/states, and round out the dark theme.
+   ========================================================================== */
+
+/* --- Forms: field grouping, hints, required marker --- */
+.form-group {
+    margin-bottom: 1.1rem;
+}
+.form-group > label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.form-group .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    margin-bottom: 0;
+}
+.form-help {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--text-light, #9ca3af);
+}
+.required {
+    color: #ef8a8a;
+    font-weight: 700;
+}
+
+/* --- Changelist search (shared list_table partial) --- */
+.changelist-search {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.changelist-search input[type="search"] {
+    flex: 1 1 14rem;
+    min-width: 0;
+}
+
+/* --- Pagination --- */
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.25rem;
+}
+.pagination-info {
+    color: var(--text-light, #9ca3af);
+    font-size: 0.85rem;
+}
+
+/* --- Dashboard stat tiles (home dashboard parity with admin) --- */
+.stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #62cb98;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-light, #9ca3af);
+}
+/* Stat cards that are links: feel clickable. */
+.stat-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.stat-card-link:hover {
+    transform: translateY(-2px);
+    border-color: rgba(98, 203, 152, 0.4);
+}
+
+/* --- Inline action link clusters (e.g. timeline / table row actions) --- */
+.action-links {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+/* --- Activity timeline (note comments) --- */
+.timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+}
+.timeline-item {
+    position: relative;
+    padding: 0 0 1.25rem 1.25rem;
+    border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+.timeline-item:last-child {
+    border-left-color: transparent;
+    padding-bottom: 0;
+}
+.timeline-item::before {
+    content: "";
+    position: absolute;
+    left: -5px;
+    top: 0.35rem;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #62cb98;
+}
+.timeline-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.25rem;
+}
+.timeline-time {
+    color: var(--text-light, #9ca3af);
+    font-size: 0.8rem;
+}
+.timeline-body {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* --- Danger zone (destructive settings) --- */
+.danger-zone {
+    margin-top: 2rem;
+    padding: 1.25rem;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.05);
+}
+.danger-zone h2,
+.danger-zone h3 {
+    color: #ef8a8a;
+    margin-bottom: 0.5rem;
+}
+
+/* --- Staff role badge (members list) --- */
+.role-badge[data-role="staff"] {
+    background: rgba(90, 96, 206, 0.18);
+    color: #a5a9f7;
+}
+
+/* --- Visible keyboard focus everywhere (a11y) --- */
+[data-href]:focus-visible,
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role="menuitem"]:focus-visible {
+    outline: 2px solid var(--ring, #62cb98);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+/* Clickable rows show an inset ring so the outline isn't clipped by the cell. */
+table.clickable-rows tbody tr[data-href] {
+    cursor: pointer;
+}
+table.clickable-rows tbody tr[data-href]:focus-visible {
+    outline: 2px solid var(--ring, #62cb98);
+    outline-offset: -2px;
+}
+
+/* --- Wide tables stay usable on small screens --- */
+@media (max-width: 768px) {
+    main table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
