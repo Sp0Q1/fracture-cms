@@ -113,6 +113,30 @@ pub fn form(
     format::render().view(v, "admin/form.html", data!(ctx))
 }
 
+/// Renders the staff job-permissions policy form.
+///
+/// # Errors
+///
+/// Returns an error if template rendering fails.
+pub fn job_permissions(
+    v: &impl ViewRenderer,
+    user: &users::Model,
+    org_ctx: Option<&OrgContext>,
+    user_orgs: &[organizations::Model],
+    perms: crate::jobs::JobPermissions,
+) -> Result<Response> {
+    let mut ctx = super::base_context(user, org_ctx, user_orgs);
+    let levels: Vec<_> = crate::jobs::JobAccessLevel::all()
+        .iter()
+        .map(|l| json!({ "value": l.as_str(), "label": l.label() }))
+        .collect();
+    ctx["levels"] = json!(levels);
+    ctx["view_level"] = json!(perms.view.as_str());
+    ctx["run_level"] = json!(perms.run.as_str());
+    ctx["manage_level"] = json!(perms.manage.as_str());
+    format::render().view(v, "admin/job_permissions.html", data!(ctx))
+}
+
 /// Renders the admin organizations list.
 ///
 /// # Errors

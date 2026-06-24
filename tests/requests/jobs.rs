@@ -41,6 +41,41 @@ fn org_cookie(org: &organizations::Model) -> axum_extra::extract::cookie::Cookie
     axum_extra::extract::cookie::Cookie::new("org_pid", org.pid.to_string())
 }
 
+/// Sets the global job-permission policy for a test (creating the staff org if
+/// needed). The shared test DB persists settings across serial tests, so each
+/// permission-sensitive test sets the policy it expects rather than relying on
+/// the default.
+async fn set_job_policy(
+    db: &sea_orm::DatabaseConnection,
+    run: fracture_core::jobs::JobAccessLevel,
+    manage: fracture_core::jobs::JobAccessLevel,
+) {
+    if organizations::Model::find_staff_org(db)
+        .await
+        .unwrap()
+        .is_none()
+    {
+        organizations::ActiveModel {
+            name: Set("Platform Admin".to_string()),
+            slug: Set("platform-admin".to_string()),
+            is_personal: Set(false),
+            is_staff: Set(true),
+            ..Default::default()
+        }
+        .insert(db)
+        .await
+        .unwrap();
+    }
+    fracture_core::jobs::JobPermissions {
+        view: fracture_core::jobs::JobAccessLevel::Viewer,
+        run,
+        manage,
+    }
+    .save(db)
+    .await
+    .unwrap();
+}
+
 async fn mk_definition(
     db: &sea_orm::DatabaseConnection,
     org_id: i32,
@@ -71,6 +106,13 @@ async fn viewer_cannot_trigger_job_run() {
         org_members::Model::add_member(&ctx.db, org.id, viewer.id, OrgRole::Viewer)
             .await
             .unwrap();
+        // Even with running opened to Members, a Viewer is below it.
+        set_job_policy(
+            &ctx.db,
+            fracture_core::jobs::JobAccessLevel::Member,
+            fracture_core::jobs::JobAccessLevel::Admin,
+        )
+        .await;
         let def = mk_definition(&ctx.db, org.id).await;
 
         let response = request
@@ -101,6 +143,13 @@ async fn member_trigger_queues_one_run() {
         org_members::Model::add_member(&ctx.db, org.id, member.id, OrgRole::Member)
             .await
             .unwrap();
+        // Open running to Members for this test.
+        set_job_policy(
+            &ctx.db,
+            fracture_core::jobs::JobAccessLevel::Member,
+            fracture_core::jobs::JobAccessLevel::Admin,
+        )
+        .await;
         let def = mk_definition(&ctx.db, org.id).await;
 
         for _ in 0..2 {
@@ -133,8 +182,15 @@ async fn member_cannot_create_definition_and_unknown_type_rejected() {
         org_members::Model::add_member(&ctx.db, org.id, member.id, OrgRole::Member)
             .await
             .unwrap();
+        // Managing requires Admin for this test.
+        set_job_policy(
+            &ctx.db,
+            fracture_core::jobs::JobAccessLevel::Member,
+            fracture_core::jobs::JobAccessLevel::Admin,
+        )
+        .await;
 
-        // Member: refused by the role gate.
+        // Member: refused by the policy gate.
         let response = request
             .post("/jobs")
             .add_cookie(jwt_cookie(&ctx, &member))
@@ -184,6 +240,12 @@ async fn admin_can_edit_and_delete_definition() {
         let owner = mk_user(&ctx.db, "edit-owner").await;
         let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
         let org = &org_owned;
+        set_job_policy(
+            &ctx.db,
+            fracture_core::jobs::JobAccessLevel::Member,
+            fracture_core::jobs::JobAccessLevel::Admin,
+        )
+        .await;
         let def = mk_definition(&ctx.db, org.id).await;
 
         // Rename + reschedule.
@@ -248,6 +310,12 @@ async fn member_cannot_edit_or_delete_definition() {
         org_members::Model::add_member(&ctx.db, org.id, member.id, OrgRole::Member)
             .await
             .unwrap();
+        set_job_policy(
+            &ctx.db,
+            fracture_core::jobs::JobAccessLevel::Member,
+            fracture_core::jobs::JobAccessLevel::Admin,
+        )
+        .await;
         let def = mk_definition(&ctx.db, org.id).await;
 
         let edit = request
@@ -297,6 +365,12 @@ async fn write_note_friendly_create_flow() {
         .insert(&ctx.db)
         .await
         .unwrap();
+        set_job_policy(
+            &ctx.db,
+            fracture_core::jobs::JobAccessLevel::Member,
+            fracture_core::jobs::JobAccessLevel::Admin,
+        )
+        .await;
 
         // The per-type form renders the project dropdown (no raw JSON).
         let form = request
@@ -335,6 +409,107 @@ async fn write_note_friendly_create_flow() {
             defs[0].config.contains(&project.pid.to_string()),
             "config must record the chosen project"
         );
+    })
+    .await;
+}
+
+/// Default-tight policy: with run & manage set to staff-only, even an org Owner
+/// (who is not platform staff) cannot trigger or create jobs.
+#[tokio::test]
+#[serial]
+async fn staff_only_policy_blocks_non_staff() {
+    use fracture_core::jobs::JobAccessLevel;
+
+    request::<App, _, _>(|request, ctx| async move {
+        let owner = mk_user(&ctx.db, "lock-owner").await;
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
+        set_job_policy(&ctx.db, JobAccessLevel::Staff, JobAccessLevel::Staff).await;
+        let def = mk_definition(&ctx.db, org.id).await;
+
+        // Owner cannot run.
+        let run = request
+            .post(&format!("/jobs/{}/run", def.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .add_cookie(org_cookie(org))
+            .await;
+        assert_eq!(
+            run.status_code(),
+            403,
+            "owner must not run under staff-only"
+        );
+
+        // Owner cannot create.
+        let create = request
+            .post("/jobs")
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .add_cookie(org_cookie(org))
+            .form(&[("name", "x"), ("job_type", "content_stats")])
+            .await;
+        assert_eq!(
+            create.status_code(),
+            403,
+            "owner must not create under staff-only"
+        );
+    })
+    .await;
+}
+
+/// Staff can view and save the job-permission policy from the admin screen;
+/// a non-staff org owner cannot reach it.
+#[tokio::test]
+#[serial]
+async fn staff_configures_job_permissions() {
+    use fracture_core::jobs::{JobAccessLevel, JobPermissions};
+
+    request::<App, _, _>(|request, ctx| async move {
+        // A staff user (member of an is_staff org).
+        let staff = mk_user(&ctx.db, "perm-staff").await;
+        let staff_org = organizations::ActiveModel {
+            name: Set("Platform Admin".to_string()),
+            slug: Set("platform-admin".to_string()),
+            is_personal: Set(false),
+            is_staff: Set(true),
+            ..Default::default()
+        }
+        .insert(&ctx.db)
+        .await
+        .unwrap();
+        org_members::Model::add_member(&ctx.db, staff_org.id, staff.id, OrgRole::Owner)
+            .await
+            .unwrap();
+
+        // A non-staff org owner is refused the settings page.
+        let owner = mk_user(&ctx.db, "perm-owner").await;
+        let _org = crate::support::owned_org(&ctx.db, "perm", owner.id).await;
+        let denied = request
+            .get("/admin/job-permissions")
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .await;
+        assert_eq!(
+            denied.status_code(),
+            403,
+            "non-staff cannot view job permissions"
+        );
+
+        // Staff can view and save.
+        let view = request
+            .get("/admin/job-permissions")
+            .add_cookie(jwt_cookie(&ctx, &staff))
+            .await;
+        assert_eq!(view.status_code(), 200);
+
+        let saved = request
+            .post("/admin/job-permissions")
+            .add_cookie(jwt_cookie(&ctx, &staff))
+            .form(&[("view", "member"), ("run", "admin"), ("manage", "owner")])
+            .await;
+        assert_eq!(saved.status_code(), 303);
+
+        let perms = JobPermissions::load(&ctx.db).await;
+        assert_eq!(perms.view, JobAccessLevel::Member);
+        assert_eq!(perms.run, JobAccessLevel::Admin);
+        assert_eq!(perms.manage, JobAccessLevel::Owner);
     })
     .await;
 }
