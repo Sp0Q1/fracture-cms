@@ -700,22 +700,59 @@ table.clickable-rows tbody tr:hover {
 }
 
 @media (max-width: 768px) {
-    /* The hamburger collapses the ENTIRE link group — section links included.
+    /* The hamburger reveals the link group as a dropdown PANEL under the bar.
        Pure CSS (checkbox :checked), so it works without app.js (guest pages
        don't load it). */
     .mobile-menu-toggle { display:inline-flex; align-items:center; margin-left:auto }
-    .nav-inner { flex-wrap: wrap }
+    .nav-inner { position: relative; }
+
     .nav-links {
-        display: none;
-        width: 100%;
+        /* Floating panel anchored under the bar — doesn't push page content. */
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        right: 0;
+        left: 0;
         flex-direction: column;
-        align-items: flex-start;
-        gap: 0.25rem;
-        padding: 0.5rem 0;
+        align-items: stretch;
+        gap: 0.125rem;
+        padding: 0.5rem;
+        background: rgba(13, 15, 22, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: var(--radius-large, 1rem);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(12px);
+        /* hidden state (animated) */
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-8px);
+        transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
     }
-    .nav-toggle-cb:checked ~ .nav-links { display: flex }
-    .nav-links .nav-end { margin-left: 0; width: 100% }
-    .nav-links .org-switcher-nav { width: 100% }
+    .nav-toggle-cb:checked ~ .nav-links {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+    }
+    /* Each entry is a full-width, padded, rounded menu row. */
+    .nav-links > a,
+    .nav-links .org-switcher-nav,
+    .nav-links .nav-end {
+        width: 100%;
+        margin-left: 0;
+        border-radius: var(--radius-medium, 0.625rem);
+    }
+    .nav-links > a {
+        padding: 0.6rem 0.75rem;
+    }
+    .nav-links > a:hover,
+    .nav-links > a:focus-visible {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    /* Drop the active-page underline in the stacked menu (looks odd full-width). */
+    .nav-links > a[aria-current="page"] {
+        border-bottom: none;
+        background: rgba(98, 203, 152, 0.12);
+    }
+    .nav-links .nav-end > * { width: 100%; }
 
     .hero h1 {
         font-size: 2rem;
@@ -1095,4 +1132,5 @@ table.clickable-rows tbody tr[data-href]:focus-visible {
     .hero-landing::before { animation: none; }
     .term-line { opacity: 1; animation: none; }
     .term-cursor { animation: none; }
+    .nav-links { transition: none; transform: none; }
 }
