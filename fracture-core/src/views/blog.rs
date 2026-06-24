@@ -68,10 +68,35 @@ pub fn public_show(
             "author_name": author_name,
             "base_url": base_url,
             "preview": preview,
+            // JSON-LD built server-side: serde_json escapes the string values
+            // correctly for a JSON/script context (HTML autoescape would not),
+            // and `<` is escaped so no value can break out of the <script>.
+            "structured_data": blog_jsonld(post, author_name, base_url),
         }),
         nav,
     );
     format::render().view(v, "blog/public_show.html", data!(ctx))
+}
+
+/// Serializes the `BlogPosting` JSON-LD for a post, safe to emit inside a
+/// `<script type="application/ld+json">` (all values JSON-encoded; `<`
+/// escaped to `<` so `</script>` / `<!--` can't terminate the block).
+fn blog_jsonld(post: &blog_posts::Model, author_name: &str, base_url: &str) -> String {
+    let mut doc = json!({
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": post.title,
+        "url": format!("{base_url}/blog/{}", post.slug),
+        "dateModified": post.updated_at.to_rfc3339(),
+        "author": { "@type": "Person", "name": author_name },
+    });
+    if let Some(published) = post.published_at {
+        doc["datePublished"] = json!(published.to_rfc3339());
+    }
+    if let Some(desc) = &post.meta_description {
+        doc["description"] = json!(desc);
+    }
+    doc.to_string().replace('<', "\\u003c")
 }
 
 /// Minimal XML text escaping for the Atom feed.

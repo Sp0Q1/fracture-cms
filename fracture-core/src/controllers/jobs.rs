@@ -60,6 +60,9 @@ struct ValidatedEdit {
     config: String,
 }
 
+/// Upper bound on a job definition's `config` JSON (staff-supplied).
+const MAX_CONFIG_BYTES: usize = 16 * 1024;
+
 /// Validates the common name/schedule/config fields shared by create and edit.
 /// `exclude_id` skips the row being edited in the duplicate-name check.
 async fn validate_job_fields(
@@ -84,12 +87,24 @@ async fn validate_job_fields(
             ));
         }
     }
+    // Config is operator-supplied JSON (staff are trusted, but validate
+    // anyway): bound a size, require a JSON *object* (executors read keys off
+    // it), and reject anything else. It is stored as a bound parameter and
+    // read via serde — never interpolated or evaluated.
     let config = config
         .map(|c| c.trim().to_string())
         .filter(|c| !c.is_empty())
         .unwrap_or_else(|| "{}".to_string());
-    if serde_json::from_str::<serde_json::Value>(&config).is_err() {
-        return Err("config must be valid JSON".to_string());
+    if config.len() > MAX_CONFIG_BYTES {
+        return Err(format!(
+            "config is too large (max {} KB)",
+            MAX_CONFIG_BYTES / 1024
+        ));
+    }
+    match serde_json::from_str::<serde_json::Value>(&config) {
+        Ok(serde_json::Value::Object(_)) => {}
+        Ok(_) => return Err("config must be a JSON object, e.g. {\"key\": \"value\"}".to_string()),
+        Err(_) => return Err("config must be valid JSON".to_string()),
     }
     // Friendly error for the unique (org_id, name) index; the constraint
     // itself remains the race-safe backstop.

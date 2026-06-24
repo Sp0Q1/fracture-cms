@@ -513,3 +513,38 @@ async fn staff_configures_job_permissions() {
     })
     .await;
 }
+
+/// A job config must be a JSON *object*; a valid-but-non-object value (array,
+/// scalar) is rejected and the definition is left unchanged.
+#[tokio::test]
+#[serial]
+async fn job_config_must_be_a_json_object() {
+    use fracture_core::jobs::JobAccessLevel;
+
+    request::<App, _, _>(|request, ctx| async move {
+        let owner = mk_user(&ctx.db, "cfgobj-owner").await;
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
+        set_job_policy(&ctx.db, JobAccessLevel::Member, JobAccessLevel::Admin).await;
+        let def = mk_definition(&ctx.db, org.id).await;
+
+        // A JSON array is valid JSON but not an object → rejected (form re-renders).
+        let resp = request
+            .post(&format!("/jobs/{}/edit", def.pid))
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .add_cookie(org_cookie(org))
+            .form(&[("name", "stats"), ("config", "[1,2,3]")])
+            .await;
+        assert_eq!(resp.status_code(), 200, "bad config re-renders the form");
+
+        let reloaded = fracture_core::models::job_definitions::Model::find_by_pid(
+            &ctx.db,
+            &def.pid.to_string(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(reloaded.config, "{}", "non-object config must not persist");
+    })
+    .await;
+}

@@ -15,21 +15,8 @@
 {% endblock og_tags %}
 
 {% block structured_data %}
-<script type="application/ld+json">
-{
-    "@context": "https://schema.org",
-    "@type": "BlogPosting",
-    "headline": "{{ post.title }}",
-    "url": "{{ base_url }}/blog/{{ post.slug }}",
-    {% if post.published_at %}"datePublished": "{{ post.published_at }}",{% endif %}
-    "dateModified": "{{ post.updated_at }}",
-    "author": {
-        "@type": "Person",
-        "name": "{{ author_name }}"
-    }{% if post.meta_description %},
-    "description": "{{ post.meta_description }}"{% endif %}
-}
-</script>
+{# Built and escaped server-side (see views::blog::blog_jsonld); safe to emit. #}
+<script type="application/ld+json">{{ structured_data | safe }}</script>
 {% endblock structured_data %}
 
 {% block content %}
