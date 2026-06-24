@@ -276,3 +276,65 @@ async fn member_cannot_edit_or_delete_definition() {
     })
     .await;
 }
+
+/// The friendly create flow: the per-type form renders the job's declared
+/// fields (a project dropdown), and submitting it stores the choice in config.
+#[tokio::test]
+#[serial]
+async fn write_note_friendly_create_flow() {
+    use fracture_cms::models::_entities::projects;
+
+    request::<App, _, _>(|request, ctx| async move {
+        let owner = mk_user(&ctx.db, "wn-owner").await;
+        let org_owned = crate::support::owned_org(&ctx.db, "req", owner.id).await;
+        let org = &org_owned;
+        let project = projects::ActiveModel {
+            org_id: Set(org.id),
+            title: Set("Reports".to_string()),
+            owner_tier: Set("org".to_string()),
+            ..Default::default()
+        }
+        .insert(&ctx.db)
+        .await
+        .unwrap();
+
+        // The per-type form renders the project dropdown (no raw JSON).
+        let form = request
+            .get("/jobs/new/write_note")
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .add_cookie(org_cookie(org))
+            .await;
+        assert_eq!(form.status_code(), 200);
+        let body = form.text();
+        assert!(
+            body.contains("name=\"project_id\""),
+            "project dropdown present"
+        );
+        assert!(body.contains("Reports"), "the org's project is an option");
+
+        // Submitting it stores the chosen project in the definition config.
+        let created = request
+            .post("/jobs")
+            .add_cookie(jwt_cookie(&ctx, &owner))
+            .add_cookie(org_cookie(org))
+            .form(&[
+                ("job_type", "write_note"),
+                ("name", "Daily note"),
+                ("project_id", project.pid.to_string().as_str()),
+                ("schedule", ""),
+            ])
+            .await;
+        assert_eq!(created.status_code(), 303);
+
+        let defs = fracture_core::models::job_definitions::Model::find_all_by_org(&ctx.db, org.id)
+            .await
+            .unwrap();
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].name, "Daily note");
+        assert!(
+            defs[0].config.contains(&project.pid.to_string()),
+            "config must record the chosen project"
+        );
+    })
+    .await;
+}

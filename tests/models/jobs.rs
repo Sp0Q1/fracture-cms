@@ -319,6 +319,106 @@ async fn write_note_job_creates_a_note() {
     );
 }
 
+/// The write_note job declares a friendly config form: a project dropdown
+/// (populated from the org's projects) and an optional title — no raw JSON.
+#[tokio::test]
+#[serial]
+async fn write_note_config_form_lists_org_projects() {
+    use fracture_cms::jobs::WriteNoteJob;
+    use fracture_cms::models::_entities::projects;
+    use fracture_core::jobs::JobExecutor;
+    use fracture_core::listing::FieldKind;
+
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+    let org = mk_org(db, "cfgform").await;
+    let project = projects::ActiveModel {
+        org_id: Set(org.id),
+        title: Set("Alpha".to_string()),
+        owner_tier: Set("org".to_string()),
+        ..Default::default()
+    }
+    .insert(db)
+    .await
+    .unwrap();
+
+    let fields = WriteNoteJob.config_form(db, org.id).await.unwrap();
+    let project_field = fields
+        .iter()
+        .find(|f| f.name == "project_id")
+        .expect("a project_id field");
+    assert_eq!(project_field.kind, FieldKind::Select);
+    assert!(
+        project_field
+            .options
+            .iter()
+            .any(|o| o.value == project.pid.to_string() && o.label == "Alpha"),
+        "the org's project must be an option"
+    );
+    assert!(fields.iter().any(|f| f.name == "title"));
+}
+
+/// write_note writes its note into the project chosen via config, not just the
+/// first one.
+#[tokio::test]
+#[serial]
+async fn write_note_honors_configured_project() {
+    use fracture_cms::jobs::WriteNoteJob;
+    use fracture_cms::models::_entities::{notes, projects};
+    use fracture_core::jobs::JobExecutor;
+    use sea_orm::{ColumnTrait, QueryFilter, QueryOrder};
+
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+    let org = mk_org(db, "cfgproj").await;
+    // Two projects; the job should target the second one via config.
+    let _first = projects::ActiveModel {
+        org_id: Set(org.id),
+        title: Set("First".to_string()),
+        owner_tier: Set("org".to_string()),
+        ..Default::default()
+    }
+    .insert(db)
+    .await
+    .unwrap();
+    let target = projects::ActiveModel {
+        org_id: Set(org.id),
+        title: Set("Target".to_string()),
+        owner_tier: Set("org".to_string()),
+        ..Default::default()
+    }
+    .insert(db)
+    .await
+    .unwrap();
+
+    let def = job_definitions::ActiveModel {
+        org_id: Set(org.id),
+        name: Set("note into target".to_string()),
+        job_type: Set("write_note".to_string()),
+        schedule: Set(None),
+        enabled: Set(true),
+        config: Set(format!(r#"{{"project_id":"{}"}}"#, target.pid)),
+        ..Default::default()
+    }
+    .insert(db)
+    .await
+    .unwrap();
+
+    WriteNoteJob.execute(db, &def, None).await.unwrap();
+
+    let note = notes::Entity::find()
+        .filter(notes::Column::OrgId.eq(org.id))
+        .order_by_desc(notes::Column::Id)
+        .one(db)
+        .await
+        .unwrap()
+        .expect("a note was written");
+    assert_eq!(
+        note.project_id, target.id,
+        "note must land in the chosen project"
+    );
+}
+
 #[test]
 fn is_due_logic() {
     let now = chrono::Utc::now();

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::controllers::middleware;
 use crate::jobs::try_job_registry;
+use crate::listing::{FieldKind, FormField};
 use crate::models::_entities::{job_definitions, job_runs, organizations};
 use crate::models::org_members::OrgRole;
 use crate::models::{
@@ -18,14 +19,6 @@ use crate::models::{
 };
 use crate::views;
 use crate::{require_role, require_staff, require_user};
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NewJobParams {
-    pub name: String,
-    pub job_type: String,
-    pub schedule: Option<String>,
-    pub config: Option<String>,
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditJobParams {
@@ -161,8 +154,8 @@ pub async fn org_index(
         None => vec![],
     };
     let latest_runs = latest_runs_by_definition(&ctx.db, &definitions).await?;
-    let job_types: Vec<String> = try_job_registry()
-        .map(|r| r.job_types().iter().map(ToString::to_string).collect())
+    let job_types = try_job_registry()
+        .map(crate::jobs::JobRegistry::job_type_infos)
         .unwrap_or_default();
     views::jobs::org_index(
         &v,
@@ -200,17 +193,101 @@ pub async fn org_show(
     views::jobs::org_show(&v, &user, org_ctx.as_ref(), &user_orgs, &definition, &runs)
 }
 
-/// POST /jobs — create a job definition (org admins only).
+/// Builds a definition's `config` JSON from the submitted form body, driven by
+/// the job type's declared [`config_form`](crate::jobs::JobExecutor::config_form).
+/// Job types that declare no form fall back to a raw `config` JSON field, so
+/// advanced or container-style jobs aren't constrained by a fixed UI.
+fn build_config(
+    fields: &[FormField],
+    body: &HashMap<String, String>,
+) -> std::result::Result<String, String> {
+    if fields.is_empty() {
+        let raw = body
+            .get("config")
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "{}".to_string());
+        if serde_json::from_str::<serde_json::Value>(&raw).is_err() {
+            return Err("config must be valid JSON".to_string());
+        }
+        return Ok(raw);
+    }
+    let mut obj = serde_json::Map::new();
+    for f in fields {
+        if f.kind == FieldKind::Checkbox {
+            obj.insert(
+                f.name.to_string(),
+                serde_json::Value::Bool(body.contains_key(f.name)),
+            );
+            continue;
+        }
+        let val = body
+            .get(f.name)
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        if f.required && val.is_empty() {
+            return Err(format!("{} is required.", f.label));
+        }
+        obj.insert(f.name.to_string(), serde_json::Value::String(val));
+    }
+    Ok(serde_json::Value::Object(obj).to_string())
+}
+
+/// GET `/jobs/new/{job_type}` — friendly create form for one job type, with the
+/// fields that job declares (org admins only).
+///
+/// # Errors
+///
+/// Returns an error if the user is not authorized or the job type is unknown.
+#[debug_handler]
+pub async fn org_new_form(
+    Path(job_type): Path<String>,
+    ViewEngine(v): ViewEngine<TeraView>,
+    State(ctx): State<AppContext>,
+    jar: CookieJar,
+) -> Result<Response> {
+    let user = middleware::get_current_user(&jar, &ctx).await;
+    let user = require_user!(user);
+    let org_ctx = middleware::get_org_context_or_default(&jar, &ctx.db, &user)
+        .await
+        .ok_or_else(|| Error::NotFound)?;
+    require_role!(org_ctx, OrgRole::Admin);
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+
+    let registry = try_job_registry().ok_or_else(|| Error::NotFound)?;
+    let executor = registry.get(&job_type).ok_or_else(|| Error::NotFound)?;
+    let fields = executor
+        .config_form(&ctx.db, org_ctx.org.id)
+        .await
+        .unwrap_or_default();
+
+    views::jobs::org_new(
+        &v,
+        &user,
+        Some(&org_ctx),
+        &user_orgs,
+        &job_type,
+        executor.label(),
+        &fields,
+        None,
+    )
+}
+
+/// POST /jobs — create a job definition from the friendly form (org admins only).
 ///
 /// # Errors
 ///
 /// Returns an error if validation fails, the database insert fails, or the
 /// user is not authenticated.
 #[debug_handler]
+#[allow(clippy::implicit_hasher)]
 pub async fn org_create(
+    ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
-    Form(params): Form<NewJobParams>,
+    Form(body): Form<HashMap<String, String>>,
 ) -> Result<Response> {
     let user = middleware::get_current_user(&jar, &ctx).await;
     let user = require_user!(user);
@@ -219,30 +296,55 @@ pub async fn org_create(
         .ok_or_else(|| Error::NotFound)?;
     require_role!(org_ctx, OrgRole::Admin);
 
-    // Only registered job types may be created — an unknown type would
-    // produce runs that can only ever fail.
-    let known = try_job_registry().is_some_and(|r| r.get(&params.job_type).is_some());
-    if !known {
-        return Err(Error::BadRequest(format!(
-            "unknown job type '{}'",
-            params.job_type
-        )));
-    }
-    let valid = validate_job_fields(
-        &ctx.db,
-        org_ctx.org.id,
-        &params.name,
-        params.schedule,
-        params.config,
-        None,
-    )
-    .await
-    .map_err(Error::BadRequest)?;
+    let job_type = body.get("job_type").cloned().unwrap_or_default();
+    // Only registered job types may be created — an unknown type would produce
+    // runs that can only ever fail.
+    let registry = try_job_registry().ok_or_else(|| Error::NotFound)?;
+    let executor = registry
+        .get(&job_type)
+        .ok_or_else(|| Error::BadRequest(format!("unknown job type '{job_type}'")))?;
+
+    let fields = executor
+        .config_form(&ctx.db, org_ctx.org.id)
+        .await
+        .unwrap_or_default();
+    let name = body.get("name").cloned().unwrap_or_default();
+    let schedule = body.get("schedule").cloned();
+    let user_orgs = org_model::Model::find_orgs_for_user(&ctx.db, user.id)
+        .await
+        .unwrap_or_default();
+
+    // Re-render the friendly form with the submitted values + a message on any
+    // validation failure, so org owners never see a raw error page.
+    let rerender = |error: String, fields: Vec<FormField>| {
+        views::jobs::org_new(
+            &v,
+            &user,
+            Some(&org_ctx),
+            &user_orgs,
+            &job_type,
+            executor.label(),
+            &fields,
+            Some(&error),
+        )
+    };
+
+    let config = match build_config(&fields, &body) {
+        Ok(c) => c,
+        Err(e) => return rerender(e, prefill(&fields, &body)),
+    };
+    let valid =
+        match validate_job_fields(&ctx.db, org_ctx.org.id, &name, schedule, Some(config), None)
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => return rerender(e, prefill(&fields, &body)),
+        };
 
     job_definitions::ActiveModel {
         org_id: sea_orm::ActiveValue::Set(org_ctx.org.id),
         name: sea_orm::ActiveValue::Set(valid.name),
-        job_type: sea_orm::ActiveValue::Set(params.job_type),
+        job_type: sea_orm::ActiveValue::Set(job_type.clone()),
         schedule: sea_orm::ActiveValue::Set(valid.schedule),
         enabled: sea_orm::ActiveValue::Set(true),
         config: sea_orm::ActiveValue::Set(valid.config),
@@ -252,6 +354,19 @@ pub async fn org_create(
     .await?;
 
     Ok(Redirect::to("/jobs").into_response())
+}
+
+/// Re-fills config-form fields with the submitted values so a rejected create
+/// keeps what the user typed/selected.
+fn prefill(fields: &[FormField], body: &HashMap<String, String>) -> Vec<FormField> {
+    fields
+        .iter()
+        .map(|f| {
+            let mut f = f.clone();
+            f.value = body.get(f.name).cloned().unwrap_or_default();
+            f
+        })
+        .collect()
 }
 
 /// POST `/jobs/:pid/toggle` — enable/disable a job definition (org admins only).
@@ -521,6 +636,7 @@ pub fn org_routes() -> Routes {
         .prefix("/jobs")
         .add("/", get(org_index))
         .add("/", post(org_create))
+        .add("/new/{job_type}", get(org_new_form))
         .add("/{pid}", get(org_show))
         .add("/{pid}/edit", get(org_edit).post(org_update))
         .add("/{pid}/delete", post(org_delete))

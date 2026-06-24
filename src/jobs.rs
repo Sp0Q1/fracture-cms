@@ -13,8 +13,9 @@
 use std::error::Error;
 
 use fracture_core::jobs::{JobDiff, JobExecutor, JobRegistry, JobResult};
+use fracture_core::listing::{FormField, FormOption};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait,
     PaginatorTrait, QueryFilter, QueryOrder,
 };
 use serde_json::json;
@@ -76,14 +77,48 @@ impl JobExecutor for ContentStatsJob {
 ///
 /// A minimal, side-effecting proof of the job lifecycle: run it manually from
 /// a job's page to watch a queued run execute, create a note, and record a
-/// `created` diff. Config (optional JSON): `{ "title": "…" }` sets the note's
-/// title prefix.
+/// `created` diff. It also demonstrates a job-defined config form (see
+/// [`config_form`](WriteNoteJob::config_form)) — a project dropdown and an
+/// optional title — so org owners create it without touching JSON.
 pub struct WriteNoteJob;
 
 #[async_trait::async_trait]
 impl JobExecutor for WriteNoteJob {
     fn job_type(&self) -> &'static str {
         "write_note"
+    }
+
+    fn label(&self) -> &'static str {
+        "Write a note"
+    }
+
+    fn description(&self) -> &'static str {
+        "Creates a note in a chosen project on each run."
+    }
+
+    async fn config_form(
+        &self,
+        db: &DatabaseConnection,
+        org_id: i32,
+    ) -> Result<Vec<FormField>, DbErr> {
+        // The project dropdown is built from this org's projects, so the form
+        // is dynamic per org — the kind of thing a raw JSON textarea can't do.
+        let projects = projects::Entity::find()
+            .filter(projects::Column::OrgId.eq(org_id))
+            .order_by_asc(projects::Column::Title)
+            .all(db)
+            .await?;
+        let options = projects
+            .iter()
+            .map(|p| FormOption::new(p.pid.to_string(), p.title.clone()))
+            .collect();
+        Ok(vec![
+            FormField::select("project_id", "Project", options)
+                .with_help("Where the note will be created."),
+            FormField::text("title", "Note title")
+                .optional()
+                .with_help("Prefix for the note's title. Defaults to “Automated note”."),
+        ])
     }
 
     async fn execute(
@@ -93,37 +128,52 @@ impl JobExecutor for WriteNoteJob {
         _previous_run: Option<&job_runs::Model>,
     ) -> Result<JobResult, Box<dyn Error + Send + Sync>> {
         let org_id = definition.org_id;
-
-        // Notes belong to a project, so attach to the org's first project,
-        // creating a holding project the first time if the org has none.
-        let project = match projects::Entity::find()
-            .filter(projects::Column::OrgId.eq(org_id))
-            .order_by_asc(projects::Column::Id)
-            .one(db)
-            .await?
-        {
-            Some(p) => p,
-            None => {
-                projects::ActiveModel {
-                    org_id: Set(org_id),
-                    title: Set("Automated Notes".to_string()),
-                    description: Set(Some(
-                        "Holds notes created by the write_note template job.".to_string(),
-                    )),
-                    owner_tier: Set("org".to_string()),
-                    ..Default::default()
-                }
-                .insert(db)
-                .await?
-            }
-        };
-
-        // Optional title prefix from the definition's config.
         let config: serde_json::Value =
             serde_json::from_str(&definition.config).unwrap_or_else(|_| json!({}));
+
+        // Prefer the project chosen in the config form; otherwise fall back to
+        // the org's first project, creating a holding project if it has none.
+        let chosen_pid = config.get("project_id").and_then(serde_json::Value::as_str);
+        let project = match chosen_pid {
+            Some(pid) if !pid.is_empty() => projects::Entity::find()
+                .filter(projects::Column::OrgId.eq(org_id))
+                .filter(
+                    projects::Column::Pid
+                        .eq(sea_orm::prelude::Uuid::parse_str(pid).unwrap_or_default()),
+                )
+                .one(db)
+                .await?
+                .ok_or_else(|| -> Box<dyn Error + Send + Sync> {
+                    "the configured project no longer exists".into()
+                })?,
+            _ => match projects::Entity::find()
+                .filter(projects::Column::OrgId.eq(org_id))
+                .order_by_asc(projects::Column::Id)
+                .one(db)
+                .await?
+            {
+                Some(p) => p,
+                None => {
+                    projects::ActiveModel {
+                        org_id: Set(org_id),
+                        title: Set("Automated Notes".to_string()),
+                        description: Set(Some(
+                            "Holds notes created by the write_note template job.".to_string(),
+                        )),
+                        owner_tier: Set("org".to_string()),
+                        ..Default::default()
+                    }
+                    .insert(db)
+                    .await?
+                }
+            },
+        };
+
+        // Optional title prefix from the config form.
         let prefix = config
             .get("title")
             .and_then(serde_json::Value::as_str)
+            .filter(|s| !s.trim().is_empty())
             .unwrap_or("Automated note");
         let now = chrono::Utc::now();
         let title = format!("{prefix} — {}", now.format("%Y-%m-%d %H:%M:%S UTC"));

@@ -59,28 +59,19 @@
 
 {% if can_manage_jobs %}
     {% if job_types %}
-    <article class="card">
-        <h3>New Job</h3>
-        <form action="/jobs" method="post" class="stack">
-            <label for="job-name">Name</label>
-            <input id="job-name" name="name" type="text" required maxlength="120" placeholder="Nightly content stats">
-
-            <label for="job-type">Type</label>
-            <select id="job-type" name="job_type" required>
-                {% for jt in job_types %}
-                <option value="{{ jt }}">{{ jt }}</option>
-                {% endfor %}
-            </select>
-
-            <label for="job-schedule">Schedule (optional cron, with seconds — e.g. <code>0 0 * * * *</code> for hourly; leave empty for manual runs)</label>
-            <input id="job-schedule" name="schedule" type="text" placeholder="0 0 * * * *">
-
-            <label for="job-config">Config (JSON, optional)</label>
-            <textarea id="job-config" name="config" rows="3" placeholder="{}"></textarea>
-
-            <button type="submit" class="button">Create Job</button>
-        </form>
-    </article>
+    <h3 class="mt-6">Create a job</h3>
+    <p class="page-subtitle">Pick a job type — each one has its own simple form.</p>
+    <div class="row">
+        {% for jt in job_types %}
+        <div class="col-6">
+            <article class="card card-accent">
+                <header>{{ jt.label }}</header>
+                {% if jt.description %}<p>{{ jt.description }}</p>{% endif %}
+                <a href="/jobs/new/{{ jt.job_type }}" class="button outline">Create</a>
+            </article>
+        </div>
+        {% endfor %}
+    </div>
     {% else %}
     <article class="card empty-state">
         <h3>No Job Types Available</h3>
