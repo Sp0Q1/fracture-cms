@@ -40,7 +40,7 @@
     <h2>Danger Zone</h2>
     <p>Deleting an organization is permanent. All members will be removed and all associated data will be lost.</p>
     <form action="/orgs/{{ org.pid }}/delete" method="post">
-        <button type="submit" data-variant="danger" class="btn-danger" data-confirm="Are you sure you want to delete this organization? This action cannot be undone.">
+        <button type="submit" class="button" data-variant="danger" data-confirm="Are you sure you want to delete this organization? This action cannot be undone.">
             Delete Organization
         </button>
     </form>
