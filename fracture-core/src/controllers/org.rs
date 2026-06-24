@@ -440,35 +440,26 @@ pub async fn delete(
     // Platform admins can delete any org. Org owners can delete their own non-personal org.
     let is_owner = org_ctx.role.at_least(OrgRole::Owner);
     if !org_ctx.is_staff && !is_owner {
-        return Ok(axum::response::Response::builder()
-            .status(axum::http::StatusCode::FORBIDDEN)
-            .body(axum::body::Body::from("Forbidden"))
-            .unwrap()
-            .into_response());
+        return Ok(crate::controllers::errors::forbidden());
     }
 
     // Cannot delete platform admin orgs
     if org.is_staff {
-        return Ok(axum::response::Response::builder()
-            .status(axum::http::StatusCode::FORBIDDEN)
-            .body(axum::body::Body::from(
-                "Cannot delete the platform admin organization",
-            ))
-            .unwrap()
-            .into_response());
+        return Ok(crate::controllers::errors::error_page(
+            axum::http::StatusCode::FORBIDDEN,
+            "Can't delete this organization",
+            "The platform admin organization can't be deleted.",
+        ));
     }
 
     // Refuse if any member's only org is this one. With no personal orgs to
     // fall back to, deleting it would leave them with no organization.
     if org_model::Model::has_member_whose_only_org_is(&ctx.db, org.id).await? {
-        return Ok(axum::response::Response::builder()
-            .status(axum::http::StatusCode::CONFLICT)
-            .body(axum::body::Body::from(
-                "Cannot delete this organization: a member would be left \
-                 with no organization. Move members to another org first.",
-            ))
-            .unwrap()
-            .into_response());
+        return Ok(crate::controllers::errors::error_page(
+            axum::http::StatusCode::CONFLICT,
+            "Can't delete this organization",
+            "A member would be left with no organization. Move members to another org first.",
+        ));
     }
 
     // For personal orgs: also delete the associated user
@@ -486,11 +477,11 @@ pub async fn delete(
 
     // Cannot delete yourself via personal org deletion
     if delete_user_id == Some(user.id) {
-        return Ok(axum::response::Response::builder()
-            .status(axum::http::StatusCode::FORBIDDEN)
-            .body(axum::body::Body::from("Cannot delete your own account"))
-            .unwrap()
-            .into_response());
+        return Ok(crate::controllers::errors::error_page(
+            axum::http::StatusCode::FORBIDDEN,
+            "Can't delete this organization",
+            "You can't delete your own account this way.",
+        ));
     }
 
     let org_id = org.id;
@@ -617,11 +608,7 @@ pub async fn accept_invite(
 
     // Verify the authenticated user's email matches the invite recipient
     if user.email != invite.email {
-        return Ok(axum::response::Response::builder()
-            .status(axum::http::StatusCode::FORBIDDEN)
-            .body(axum::body::Body::from("Forbidden"))
-            .unwrap()
-            .into_response());
+        return Ok(crate::controllers::errors::forbidden());
     }
 
     org_invites::Model::accept_invite(&ctx.db, invite, user.id)

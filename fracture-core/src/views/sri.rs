@@ -178,7 +178,12 @@ pub fn register_sri_function(tera: &mut tera::Tera, index: SriIndex) {
                          directory was scanned at boot and only css/js files are indexed."
                     )))
                 },
-                |hash| Ok(tera::Value::String(format!("{url}?v={}", short_token(hash)))),
+                |hash| {
+                    Ok(tera::Value::String(format!(
+                        "{url}?v={}",
+                        short_token(hash)
+                    )))
+                },
             )
         },
     );
