@@ -99,6 +99,7 @@ pub fn org_index(
         { "key": "job_type", "label": "Type" },
         { "key": "schedule", "label": "Schedule" },
         { "key": "enabled", "label": "Enabled" },
+        { "key": "last_run", "label": "Last Run" },
     ]);
     add_capabilities(&mut ctx, access);
     format::render().view(v, "jobs/org_index.html", data!(ctx))
