@@ -3,6 +3,7 @@
    - page     : a serialized ListPage { columns, rows, total, page, per_page,
                 total_pages, sort, desc, q }
    Rows with a "_url" key render as clickable rows. #}
+<span data-list-base="{{ base_url }}" hidden></span>
 <form action="{{ base_url }}" method="get" class="changelist-search">
     {% if page.sort %}<input type="hidden" name="sort" value="{{ page.sort }}">{% endif %}
     {% if page.desc %}<input type="hidden" name="dir" value="desc">{% endif %}

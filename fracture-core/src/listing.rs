@@ -237,6 +237,18 @@ impl ListQuery {
     pub const fn page_index(&self) -> u64 {
         self.page.saturating_sub(1)
     }
+
+    /// Applies a list's default sort when the request didn't specify one, so
+    /// the data is sorted *and* the column header shows the active-sort arrow
+    /// (otherwise a defaulted list looks unsorted). No-op if `?sort` was given.
+    #[must_use]
+    pub fn with_default_sort(mut self, key: &str, desc: bool) -> Self {
+        if self.sort.is_none() {
+            self.sort = Some(key.to_string());
+            self.desc = desc;
+        }
+        self
+    }
 }
 
 /// A page of list results plus the metadata templates need.

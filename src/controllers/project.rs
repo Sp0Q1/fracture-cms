@@ -53,7 +53,7 @@ pub async fn list(
 
     // Org-scoped, searchable, sortable, paginated — through the same shared
     // listing framework as every other table (admin changelist included).
-    let q = ListQuery::from_params(&params);
+    let q = ListQuery::from_params(&params).with_default_sort("title", false);
     let mut query = Entity::find().filter(Column::OrgId.eq(org_ctx.org.id));
     if let Some(s) = &q.q {
         query = query.filter(
@@ -180,7 +180,7 @@ pub async fn show(
 
     // The project's notes render through the same shared listing framework
     // (search + sort + paginate), scoped to this project.
-    let q = ListQuery::from_params(&params);
+    let q = ListQuery::from_params(&params).with_default_sort("title", false);
     let project_pid = item.pid.to_string();
     let notes_page = {
         use crate::models::_entities::notes::{Column, Entity};
