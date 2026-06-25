@@ -196,10 +196,10 @@ pub async fn org_index(
         return Ok(forbidden());
     }
 
-    // Sortable by the definition's own columns (name/type/schedule/enabled);
-    // "Last Run" comes from a join and stays unsorted. Default: name asc.
+    // The definition's own columns sort in the DB; "Last Run" is a join, so it
+    // sorts in memory below (the list isn't paginated). Default: name asc.
     let q = crate::listing::ListQuery::from_params(&params).with_default_sort("name", false);
-    let definitions = match org_ctx {
+    let mut definitions = match org_ctx {
         Some(ref oc) => {
             use crate::models::_entities::job_definitions::{Column, Entity};
             let dir = if q.desc { Order::Desc } else { Order::Asc };
@@ -215,6 +215,18 @@ pub async fn org_index(
         None => vec![],
     };
     let latest_runs = latest_runs_by_definition(&ctx.db, &definitions).await?;
+    // Sort by last-run time in memory (never-run sorts first ascending).
+    if q.sort.as_deref() == Some("last_run") {
+        definitions.sort_by(|a, b| {
+            let ta = latest_runs.get(&a.id).map(|r| r.created_at);
+            let tb = latest_runs.get(&b.id).map(|r| r.created_at);
+            if q.desc {
+                tb.cmp(&ta)
+            } else {
+                ta.cmp(&tb)
+            }
+        });
+    }
     let job_types = try_job_registry()
         .map(crate::jobs::JobRegistry::job_type_infos)
         .unwrap_or_default();
