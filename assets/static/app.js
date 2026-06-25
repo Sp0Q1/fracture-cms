@@ -1,4 +1,37 @@
 document.addEventListener("DOMContentLoaded", function () {
+    // Remember each list's sort in the browser and reapply it on return. The
+    // shared list partial emits <span data-list-base="<base_url>">. With a sort
+    // in the URL we save it; without one we reapply the saved sort (if any).
+    (function rememberListSort() {
+        var marker = document.querySelector("[data-list-base]");
+        if (!marker || !window.localStorage) {
+            return;
+        }
+        var base = marker.getAttribute("data-list-base");
+        var storeKey = "sort:" + base;
+        var params = new URLSearchParams(window.location.search);
+        if (params.get("sort")) {
+            try {
+                localStorage.setItem(
+                    storeKey,
+                    JSON.stringify({ sort: params.get("sort"), dir: params.get("dir") || "asc" })
+                );
+            } catch (e) {}
+            return;
+        }
+        var saved = null;
+        try {
+            saved = JSON.parse(localStorage.getItem(storeKey));
+        } catch (e) {}
+        if (saved && saved.sort) {
+            params.set("sort", saved.sort);
+            if (saved.dir) {
+                params.set("dir", saved.dir);
+            }
+            window.location.replace(base + "?" + params.toString());
+        }
+    })();
+
     // Styled confirm dialog (native <dialog>, CSP-safe) replacing window.confirm.
     // Returns a Promise<boolean>. Message is set via textContent (no injection).
     function showConfirm(message) {

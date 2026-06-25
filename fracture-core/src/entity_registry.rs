@@ -216,6 +216,7 @@ impl AdminEntity for OrgsEntity {
 
     async fn list(&self, db: &DatabaseConnection, q: &ListQuery) -> Result<ListPage, DbErr> {
         use crate::models::_entities::organizations::{Column, Entity};
+        let q = q.clone().with_default_sort("name", false);
         let mut query = Entity::find();
         if let Some(s) = &q.q {
             query = query.filter(
@@ -227,10 +228,9 @@ impl AdminEntity for OrgsEntity {
         let dir = if q.desc { Order::Desc } else { Order::Asc };
         query = match q.sort.as_deref() {
             Some("slug") => query.order_by(Column::Slug, dir),
-            Some("name") => query.order_by(Column::Name, dir),
-            _ => query.order_by(Column::Name, Order::Asc),
+            _ => query.order_by(Column::Name, dir),
         };
-        paginate_models(db, query, q, self.columns(), |m| {
+        paginate_models(db, query, &q, self.columns(), |m| {
             serde_json::json!({
                 "pid": m.pid.to_string(),
                 "name": m.name,
@@ -362,6 +362,7 @@ impl AdminEntity for UsersEntity {
 
     async fn list(&self, db: &DatabaseConnection, q: &ListQuery) -> Result<ListPage, DbErr> {
         use crate::models::_entities::users::{Column, Entity};
+        let q = q.clone().with_default_sort("created_at", true);
         let mut query = Entity::find();
         if let Some(s) = &q.q {
             query = query.filter(
@@ -374,12 +375,11 @@ impl AdminEntity for UsersEntity {
         query = match q.sort.as_deref() {
             Some("email") => query.order_by(Column::Email, dir),
             Some("name") => query.order_by(Column::Name, dir),
-            Some("created_at") => query.order_by(Column::CreatedAt, dir),
-            _ => query.order_by(Column::CreatedAt, Order::Desc),
+            _ => query.order_by(Column::CreatedAt, dir),
         };
         // Never serialize the full user model — it carries the password hash and
         // api_key. Project only safe, displayable fields.
-        paginate_models(db, query, q, self.columns(), |m| {
+        paginate_models(db, query, &q, self.columns(), |m| {
             serde_json::json!({
                 "pid": m.pid.to_string(),
                 "email": m.email,
@@ -485,6 +485,7 @@ impl AdminEntity for JobRunsEntity {
 
     async fn list(&self, db: &DatabaseConnection, q: &ListQuery) -> Result<ListPage, DbErr> {
         use crate::models::_entities::job_runs::{Column, Entity};
+        let q = q.clone().with_default_sort("started_at", true);
         let mut query = Entity::find();
         if let Some(s) = &q.q {
             query = query.filter(Column::Status.contains(s));
@@ -492,10 +493,9 @@ impl AdminEntity for JobRunsEntity {
         let dir = if q.desc { Order::Desc } else { Order::Asc };
         query = match q.sort.as_deref() {
             Some("status") => query.order_by(Column::Status, dir),
-            Some("started_at") => query.order_by(Column::StartedAt, dir),
-            _ => query.order_by(Column::CreatedAt, Order::Desc),
+            _ => query.order_by(Column::StartedAt, dir),
         };
-        paginate_models(db, query, q, self.columns(), |m| {
+        paginate_models(db, query, &q, self.columns(), |m| {
             serde_json::json!({
                 "pid": m.pid.to_string(),
                 "status": m.status,
