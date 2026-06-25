@@ -23,13 +23,26 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 impl Model {
-    /// Ensures the deployment's default org exists and `user_id` is a member.
+    /// Gives a user with no organization a home in the deployment's shared
+    /// default org.
     ///
-    /// New users join one shared default org (named for the client) rather
-    /// than each getting a personal org; additional orgs are staff-created.
-    /// The org is created on first use if missing; members join at `role`
-    /// (configured via `settings.org.default_role`; staff elevate individuals
-    /// as needed). Idempotent — an existing member's role is left untouched.
+    /// New users join one shared default org (named for the deployment)
+    /// rather than each getting a personal org; additional orgs are
+    /// staff-created. The org is created on first use if missing; the user
+    /// joins at `role` (configured via `settings.org.default_role`; staff
+    /// elevate individuals as needed).
+    ///
+    /// Returns `Ok(None)` — touching nothing — when the user **already**
+    /// belongs to at least one org. This deliberately skips two kinds of user
+    /// who must not also be dropped into the shared default org:
+    ///
+    /// - a user who joined a specific org via an auto-accepted invite, and
+    /// - staff, who belong to a staff org (their access to other orgs is
+    ///   virtual; see [`org_members::Model::find_membership_or_admin`]).
+    ///
+    /// The default org is therefore only a home for users who would otherwise
+    /// have none. Idempotent: a user already in the default org has an org, so
+    /// a repeat call is a no-op.
     ///
     /// # Errors
     ///
@@ -40,7 +53,12 @@ impl Model {
         name: &str,
         role: OrgRole,
         user_id: i32,
-    ) -> Result<Self, DbErr> {
+    ) -> Result<Option<Self>, DbErr> {
+        // A user who already has any org is left alone — don't also add them
+        // to the shared default org (covers invited users and staff).
+        if !Self::find_orgs_for_user(db, user_id).await?.is_empty() {
+            return Ok(None);
+        }
         let org = match Self::find_by_slug(db, slug).await? {
             Some(o) => o,
             None => {
@@ -56,20 +74,16 @@ impl Model {
                 .await?
             }
         };
-        if org_members::Model::find_membership(db, org.id, user_id)
-            .await?
-            .is_none()
-        {
-            org_members::ActiveModel {
-                org_id: sea_orm::ActiveValue::Set(org.id),
-                user_id: sea_orm::ActiveValue::Set(user_id),
-                role: sea_orm::ActiveValue::Set(role.to_string()),
-                ..Default::default()
-            }
-            .insert(db)
-            .await?;
+        // The user has no org yet, so they cannot already be a member here.
+        org_members::ActiveModel {
+            org_id: sea_orm::ActiveValue::Set(org.id),
+            user_id: sea_orm::ActiveValue::Set(user_id),
+            role: sea_orm::ActiveValue::Set(role.to_string()),
+            ..Default::default()
         }
-        Ok(org)
+        .insert(db)
+        .await?;
+        Ok(Some(org))
     }
 
     /// Finds an organization by its public ID.

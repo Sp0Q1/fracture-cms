@@ -227,10 +227,13 @@ async fn callback(
 
     let user = users::Model::find_or_create_from_oidc(&ctx.db, &info).await?;
 
-    // Place the user in the deployment's default org (one shared client org;
-    // no per-user personal orgs). Configured via settings.org.default_slug /
-    // default_name / default_role; the org is created on first use.
-    // Best-effort — a failure here must not block an otherwise-valid login.
+    // Give brand-new users a home in the deployment's shared default org (one
+    // shared org; no per-user personal orgs). Configured via
+    // settings.org.default_slug / default_name / default_role; the org is
+    // created on first use. Users who already have an org — joined a specific
+    // org via an auto-accepted invite above, or staff via their staff org —
+    // are left as-is and not also added here (ensure_default_membership
+    // returns Ok(None)). Best-effort: a failure must not block a valid login.
     if let Some(org_cfg) = ctx.config.settings.as_ref().and_then(|s| s.get("org")) {
         if let Some(slug) = org_cfg
             .get("default_slug")

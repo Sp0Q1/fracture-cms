@@ -124,9 +124,12 @@ Assume tenant A's server is owned (root, app credentials, DB):
 2. Server: `fracture-ctl init` (fresh `JWT_SECRET` + DB password), fill
    `OIDC_ISSUER_URL` (the tenant realm) and `OIDC_CLIENT_ID`/`SECRET`, set
    `AUTH_ALLOWED_EMAIL_DOMAINS` to the tenant's domain(s), and set
-   `DEFAULT_ORG_SLUG`/`DEFAULT_ORG_NAME` to the client's shared org (every new
-   user joins it on first login at `DEFAULT_ORG_ROLE`, default `member`; leave
-   the slug empty to disable). Additional orgs are staff-created — clients
+   `DEFAULT_ORG_SLUG`/`DEFAULT_ORG_NAME` to the client's shared org. On first
+   login a user with **no** org yet joins it at `DEFAULT_ORG_ROLE` (default
+   `member`); leave the slug empty to disable. Users who already have an org
+   are left as-is and not also added — this covers a user who joined a specific
+   org via an auto-accepted invite, and staff (who belong to a staff org and
+   reach other orgs virtually). Additional orgs are staff-created — clients
    cannot self-provision them.
 3. DNS/TLS for the tenant domain; `OIDC_REDIRECT_URI` and
    `OIDC_POST_LOGOUT_REDIRECT_URI` use it.

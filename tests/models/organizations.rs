@@ -63,8 +63,10 @@ async fn test_no_personal_org_and_default_org_join() {
         user.id,
     )
     .await
-    .unwrap();
-    organizations::Model::ensure_default_membership(
+    .unwrap()
+    .expect("brand-new user is placed in the default org");
+    // Second call: the user now has an org, so it is a no-op (returns None).
+    let repeat = organizations::Model::ensure_default_membership(
         db,
         "acme",
         "Acme Inc.",
@@ -73,6 +75,10 @@ async fn test_no_personal_org_and_default_org_join() {
     )
     .await
     .unwrap();
+    assert!(
+        repeat.is_none(),
+        "user already has an org, so a repeat call is a no-op"
+    );
     let orgs = organizations::Model::find_orgs_for_user(db, user.id)
         .await
         .unwrap();
@@ -85,6 +91,59 @@ async fn test_no_personal_org_and_default_org_join() {
     assert_eq!(
         membership.role, "member",
         "default-org join uses given role"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn test_default_org_skipped_when_user_already_has_an_org() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    // A user who already belongs to an org (e.g. joined via an auto-accepted
+    // invite, or staff via their staff org) must NOT also be dropped into the
+    // shared default org.
+    let user = users::Model::find_or_create_from_oidc(
+        db,
+        &OidcUserInfo {
+            provider: "test".to_string(),
+            subject: "already-homed".to_string(),
+            email: "already-homed@example.com".to_string(),
+            name: Some("Already Homed".to_string()),
+            email_verified: true,
+        },
+    )
+    .await
+    .unwrap();
+    let home = crate::support::owned_org(db, "already-homed", user.id).await;
+
+    let result = organizations::Model::ensure_default_membership(
+        db,
+        "acme",
+        "Acme Inc.",
+        OrgRole::Member,
+        user.id,
+    )
+    .await
+    .unwrap();
+    assert!(
+        result.is_none(),
+        "user with an existing org is not added to the default org"
+    );
+
+    let orgs = organizations::Model::find_orgs_for_user(db, user.id)
+        .await
+        .unwrap();
+    assert_eq!(orgs.len(), 1, "still in exactly their original org");
+    assert_eq!(orgs[0].id, home.id, "unchanged home org");
+
+    // The default org was never created, since no homeless user needed it.
+    assert!(
+        organizations::Model::find_by_slug(db, "acme")
+            .await
+            .unwrap()
+            .is_none(),
+        "default org is created lazily, only for a user who needs a home"
     );
 }
 
