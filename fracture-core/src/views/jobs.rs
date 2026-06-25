@@ -83,6 +83,8 @@ pub fn org_index(
     latest_runs: &HashMap<i32, job_runs::Model>,
     job_types: &[crate::jobs::JobTypeInfo],
     access: crate::jobs::JobAccess,
+    sort: Option<&str>,
+    desc: bool,
 ) -> Result<Response> {
     let mut ctx = super::base_context(user, org_ctx, user_orgs);
     ctx["definitions"] = json!(definitions
@@ -90,6 +92,14 @@ pub fn org_index(
         .map(|d| definition_with_latest_json(d, latest_runs))
         .collect::<Vec<_>>());
     ctx["job_types"] = json!(job_types);
+    ctx["sort"] = json!(sort);
+    ctx["desc"] = json!(desc);
+    ctx["headers"] = json!([
+        { "key": "name", "label": "Name" },
+        { "key": "job_type", "label": "Type" },
+        { "key": "schedule", "label": "Schedule" },
+        { "key": "enabled", "label": "Enabled" },
+    ]);
     add_capabilities(&mut ctx, access);
     format::render().view(v, "jobs/org_index.html", data!(ctx))
 }

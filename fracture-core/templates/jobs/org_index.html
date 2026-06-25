@@ -5,6 +5,7 @@
 {% block page_title_block %}{% endblock page_title_block %}
 
 {% block content %}
+<span data-list-base="/jobs" hidden></span>
 <div class="page-header">
     <h1>Jobs <span class="badge secondary">{{ definitions | length }}</span></h1>
     <p class="page-subtitle">Automated job definitions for your organization</p>
@@ -14,10 +15,14 @@
     <table class="clickable-rows">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Schedule</th>
-                <th>Enabled</th>
+                {% for h in headers %}
+                <th>
+                    {% if sort == h.key and not desc %}{% set nextdir = "desc" %}{% set arrow = " ▲" %}
+                    {% elif sort == h.key and desc %}{% set nextdir = "asc" %}{% set arrow = " ▼" %}
+                    {% else %}{% set nextdir = "asc" %}{% set arrow = "" %}{% endif %}
+                    <a href="/jobs?sort={{ h.key }}&dir={{ nextdir }}">{{ h.label }}{{ arrow }}</a>
+                </th>
+                {% endfor %}
                 <th>Last Run</th>
             </tr>
         </thead>

@@ -5,7 +5,8 @@ use axum::response::Redirect;
 use axum_extra::extract::cookie::CookieJar;
 use axum_extra::extract::Form;
 use loco_rs::prelude::*;
-use sea_orm::{EntityTrait, QueryOrder};
+use axum::extract::Query;
+use sea_orm::{ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder};
 use serde::{Deserialize, Serialize};
 
 use crate::controllers::middleware;
@@ -174,7 +175,9 @@ async fn latest_runs_by_definition(
 ///
 /// Returns an error if the database query fails or the user is not authenticated.
 #[debug_handler]
+#[allow(clippy::implicit_hasher)] // axum's Query extractor requires a concrete HashMap.
 pub async fn org_index(
+    Query(params): Query<HashMap<String, String>>,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     jar: CookieJar,
@@ -193,8 +196,22 @@ pub async fn org_index(
         return Ok(forbidden());
     }
 
+    // Sortable by the definition's own columns (name/type/schedule/enabled);
+    // "Last Run" comes from a join and stays unsorted. Default: name asc.
+    let q = crate::listing::ListQuery::from_params(&params).with_default_sort("name", false);
     let definitions = match org_ctx {
-        Some(ref oc) => job_def_model::Model::find_all_by_org(&ctx.db, oc.org.id).await?,
+        Some(ref oc) => {
+            use crate::models::_entities::job_definitions::{Column, Entity};
+            let dir = if q.desc { Order::Desc } else { Order::Asc };
+            let query = Entity::find().filter(Column::OrgId.eq(oc.org.id));
+            let query = match q.sort.as_deref() {
+                Some("job_type") => query.order_by(Column::JobType, dir),
+                Some("schedule") => query.order_by(Column::Schedule, dir),
+                Some("enabled") => query.order_by(Column::Enabled, dir),
+                _ => query.order_by(Column::Name, dir),
+            };
+            query.all(&ctx.db).await?
+        }
         None => vec![],
     };
     let latest_runs = latest_runs_by_definition(&ctx.db, &definitions).await?;
@@ -210,6 +227,8 @@ pub async fn org_index(
         &latest_runs,
         &job_types,
         access,
+        q.sort.as_deref(),
+        q.desc,
     )
 }
 
