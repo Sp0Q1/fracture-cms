@@ -23,7 +23,7 @@ form_urlencoded = { version = "1" }
 comrak = { version = "0.52", default-features = false }
 slug = { version = "0.1" }
 include_dir = { version = "0.7", features = ["glob"] }
-tera = { version = "1" }
+tera = { version = "2" }
 time = { version = "0.3" }
 tracing = { version = "0.1" }
 validator = { version = "0.20" }
