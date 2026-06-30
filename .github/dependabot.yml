@@ -16,6 +16,13 @@ updates:
         update-types:
           - minor
           - patch
+    # tera 2.x is a breaking major that loco-rs 0.16 does not support (it pins
+    # tera 1.x and re-exports its types via ViewEngine). Ignore tera majors
+    # until loco itself moves to tera 2, so dependabot stops proposing a bump
+    # that cannot build.
+    ignore:
+      - dependency-name: "tera"
+        update-types: ["version-update:semver-major"]
     reviewers:
       - Sp0Q1
 
