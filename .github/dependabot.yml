@@ -6,6 +6,11 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    # Wait before adopting a freshly published release: a malicious version in a
+    # compromised-package attack is usually yanked within days, so a cooldown
+    # avoids ever bumping to it.
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         update-types:
@@ -20,5 +25,7 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     reviewers:
       - Sp0Q1
