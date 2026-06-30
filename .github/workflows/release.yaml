@@ -16,4 +16,5 @@ jobs:
     uses: ./.github/workflows/release-app.yaml
     with:
       image_name: ghcr.io/${{ github.repository }}
-    secrets: inherit
+    # No `secrets: inherit` — the reusable workflow only needs GITHUB_TOKEN,
+    # which is provided automatically; inheriting would expose every repo secret.

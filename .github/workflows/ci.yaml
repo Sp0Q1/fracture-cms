@@ -27,8 +27,8 @@ jobs:
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt
@@ -45,12 +45,12 @@ jobs:
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Run cargo clippy
         run: cargo clippy --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery -W rust-2018-idioms
 
@@ -67,7 +67,7 @@ jobs:
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Run semgrep
         run: semgrep scan --config auto --error --exclude-rule python.django.security.django-no-csrf-token.django-no-csrf-token .
 
@@ -96,12 +96,12 @@ jobs:
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Run cargo test
         run: cargo test --all-features --all
         env:
@@ -116,14 +116,16 @@ jobs:
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: Install cargo-audit
         # Prebuilt binary: `cargo install` compiled it from source on every
         # run (~minutes); this is seconds.
-        uses: taiki-e/install-action@cargo-audit
+        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2
+        with:
+          tool: cargo-audit
       - name: Run cargo audit
         run: cargo audit
           
