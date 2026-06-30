@@ -2,7 +2,7 @@ use fracture_cms::{
     app::App,
     models::{
         org_members::{self, OrgRole},
-        organizations,
+        organizations, staff_org_access,
         users::{self, OidcUserInfo},
     },
 };
@@ -293,6 +293,67 @@ async fn cannot_delete_a_members_last_org() {
                 .is_none(),
             "org A should be gone after a successful delete"
         );
+    })
+    .await;
+}
+
+/// Transparency: when a staff member actually opens a tenant's org (they are
+/// not a real member — access is virtual), it is recorded and surfaced on that
+/// org's members page, so the tenant can see which staff have been in their org.
+#[tokio::test]
+#[serial]
+async fn staff_access_to_an_org_is_recorded_and_shown_on_members_page() {
+    request::<App, _, _>(|request, ctx| async move {
+        let owner = mk_user(&ctx.db, "transp-owner").await;
+        let org = crate::support::owned_org(&ctx.db, "transp", owner.id).await;
+
+        // A staff member, made staff via membership in an is_staff org. They are
+        // NOT a member of `org`.
+        let staff = mk_user(&ctx.db, "transp-staff").await;
+        let staff_org = organizations::ActiveModel {
+            name: Set("Platform Admin".to_string()),
+            slug: Set(format!("platform-admin-{}", staff.id)),
+            is_personal: Set(false),
+            is_staff: Set(true),
+            ..Default::default()
+        }
+        .insert(&ctx.db)
+        .await
+        .unwrap();
+        org_members::Model::add_member(&ctx.db, staff_org.id, staff.id, OrgRole::Owner)
+            .await
+            .unwrap();
+
+        // No access recorded before the staffer ever opens the org.
+        assert!(
+            staff_org_access::Model::find_for_org_with_users(&ctx.db, org.id)
+                .await
+                .unwrap()
+                .is_empty(),
+            "no staff access recorded before the org is opened"
+        );
+
+        // Staff opens the org's members page (virtual-admin access).
+        let response = request
+            .get(&format!("/orgs/{}/members", org.pid))
+            .add_cookie(jwt_cookie(&ctx, &staff))
+            .await;
+        assert_eq!(response.status_code(), 200);
+        assert!(
+            response.text().contains("Platform staff access"),
+            "members page shows the staff-access transparency section"
+        );
+        assert!(
+            response.text().contains(&staff.name),
+            "the accessing staff member is listed by name"
+        );
+
+        // The access is now recorded for this org, paired with the staffer.
+        let recorded = staff_org_access::Model::find_for_org_with_users(&ctx.db, org.id)
+            .await
+            .unwrap();
+        assert_eq!(recorded.len(), 1, "exactly one staff-access record");
+        assert_eq!(recorded[0].1.id, staff.id, "recorded for the staff user");
     })
     .await;
 }

@@ -10,7 +10,9 @@ use crate::controllers::middleware;
 use crate::mailers::invite::InviteMailer;
 use crate::models::_entities::{org_members, organizations, users as users_entity};
 use crate::models::org_members::{MemberWriteError, OrgRole};
-use crate::models::{org_invites, organizations as org_model, uploads as upload_model};
+use crate::models::{
+    org_invites, organizations as org_model, staff_org_access, uploads as upload_model,
+};
 use crate::views;
 use crate::{require_role, require_staff, require_user};
 
@@ -251,6 +253,14 @@ pub async fn members(
             staff_user_ids.insert(member.id);
         }
     }
+    // Staff who have actually accessed this org but are not real members, shown
+    // for transparency. Exclude any who are also real members (already listed
+    // above) so each staffer appears once.
+    let staff_access: Vec<_> = staff_org_access::Model::find_for_org_with_users(&ctx.db, org.id)
+        .await?
+        .into_iter()
+        .filter(|(_, u)| !member_users.iter().any(|(_, m)| m.id == u.id))
+        .collect();
     let app_url = ctx.config.server.host.clone();
     views::org::members(
         &v,
@@ -263,6 +273,7 @@ pub async fn members(
             pending_invites: &pending_invites,
             app_url: &app_url,
             staff_user_ids: &staff_user_ids,
+            staff_access: &staff_access,
         },
     )
 }
