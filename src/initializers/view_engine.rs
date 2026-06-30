@@ -22,7 +22,7 @@ impl Initializer for TemplateInitializer {
         "view-engine".to_string()
     }
 
-    async fn after_routes(&self, router: AxumRouter, _ctx: &AppContext) -> Result<AxumRouter> {
+    async fn after_routes(&self, router: AxumRouter, ctx: &AppContext) -> Result<AxumRouter> {
         // SHA-384 every static asset once at boot. Templates use
         // `{{ sri(path='/static/foo.css') }}` instead of carrying literal
         // hashes that can drift out of sync.
@@ -59,6 +59,23 @@ impl Initializer for TemplateInitializer {
                 Ok(())
             })?
         };
+
+        // `ctx` is only read in debug builds (below); keep release warning-clean.
+        #[cfg(not(debug_assertions))]
+        let _ = &ctx;
+        // In the test environment, drop the template hot-reload file-watcher
+        // that loco installs in debug builds. `boot_test` builds a fresh view
+        // engine per test, and these watchers accumulate across a run until the
+        // OS inotify instance limit (`fs.inotify.max_user_instances`, default
+        // 128) is exhausted and boots start failing with "error creating file
+        // watcher". Hot-reload has no purpose under test. (Debug-only: the
+        // watcher and `tera` mutex exist solely in debug builds.)
+        #[cfg(debug_assertions)]
+        if matches!(ctx.environment, loco_rs::environment::Environment::Test) {
+            if let Ok(mut engine) = tera_engine.tera.lock() {
+                engine.file_watcher = None;
+            }
+        }
 
         Ok(router.layer(Extension(ViewEngine::from(tera_engine))))
     }
