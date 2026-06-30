@@ -10,4 +10,5 @@ mod org_scoped;
 mod organizations;
 mod projects;
 mod resource_assignments;
+mod staff_org_access;
 mod users;

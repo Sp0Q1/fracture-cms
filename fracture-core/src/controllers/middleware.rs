@@ -1,8 +1,18 @@
 use axum_extra::extract::CookieJar;
 use loco_rs::{auth::jwt, prelude::*};
 
-use crate::models::_entities::{org_members, organizations, users};
+use crate::models::_entities::{org_members, organizations, staff_org_access, users};
 use crate::models::org_members::OrgRole;
+
+/// Records that a staff user is operating in an org they are not a real member
+/// of (their membership is a synthesized `virtual_admin`, `id == 0`), so the
+/// org's members page can show which staff have actually accessed it. Best
+/// effort: a failure here must never break request handling.
+async fn record_staff_access(db: &DatabaseConnection, org_id: i32, user_id: i32) {
+    if let Err(e) = staff_org_access::Model::record(db, org_id, user_id).await {
+        tracing::warn!(error = %e, org_id, "could not record staff org access");
+    }
+}
 
 /// Extracts and validates the current user from the JWT cookie.
 /// Returns `None` if the cookie is missing, the JWT is invalid, or the session has been invalidated.
@@ -41,6 +51,11 @@ impl OrgContext {
     ) -> Self {
         let role = OrgRole::from_str_role(&membership.role).unwrap_or(OrgRole::Viewer);
         let is_staff = organizations::Model::is_user_staff(db, user_id).await;
+        // Path-param handlers (org settings, members, …) reach a non-member org
+        // as staff via a virtual admin (id == 0); record that access.
+        if is_staff && membership.id == 0 {
+            record_staff_access(db, org.id, user_id).await;
+        }
         Self {
             org,
             membership,
@@ -82,6 +97,7 @@ pub async fn get_org_context_or_default(
             }
             // Platform admins can access any org even without membership
             if is_staff {
+                record_staff_access(db, org.id, user.id).await;
                 return Some(OrgContext {
                     membership: org_members::Model::virtual_admin(org.id, user.id),
                     org,
@@ -113,6 +129,11 @@ pub async fn get_org_context_or_default(
         None if is_staff => OrgRole::Admin,
         None => return None,
     };
+    // Staff falling back to their first visible org may have no real membership
+    // there — record that access before synthesizing a virtual admin.
+    if is_staff && membership.is_none() {
+        record_staff_access(db, org.id, user.id).await;
+    }
     let membership =
         membership.unwrap_or_else(|| org_members::Model::virtual_admin(org.id, user.id));
     Some(OrgContext {

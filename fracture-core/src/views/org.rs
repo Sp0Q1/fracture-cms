@@ -1,7 +1,7 @@
 use loco_rs::prelude::*;
 
 use crate::controllers::middleware::OrgContext;
-use crate::models::_entities::{org_invites, org_members, organizations, users};
+use crate::models::_entities::{org_invites, org_members, organizations, staff_org_access, users};
 
 /// One row of the organization list: the org plus the viewer's role in it and
 /// whether they may manage it (Admin+ in that org, or platform admin).
@@ -86,6 +86,10 @@ pub struct MembersViewData<'a> {
     /// admin can't change their org role or remove them, because staff power
     /// comes from the platform-admin org, not their tenant-local role.
     pub staff_user_ids: &'a std::collections::HashSet<i32>,
+    /// Staff who have actually accessed this org without being real members,
+    /// paired with their access record (first/last seen). Rendered as a
+    /// transparency list so a tenant can see which staff have been in their org.
+    pub staff_access: &'a [(staff_org_access::Model, users::Model)],
 }
 
 /// Renders the organization members page.
@@ -129,6 +133,18 @@ pub fn members(
                 "role": i.role,
                 "pid": i.pid.to_string(),
                 "accept_url": format!("{}/invites/{}/accept", data.app_url, i.pid),
+            })
+        })
+        .collect::<Vec<_>>());
+    ctx["staff_access"] = serde_json::json!(data
+        .staff_access
+        .iter()
+        .map(|(a, u)| {
+            serde_json::json!({
+                "user_name": u.name,
+                "user_email": u.email,
+                "first_accessed_at": a.first_accessed_at.to_rfc3339(),
+                "last_active_at": a.last_active_at.to_rfc3339(),
             })
         })
         .collect::<Vec<_>>());

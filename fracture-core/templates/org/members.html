@@ -120,4 +120,29 @@
     </tbody>
 </table>
 {% endif %}
+
+{% if staff_access | length > 0 %}
+<h3 class="mt-6">Platform staff access <span class="badge secondary">{{ staff_access | length }}</span></h3>
+<p class="page-subtitle">Platform staff who have actually accessed this organization. They are not members — their access is granted by the platform — and are listed here for transparency.</p>
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>First accessed</th>
+            <th>Last active</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for s in staff_access %}
+        <tr>
+            <td>{{ s.user_name }} <span class="role-badge" data-role="staff" title="Platform staff — not a member of this organization">Staff</span></td>
+            <td>{{ s.user_email }}</td>
+            <td>{{ s.first_accessed_at | truncate(length=16, end="") }}</td>
+            <td>{{ s.last_active_at | truncate(length=16, end="") }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
 {% endblock content %}

@@ -25,6 +25,7 @@ mod m20260426_000001_create_resource_assignments;
 mod m20260612_000001_add_missing_indexes;
 mod m20260612_000003_create_contact_messages;
 mod m20260624_000001_rename_is_platform_admin_to_is_staff;
+mod m20260630_000001_create_staff_org_access;
 
 pub struct Migrator;
 
@@ -53,6 +54,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260612_000001_add_missing_indexes::Migration),
             Box::new(m20260612_000003_create_contact_messages::Migration),
             Box::new(m20260624_000001_rename_is_platform_admin_to_is_staff::Migration),
+            Box::new(m20260630_000001_create_staff_org_access::Migration),
         ]
     }
 }

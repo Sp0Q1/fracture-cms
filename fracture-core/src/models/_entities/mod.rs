@@ -9,5 +9,6 @@ pub mod org_invites;
 pub mod org_members;
 pub mod organizations;
 pub mod resource_assignments;
+pub mod staff_org_access;
 pub mod uploads;
 pub mod users;
