@@ -86,6 +86,57 @@ impl Model {
         Ok(Some(org))
     }
 
+    /// Ensures the deployment's staff org exists and `user_id` is a member, so
+    /// an `IdP`-asserted platform-staff role grants *real* staff access on login
+    /// (not a confusing "signed in as staff but treated as a plain user" state).
+    ///
+    /// The org is created with `is_staff = true` on first use if missing; the
+    /// user joins as `Owner`. Unlike [`Self::ensure_default_membership`] this
+    /// always adds the user — staff belong in the staff org even if they also
+    /// hold a client-org membership. Idempotent: an existing member is left
+    /// untouched. Call this *before* `ensure_default_membership` so a staff user
+    /// lands only in the staff org, not also in the shared default org.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a database operation fails.
+    pub async fn ensure_staff_membership(
+        db: &DatabaseConnection,
+        slug: &str,
+        name: &str,
+        user_id: i32,
+    ) -> Result<Self, DbErr> {
+        let org = match Self::find_by_slug(db, slug).await? {
+            Some(o) => o,
+            None => {
+                ActiveModel {
+                    name: sea_orm::ActiveValue::Set(name.to_string()),
+                    slug: sea_orm::ActiveValue::Set(slug.to_string()),
+                    is_personal: sea_orm::ActiveValue::Set(false),
+                    is_staff: sea_orm::ActiveValue::Set(true),
+                    settings: sea_orm::ActiveValue::Set(None),
+                    ..Default::default()
+                }
+                .insert(db)
+                .await?
+            }
+        };
+        if org_members::Model::find_membership(db, org.id, user_id)
+            .await?
+            .is_none()
+        {
+            org_members::ActiveModel {
+                org_id: sea_orm::ActiveValue::Set(org.id),
+                user_id: sea_orm::ActiveValue::Set(user_id),
+                role: sea_orm::ActiveValue::Set(OrgRole::Owner.to_string()),
+                ..Default::default()
+            }
+            .insert(db)
+            .await?;
+        }
+        Ok(org)
+    }
+
     /// Finds an organization by its public ID.
     ///
     /// # Errors

@@ -60,6 +60,45 @@ fn email_domain_allowed(domains: &[String], email: &str) -> bool {
     !domain.is_empty() && domains.contains(&domain)
 }
 
+/// The ID-token claim + value that mark a login as platform staff. Configured
+/// via `settings.oidc.staff_role_claim` / `staff_role_value`; defaults suit a
+/// Keycloak realm-role mapper that emits roles into a top-level `roles` array.
+fn staff_role_claim(settings: Option<&serde_json::Value>) -> (String, String) {
+    let oidc = settings.and_then(|s| s.get("oidc"));
+    let claim = oidc
+        .and_then(|o| o.get("staff_role_claim"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("roles")
+        .to_string();
+    let value = oidc
+        .and_then(|o| o.get("staff_role_value"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("platform-staff")
+        .to_string();
+    (claim, value)
+}
+
+/// Returns true if the ID token's `claim` (a string array) contains `value`.
+///
+/// The token has already been signature-verified by the caller; this only
+/// re-reads its payload for a role/group claim the typed OIDC claims don't
+/// surface. A malformed token simply yields `false` (no staff grant).
+fn id_token_has_role(id_token_jwt: &str, claim: &str, value: &str) -> bool {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    let Some(payload) = id_token_jwt.split('.').nth(1) else {
+        return false;
+    };
+    let Ok(bytes) = URL_SAFE_NO_PAD.decode(payload) else {
+        return false;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return false;
+    };
+    json.get(claim)
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|arr| arr.iter().any(|v| v.as_str() == Some(value)))
+}
+
 fn oidc_unavailable_response() -> Response {
     Response::builder()
         .status(503)
@@ -226,6 +265,47 @@ async fn callback(
     };
 
     let user = users::Model::find_or_create_from_oidc(&ctx.db, &info).await?;
+
+    // Claim-driven staff provisioning. The staff realm asserts a platform-staff
+    // role that the tenant realm imports; when the ID token carries it, add the
+    // user to the staff org so "staff sign-in" actually grants staff (instead of
+    // authenticating a user the app then treats as a plain member). Runs BEFORE
+    // default-org placement so a staff user lands only in the staff org.
+    // Config: settings.org.staff_slug / staff_name and (optional) the claim to
+    // read via settings.oidc.staff_role_claim / staff_role_value. Best-effort:
+    // a failure must not block an otherwise-valid login.
+    if let Some(staff_slug) = ctx
+        .config
+        .settings
+        .as_ref()
+        .and_then(|s| s.get("org"))
+        .and_then(|o| o.get("staff_slug"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        let (claim, value) = staff_role_claim(ctx.config.settings.as_ref());
+        if id_token_has_role(&id_token.to_string(), &claim, &value) {
+            let staff_name = ctx
+                .config
+                .settings
+                .as_ref()
+                .and_then(|s| s.get("org"))
+                .and_then(|o| o.get("staff_name"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(staff_slug);
+            match crate::models::organizations::Model::ensure_staff_membership(
+                &ctx.db, staff_slug, staff_name, user.id,
+            )
+            .await
+            {
+                Ok(_) => tracing::info!(
+                    subject = %info.subject,
+                    "provisioned platform-staff membership from IdP role"
+                ),
+                Err(e) => tracing::warn!(error = %e, "could not ensure staff-org membership"),
+            }
+        }
+    }
 
     // Give brand-new users a home in the deployment's shared default org (one
     // shared org; no per-user personal orgs). Configured via
@@ -551,8 +631,50 @@ pub fn routes() -> Routes {
 
 #[cfg(test)]
 mod tests {
-    use super::{email_domain_allowed, parse_allowed_domains};
+    use super::{email_domain_allowed, id_token_has_role, parse_allowed_domains, staff_role_claim};
     use serde_json::json;
+
+    /// Builds an unsigned JWT (`header.payload.`) whose payload is `claims`.
+    /// `id_token_has_role` only reads the payload, so the signature is irrelevant.
+    fn jwt_with(claims: serde_json::Value) -> String {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"none"}"#);
+        let payload = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&claims).unwrap());
+        format!("{header}.{payload}.")
+    }
+
+    #[test]
+    fn staff_role_claim_defaults_and_overrides() {
+        assert_eq!(
+            staff_role_claim(None),
+            ("roles".to_string(), "platform-staff".to_string())
+        );
+        let cfg = json!({"oidc": {"staff_role_claim": "groups", "staff_role_value": "admins"}});
+        assert_eq!(
+            staff_role_claim(Some(&cfg)),
+            ("groups".to_string(), "admins".to_string())
+        );
+    }
+
+    #[test]
+    fn id_token_role_detection() {
+        let tok = jwt_with(json!({"sub": "x", "roles": ["offline_access", "platform-staff"]}));
+        assert!(id_token_has_role(&tok, "roles", "platform-staff"));
+        assert!(!id_token_has_role(&tok, "roles", "not-a-role"));
+        // Missing claim, wrong shape, and malformed token all yield false.
+        assert!(!id_token_has_role(
+            &jwt_with(json!({"sub": "x"})),
+            "roles",
+            "platform-staff"
+        ));
+        assert!(!id_token_has_role(
+            &jwt_with(json!({"roles": "platform-staff"})),
+            "roles",
+            "platform-staff"
+        ));
+        assert!(!id_token_has_role("not.a.jwt", "roles", "platform-staff"));
+        assert!(!id_token_has_role("", "roles", "platform-staff"));
+    }
 
     #[test]
     fn no_settings_or_key_means_no_restriction() {

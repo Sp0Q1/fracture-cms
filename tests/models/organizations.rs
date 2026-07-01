@@ -226,3 +226,49 @@ async fn test_find_orgs_for_user() {
         .unwrap();
     assert_eq!(orgs.len(), 2);
 }
+
+#[tokio::test]
+#[serial]
+async fn ensure_staff_membership_creates_staff_org_and_grants_staff() {
+    let boot = boot_test::<App>().await.unwrap();
+    let db = &boot.app_context.db;
+
+    // A user who already belongs to a (non-staff) client org.
+    let user = create_test_user(db, "staffprov").await;
+    assert!(
+        !organizations::Model::is_user_staff(db, user.id).await,
+        "not staff before provisioning"
+    );
+
+    // Provisioning creates the staff org (is_staff=true) and adds the user as
+    // Owner — so they are now recognized as staff.
+    let org =
+        organizations::Model::ensure_staff_membership(db, "platform-admin", "Platform", user.id)
+            .await
+            .unwrap();
+    assert!(org.is_staff, "staff org is flagged is_staff");
+    assert!(
+        organizations::Model::is_user_staff(db, user.id).await,
+        "user is recognized as staff after provisioning"
+    );
+    let m = org_members::Model::find_membership(db, org.id, user.id)
+        .await
+        .unwrap()
+        .expect("staff-org membership");
+    assert_eq!(m.role, "owner");
+
+    // Idempotent: a repeat call reuses the org and adds no duplicate membership.
+    let org2 =
+        organizations::Model::ensure_staff_membership(db, "platform-admin", "Platform", user.id)
+            .await
+            .unwrap();
+    assert_eq!(org2.id, org.id);
+    assert_eq!(
+        org_members::Model::find_members(db, org.id)
+            .await
+            .unwrap()
+            .len(),
+        1,
+        "no duplicate staff membership"
+    );
+}
