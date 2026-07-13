@@ -123,7 +123,7 @@ jobs:
       - name: Install cargo-audit
         # Prebuilt binary: `cargo install` compiled it from source on every
         # run (~minutes); this is seconds.
-        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2
+        uses: taiki-e/install-action@4684b8405694ae9dd42c9f39ba901a70ae83f4a3 # v2
         with:
           tool: cargo-audit
       - name: Run cargo audit
